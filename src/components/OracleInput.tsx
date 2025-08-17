@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
+import { Plus, Mic } from 'lucide-react';
 import { useStarStore } from '../store/useStarStore';
 import { playSound } from '../utils/soundUtils';
 import StarRayIcon from './StarRayIcon';
@@ -8,10 +9,52 @@ import StarRayIcon from './StarRayIcon';
 const OracleInput: React.FC = () => {
   const { isAsking, setIsAsking, addStar, pendingStarPosition, isLoading } = useStarStore();
   const [question, setQuestion] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [starAnimated, setStarAnimated] = useState(false);
   
   const handleCloseInput = () => {
     if (!isLoading) {
       setIsAsking(false);
+    }
+  };
+  
+  const handleAddClick = () => {
+    console.log('Add button clicked');
+    // 可以用于打开历史对话或其他功能
+  };
+
+  const handleMicClick = () => {
+    setIsRecording(!isRecording);
+    console.log('Microphone clicked, recording:', !isRecording);
+    // TODO: 集成语音识别功能
+  };
+
+  const handleStarClick = () => {
+    setStarAnimated(true);
+    console.log('Star ray button clicked');
+    
+    // 如果有输入内容，直接提交
+    if (question.trim()) {
+      // 创建一个模拟的表单事件
+      const fakeEvent = {
+        preventDefault: () => {},
+      } as React.FormEvent;
+      handleSubmit(fakeEvent);
+    }
+    
+    // Reset animation after completion
+    setTimeout(() => {
+      setStarAnimated(false);
+    }, 1000);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setQuestion(e.target.value);
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSubmit(e as any);
     }
   };
   
@@ -40,78 +83,141 @@ const OracleInput: React.FC = () => {
   
   return (
     <>
-      {/* Question input modal - 只保留这部分，移除底部按钮 */}
+      {/* Question input modal with new dark input bar design */}
       {createPortal(
         <AnimatePresence>
           {isAsking && (
             <motion.div
               className="fixed inset-0 flex items-center justify-center"
               style={{ zIndex: 999999 }}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            <motion.div
-              className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              onClick={handleCloseInput}
-            />
-            
-            <motion.div
-              className="cosmic-input rounded-lg p-6 w-full max-w-md mx-4 z-10"
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: 20 }}
             >
-              <h2 className="text-2xl font-heading text-white mb-4 text-center">Ask the Stars</h2>
+              <motion.div
+                className="absolute inset-0 bg-black bg-opacity-50 backdrop-blur-sm"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                onClick={handleCloseInput}
+              />
               
-              <form onSubmit={handleSubmit}>
-                <div className="mb-4">
-                  <textarea
-                    className="w-full p-3 bg-cosmic-navy bg-opacity-50 border border-cosmic-purple border-opacity-30 rounded-md text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-cosmic-accent"
-                    placeholder="What wisdom do you seek from the cosmos?"
-                    rows={3}
-                    value={question}
-                    onChange={(e) => setQuestion(e.target.value)}
-                    autoFocus
-                    disabled={isLoading}
-                  />
-                </div>
+              <motion.div
+                className="w-full max-w-md mx-4 z-10"
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 20 }}
+              >
+                {/* Title */}
+                <h2 className="text-2xl font-heading text-white mb-6 text-center">Ask the Stars</h2>
                 
-                <div className="flex justify-between">
+                {/* Dark Input Bar */}
+                <form onSubmit={handleSubmit}>
+                  <div className="relative">
+                    {/* Main container with dark background */}
+                    <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
+                      
+                      {/* Plus button - positioned flush left */}
+                      <button
+                        type="button"
+                        onClick={handleAddClick}
+                        className="flex-shrink-0 w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center ml-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                        disabled={isLoading}
+                      >
+                        <Plus className="w-5 h-5 text-white" strokeWidth={2} />
+                      </button>
+
+                      {/* Input field */}
+                      <input
+                        type="text"
+                        value={question}
+                        onChange={handleInputChange}
+                        onKeyPress={handleKeyPress}
+                        placeholder="What wisdom do you seek from the cosmos?"
+                        className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none text-sm font-normal"
+                        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
+                        autoFocus
+                        disabled={isLoading}
+                      />
+
+                      {/* Right side icons container */}
+                      <div className="flex items-center space-x-2 mr-3">
+                        
+                        {/* Microphone button */}
+                        <button
+                          type="button"
+                          onClick={handleMicClick}
+                          className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
+                            isRecording 
+                              ? 'bg-red-600 hover:bg-red-500 text-white' 
+                              : 'hover:bg-gray-700 text-gray-300'
+                          }`}
+                          disabled={isLoading}
+                        >
+                          <Mic className="w-4 h-4" strokeWidth={2} />
+                        </button>
+
+                        {/* Star ray submit button */}
+                        <motion.button
+                          type="button"
+                          onClick={handleStarClick}
+                          className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
+                            question.trim() 
+                              ? 'hover:bg-cosmic-purple text-cosmic-accent' 
+                              : 'hover:bg-gray-700 text-gray-300'
+                          }`}
+                          disabled={isLoading}
+                          whileHover={!isLoading ? { scale: 1.1 } : {}}
+                        >
+                          {isLoading ? (
+                            <StarRayIcon 
+                              size={16} 
+                              animated={true} 
+                              iconColor="#ffffff"
+                            />
+                          ) : (
+                            <StarRayIcon 
+                              size={16} 
+                              animated={starAnimated || !!question.trim()} 
+                              iconColor={question.trim() ? "#9333ea" : "#ffffff"}
+                            />
+                          )}
+                        </motion.button>
+                        
+                      </div>
+                    </div>
+
+                    {/* Recording indicator */}
+                    {isRecording && (
+                      <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
+                        <div className="flex items-center space-x-2 text-red-400 text-xs">
+                          <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                          <span>Recording...</span>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </form>
+
+                {/* Cancel button */}
+                <div className="flex justify-center mt-6">
                   <button
                     type="button"
-                    className="cosmic-button px-4 py-2 rounded-md text-white"
+                    className="cosmic-button px-6 py-2 rounded-full text-white text-sm"
                     onClick={handleCloseInput}
                     disabled={isLoading}
                   >
                     Cancel
                   </button>
-                  
-                  <motion.button
-                    type="submit"
-                    className={`cosmic-button rounded-full p-4 flex items-center justify-center ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
-                    disabled={isLoading || !question.trim()}
-                    whileHover={!isLoading ? { scale: 1.1 } : {}}
-                  >
-                    {isLoading ? (
-                      <StarRayIcon size={24} animated={true} className="text-white animate-pulse" />
-                    ) : (
-                      <StarRayIcon size={24} animated={!!question.trim()} className="text-white" />
-                    )}
-                  </motion.button>
                 </div>
-              </form>
+              </motion.div>
             </motion.div>
-          </motion.div>
-        )}
+          )}
         </AnimatePresence>,
         document.body
       )}
       
-      {/* Loading animation where the star will appear */}
+      {/* Loading animation where the star will appear - keep original */}
       <AnimatePresence>
         {isLoading && pendingStarPosition && (
           <motion.div 

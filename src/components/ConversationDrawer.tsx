@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, SlidersHorizontal, Mic } from 'lucide-react';
+import { X, SlidersHorizontal, Mic, Plus } from 'lucide-react';
 import { useStarStore } from '../store/useStarStore';
 import { playSound } from '../utils/soundUtils';
 import { triggerHapticFeedback } from '../utils/hapticUtils';
@@ -35,8 +35,11 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [showConversationCard, setShowConversationCard] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [starAnimated, setStarAnimated] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const { addStar, isAsking, setIsAsking, pendingStarPosition } = useStarStore();
 
   // 滚动到底部
@@ -53,11 +56,52 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
 
   // 监听isAsking状态变化，当用户在星空中点击时自动聚焦输入框
   useEffect(() => {
-    if (isAsking && textareaRef.current) {
-      textareaRef.current.focus();
+    if (isAsking && inputRef.current) {
+      inputRef.current.focus();
       console.log("星空点击模式已激活", pendingStarPosition);
     }
   }, [isAsking, pendingStarPosition]);
+
+  const handleAddClick = () => {
+    console.log('Add button clicked');
+    // 可以用于打开历史对话或其他功能
+  };
+
+  const handleMicClick = () => {
+    setIsRecording(!isRecording);
+    console.log('Microphone clicked, recording:', !isRecording);
+    // TODO: 集成语音识别功能
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starClick');
+  };
+
+  const handleStarClick = () => {
+    setStarAnimated(true);
+    console.log('Star ray button clicked');
+    
+    // 如果有输入内容，直接提交
+    if (inputValue.trim()) {
+      handleSend();
+    }
+    
+    // Reset animation after completion
+    setTimeout(() => {
+      setStarAnimated(false);
+    }, 1000);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  };
+
+  const handleInputKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSend();
+    }
+  };
 
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
@@ -193,86 +237,93 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
           )}
         </AnimatePresence>
         
-        {/* 对话框抽屉 */}
-        <div className="w-full max-w-4xl px-4 pb-4 sm:pb-0 pointer-events-auto">
-            <div
-              className="drawer-container bg-neutral-800/70 backdrop-blur-sm border-t border-neutral-600/30 rounded-t-xl shadow-[0_-4px_12px_rgba(0,0,0,0.05)]"
-            >
-              {/* 小横杠指示器 */}
-              <div className="flex justify-center pt-2 pb-1">
-                <div className="w-12 h-1 bg-neutral-600/30 rounded-full"></div>
-              </div>
+        {/* 对话框抽屉 - 完全按照demo的暗色输入框设计，移除灰色背景 */}
+        <div className="w-full max-w-md mx-auto px-4 pb-4 pointer-events-auto">
+          <div className="relative">
+            {/* Main container with dark background - 完全复刻demo设计 */}
+            <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
               
-              <div className="flex items-center gap-3 p-3">
-                {/* 左侧图标按钮 - 只保留取消按钮（在isAsking状态下） */}
-                {isAsking && (
-                <motion.button 
-                    className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors rounded-full"
-                    whileHover={{ scale: 1.1 }} 
-                    whileTap={{ scale: 0.9 }}
-                    onClick={handleCancel}
-                >
-                    <X className="w-5 h-5" />
-                </motion.button>
-                )}
-                
-                {/* 左侧语音按钮 */}
-                <motion.button 
-                  className="flex-shrink-0 h-10 w-10 flex items-center justify-center text-neutral-400 hover:text-white transition-colors rounded-full"
-                  whileHover={{ scale: 1.1 }}
-                  whileTap={{ scale: 0.9 }}
-                >
-                  <Mic className="w-5 h-5" />
-                </motion.button>
+              {/* Plus button - positioned flush left */}
+              <button
+                type="button"
+                onClick={handleAddClick}
+                className="flex-shrink-0 w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center ml-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
+                disabled={isLoading}
+              >
+                <Plus className="w-5 h-5 text-white" strokeWidth={2} />
+              </button>
 
-                {/* 中间输入框 */}
-                <div className="flex-1 mx-1">
-                  <textarea
-                    ref={textareaRef}
-                    className="w-full bg-transparent text-white placeholder-neutral-400 resize-none outline-none leading-relaxed py-2 px-1"
-                    style={{ height: '24px', minHeight: '24px' }}
-                    placeholder={isAsking ? "向星空提出你的问题..." : "询问任何问题"}
-                    value={inputValue}
-                    onChange={(e) => setInputValue(e.target.value)}
-                    onKeyPress={handleKeyPress}
-                    rows={1}
-                  />
-                </div>
+              {/* Input field */}
+              <input
+                ref={inputRef}
+                type="text"
+                value={inputValue}
+                onChange={handleInputChange}
+                onKeyPress={handleInputKeyPress}
+                placeholder={isAsking ? "向星空提出你的问题..." : "询问任何问题"}
+                className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none text-sm font-normal"
+                style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
+                disabled={isLoading}
+              />
+
+              {/* Right side icons container */}
+              <div className="flex items-center space-x-2 mr-3">
                 
-                {/* 右侧发送/星星按钮 - 更大尺寸 */}
-                <AnimatePresence mode="wait">
-                  {inputValue.trim() ? (
-                    <motion.button
-                      key="send"
-                      className="flex-shrink-0 h-12 w-12 flex items-center justify-center rounded-full bg-cosmic-accent text-white shadow-lg"
-                      onClick={handleSend}
-                      disabled={isLoading}
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.5, opacity: 0 }}
-                      transition={{ type: 'spring', damping: 15, stiffness: 400 }}
-                      whileHover={{ scale: 1.1, backgroundColor: '#8A5FBD' }}
-                      whileTap={{ scale: 0.95 }}
-                    >
-                      <StarRayIcon size={22} animated={true} />
-                    </motion.button>
-                  ) : (
-                    <motion.button
-                      key="star"
-                      className="flex-shrink-0 h-12 w-12 flex items-center justify-center text-neutral-400 hover:text-white transition-colors rounded-full"
-                      initial={{ scale: 0.5, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0.5, opacity: 0 }}
-                      transition={{ type: 'spring', damping: 15, stiffness: 400 }}
-                      whileHover={{ scale: 1.1 }}
-                      whileTap={{ scale: 0.9 }}
-                    >
-                      <StarRayIcon size={22} />
-                    </motion.button>
-                  )}
-                </AnimatePresence>
+                {/* Microphone button */}
+                <button
+                  type="button"
+                  onClick={handleMicClick}
+                  className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
+                    isRecording 
+                      ? 'bg-red-600 hover:bg-red-500 text-white' 
+                      : 'hover:bg-gray-700 text-gray-300'
+                  }`}
+                  disabled={isLoading}
+                >
+                  <Mic className="w-4 h-4" strokeWidth={2} />
+                </button>
+
+                {/* Star ray button - 使用demo的设计和动画逻辑 */}
+                <button
+                  type="button"
+                  onClick={handleStarClick}
+                  className="p-2 rounded-full hover:bg-gray-700 text-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                  disabled={isLoading}
+                >
+                  <StarRayIcon 
+                    size={16} 
+                    animated={starAnimated || !!inputValue.trim()} 
+                    iconColor="#ffffff"
+                  />
+                </button>
+                
               </div>
             </div>
+
+            {/* Recording indicator */}
+            {isRecording && (
+              <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
+                <div className="flex items-center space-x-2 text-red-400 text-xs">
+                  <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                  <span>Recording...</span>
+                </div>
+              </div>
+            )}
+
+            {/* Cancel button for asking mode - 单独放置，不影响主输入框设计 */}
+            {isAsking && (
+              <div className="absolute -top-12 right-0">
+                <button
+                  type="button"
+                  className="flex items-center justify-center w-8 h-8 bg-gray-700 hover:bg-gray-600 rounded-full text-gray-300 hover:text-white transition-colors"
+                  onClick={handleCancel}
+                  disabled={isLoading}
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
       </motion.div>
