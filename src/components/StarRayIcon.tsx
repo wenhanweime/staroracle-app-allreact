@@ -1,92 +1,103 @@
 import React from 'react';
-import { motion } from 'framer-motion';
 
+// StarRayIcon组件接口 - 按照demo版本设计
 interface StarRayIconProps {
   size?: number;
-  color?: string;
   animated?: boolean;
+  iconColor?: string;
   className?: string;
-  isSpecial?: boolean;
+  color?: string; // 保持向后兼容
+  isSpecial?: boolean; // 保持向后兼容
 }
 
 const StarRayIcon: React.FC<StarRayIconProps> = ({ 
-  size = 24, 
-  color,
-  animated = false,
+  size = 20, 
+  animated = false, 
+  iconColor = "#ffffff",
   className = "",
-  isSpecial = false
+  color, // 向后兼容参数
+  isSpecial = false // 向后兼容参数
 }) => {
-  // 为图标生成唯一ID，用于渐变效果
-  const iconId = `star-ray-${React.useId()}`;
-  
-  // Special stars get a gold color by default, regular stars get white/current
-  const iconColor = color || (isSpecial ? "#FFD700" : "currentColor");
+  // 优先使用iconColor参数，然后是color参数，最后是默认值
+  const finalColor = iconColor || color || (isSpecial ? "#FFD700" : "#ffffff");
   
   return (
-    <svg 
-      className={className}
-      width={size} 
-      height={size} 
-      viewBox="0 0 24 24" 
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 24 24"
       fill="none"
       xmlns="http://www.w3.org/2000/svg"
-      style={{ pointerEvents: 'none' }}
+      className={`star-ray-icon ${className}`}
     >
-      <defs>
-        <radialGradient id={iconId} cx="50%" cy="50%" r="50%">
-          <stop offset="0%" stopColor={iconColor} stopOpacity="0.8"/>
-          <stop offset="100%" stopColor={iconColor} stopOpacity="0"/>
-        </radialGradient>
-      </defs>
-      
-      {/* 中心星点 */}
+      {/* Center circle */}
       {animated ? (
-        <motion.circle
+        <circle
           cx="12"
           cy="12"
-          r={isSpecial ? "3" : "2"}
-          fill={`url(#${iconId})`}
-          initial={{ scale: 0 }}
-          animate={{ scale: 1 }}
-          transition={{ delay: 0.1, type: "spring" }}
+          r="2"
+          fill={finalColor}
+          className="animate-pulse"
         />
       ) : (
-        <circle cx="12" cy="12" r={isSpecial ? "3" : "2"} fill={iconColor} />
+        <circle cx="12" cy="12" r="2" fill={finalColor} />
       )}
       
-      {/* 八条星芒 */}
-      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
-        animated ? (
-          <motion.line
+      {/* Eight rays */}
+      {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => {
+        const angle = (i * 45) * (Math.PI / 180); // Convert to radians
+        const startX = 12 + Math.cos(angle) * 3;
+        const startY = 12 + Math.sin(angle) * 3;
+        const endX = 12 + Math.cos(angle) * 8;
+        const endY = 12 + Math.sin(angle) * 8;
+        
+        return animated ? (
+          <line
             key={i}
-            x1="12"
-            y1="12"
-            x2={12 + Math.cos(i * Math.PI / 4) * (isSpecial ? 11 : 10)}
-            y2={12 + Math.sin(i * Math.PI / 4) * (isSpecial ? 11 : 10)}
-            stroke={iconColor}
-            strokeWidth={isSpecial ? "2" : "1.5"}
-            initial={{ pathLength: 0, opacity: 0 }}
-            animate={{ 
-              pathLength: 1,
-              opacity: 1
-            }}
-            transition={{
-              duration: 0.5,
-              delay: 0.1 + i * 0.05,
+            x1={startX}
+            y1={startY}
+            x2={endX}
+            y2={endY}
+            stroke={finalColor}
+            strokeWidth="2"
+            strokeLinecap="round"
+            className="animate-ray"
+            style={{
+              animation: `rayExpand 0.5s ease-out ${0.1 + i * 0.05}s both`,
+              transformOrigin: '12px 12px'
             }}
           />
         ) : (
           <line
             key={i}
-            x1="12"
-            y1="12"
-            x2={12 + Math.cos(i * Math.PI / 4) * (isSpecial ? 11 : 10)}
-            y2={12 + Math.sin(i * Math.PI / 4) * (isSpecial ? 11 : 10)}
-            stroke={iconColor}
-            strokeWidth={isSpecial ? "2" : "1.5"}
+            x1={startX}
+            y1={startY}
+            x2={endX}
+            y2={endY}
+            stroke={finalColor}
+            strokeWidth="2"
+            strokeLinecap="round"
           />
-        )
-      ))}
+        );
+      })}
+      
+      {/* CSS Animation styles - 内联样式来确保动画正常工作 */}
+      <style jsx>{`
+        @keyframes rayExpand {
+          0% {
+            stroke-dasharray: 5;
+            stroke-dashoffset: 5;
+          }
+          100% {
+            stroke-dasharray: 5;
+            stroke-dashoffset: 0;
+          }
+        }
+        .animate-ray {
+          stroke-dasharray: 5;
+          stroke-dashoffset: 0;
+        }
+      `}</style>
     </svg>
   );
 };
