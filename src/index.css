@@ -120,6 +120,102 @@ h1, h2, h3, h4, h5, h6 {
   box-sizing: border-box;
 }
 
+/* iOS Safari StarCard 特定修复 */
+@supports (-webkit-touch-callout: none) {
+  .star-card-container {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .star-card-wrapper {
+    -webkit-perspective: 1000px;
+    -webkit-transform: translate3d(0, 0, 0);
+    transform: translate3d(0, 0, 0);
+  }
+  
+  .star-card {
+    -webkit-transform-style: preserve-3d;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+  }
+  
+  .star-card-face {
+    -webkit-backface-visibility: hidden;
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  
+  /* iOS FlexBox 修复 - 确保星座区域正确居中 */
+  .star-card-bg {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-justify-content: space-between;
+    justify-content: space-between;
+  }
+  
+  .star-card-constellation {
+    -webkit-flex: 1;
+    flex: 1;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-justify-content: center;
+    justify-content: center;
+  }
+  
+  /* iOS Canvas/SVG 居中修复 */
+  .constellation-svg {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  
+  .planet-canvas {
+    -webkit-transform: translateZ(0);
+    transform: translateZ(0);
+  }
+  
+  /* iOS 背面内容 FlexBox 修复 */
+  .star-card-content {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-justify-content: space-between;
+    justify-content: space-between;
+  }
+  
+  .question-section, .answer-section {
+    -webkit-flex: 1;
+    flex: 1;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-justify-content: center;
+    justify-content: center;
+    -webkit-align-items: center;
+    align-items: center;
+  }
+  
+  /* iOS 子像素渲染修复 - 防止模糊 */
+  .star-card-container,
+  .star-card-wrapper,
+  .star-card,
+  .star-card-face,
+  .star-card-bg,
+  .star-card-constellation,
+  .star-card-content {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    will-change: transform;
+  }
+}
+
 .star-card-wrapper {
   position: relative;
   width: 100%;
