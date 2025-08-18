@@ -132,7 +132,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
                 className={`p-2 rounded-full transition-colors duration-200 focus:outline-none ${
                   isRecording 
                     ? 'bg-red-600 hover:bg-red-500 text-white' 
-                    : 'hover:bg-gray-700 text-gray-300'
+                    : 'bg-transparent hover:bg-gray-700 text-gray-300'
                 }`}
                 disabled={isLoading}
               >
@@ -143,7 +143,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
               <button
                 type="button"
                 onClick={handleStarClick}
-                className="p-2 rounded-full hover:bg-gray-700 text-gray-300 transition-colors duration-200 focus:outline-none"
+                className="p-2 rounded-full bg-transparent hover:bg-gray-700 text-gray-300 transition-colors duration-200 focus:outline-none"
                 disabled={isLoading}
               >
                 <StarRayIcon 
