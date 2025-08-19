@@ -17,9 +17,8 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [starAnimated, setStarAnimated] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
-  const { addStar, isAsking, setIsAsking } = useStarStore();
+  const { addStar, isAsking } = useStarStore();
 
-  // 监听isAsking状态变化，当用户在星空中点击时自动聚焦输入框
   useEffect(() => {
     if (isAsking && inputRef.current) {
       inputRef.current.focus();
@@ -28,14 +27,11 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
 
   const handleAddClick = () => {
     console.log('Add button clicked');
-    // 可以用于打开历史对话或其他功能
   };
 
   const handleMicClick = () => {
     setIsRecording(!isRecording);
     console.log('Microphone clicked, recording:', !isRecording);
-    // TODO: 集成语音识别功能
-    // 添加触感反馈（仅原生环境）
     if (Capacitor.isNativePlatform()) {
       triggerHapticFeedback('light');
     }
@@ -45,13 +41,9 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const handleStarClick = () => {
     setStarAnimated(true);
     console.log('Star ray button clicked');
-    
-    // 如果有输入内容，直接提交
     if (inputValue.trim()) {
       handleSend();
     }
-    
-    // Reset animation after completion
     setTimeout(() => {
       setStarAnimated(false);
     }, 1000);
@@ -61,21 +53,12 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
     setInputValue(e.target.value);
   };
 
-  const handleInputKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSend();
-    }
-  };
-
   const handleSend = async () => {
     if (!inputValue.trim() || isLoading) return;
-    
     setIsLoading(true);
     const trimmedQuestion = inputValue.trim();
     setInputValue('');
-    
     try {
-      // 在星空中创建星星
       const newStar = await addStar(trimmedQuestion);
       console.log("✨ 新星星已创建:", newStar.id);
       playSound('starReveal');
@@ -85,7 +68,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
       setIsLoading(false);
     }
   };
-  
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSend();
@@ -96,20 +79,18 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
     <div className="fixed bottom-0 left-0 right-0 z-40 p-4" style={{ paddingBottom: `max(1rem, env(safe-area-inset-bottom))` }}>
       <div className="w-full max-w-md mx-auto">
         <div className="relative">
-          {/* Main container with dark background */}
           <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
-            
-            {/* Plus button - positioned flush left */}
+            {/* Plus button - 与目标样式完全对齐 */}
             <button
               type="button"
               onClick={handleAddClick}
-              className="flex-shrink-0 w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center ml-1 transition-colors duration-200 focus:outline-none"
+              className="flex-shrink-0 w-10 h-10 bg-gray-700 hover:bg-gray-600 rounded-full flex items-center justify-center ml-1 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-2 focus:ring-offset-gray-900"
               disabled={isLoading}
             >
               <Plus className="w-5 h-5 text-white" strokeWidth={2} />
             </button>
 
-            {/* Input field */}
+            {/* Input field - 与目标样式完全对齐 */}
             <input
               ref={inputRef}
               type="text"
@@ -122,16 +103,14 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
               disabled={isLoading}
             />
 
-            {/* Right side icons container */}
-            <div className="flex items-center space-x-2 mr-3 conversation-right-buttons">
-              
-              {/* Microphone button */}
+            <div className="flex items-center space-x-2 mr-3">
+              {/* 修正点 1: 麦克风按钮 - 明确添加bg-transparent */}
               <button
                 type="button"
                 onClick={handleMicClick}
-                className={`flex items-center justify-center w-8 h-8 rounded-full transition-colors duration-200 focus:outline-none ${
+                className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                   isRecording 
-                    ? 'recording bg-red-600 hover:bg-red-500 text-white' 
+                    ? 'bg-red-600 hover:bg-red-500 text-white' 
                     : 'bg-transparent hover:bg-gray-700 text-gray-300'
                 }`}
                 disabled={isLoading}
@@ -139,11 +118,11 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
                 <Mic className="w-4 h-4" strokeWidth={2} />
               </button>
 
-              {/* Star ray button */}
+              {/* 修正点 2: 星星按钮 - 明确添加bg-transparent */}
               <button
                 type="button"
                 onClick={handleStarClick}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-transparent hover:bg-gray-700 text-gray-300 transition-colors duration-200 focus:outline-none"
+                className="p-2 rounded-full bg-transparent hover:bg-gray-700 text-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 disabled={isLoading}
               >
                 <StarRayIcon 
@@ -152,7 +131,6 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
                   iconColor="#ffffff"
                 />
               </button>
-              
             </div>
           </div>
 

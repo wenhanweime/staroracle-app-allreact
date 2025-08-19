@@ -141,30 +141,30 @@ const OracleInput: React.FC = () => {
                       />
 
                       {/* Right side icons container */}
-                      <div className="flex items-center space-x-2 mr-3">
+                      <div className="flex items-center space-x-2 mr-3 oracle-input-buttons">
                         
-                        {/* Microphone button */}
+                        {/* Microphone button - 样式对齐目标，修复iOS灰色背景 */}
                         <button
                           type="button"
                           onClick={handleMicClick}
                           className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                             isRecording 
                               ? 'bg-red-600 hover:bg-red-500 text-white' 
-                              : 'hover:bg-gray-700 text-gray-300'
+                              : 'bg-transparent hover:bg-gray-700 text-gray-300'
                           }`}
                           disabled={isLoading}
                         >
                           <Mic className="w-4 h-4" strokeWidth={2} />
                         </button>
 
-                        {/* Star ray submit button */}
+                        {/* Star ray submit button - 样式对齐目标，修复iOS灰色背景 */}
                         <motion.button
                           type="button"
                           onClick={handleStarClick}
                           className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                             question.trim() 
-                              ? 'hover:bg-cosmic-purple text-cosmic-accent' 
-                              : 'hover:bg-gray-700 text-gray-300'
+                              ? 'bg-transparent hover:bg-cosmic-purple text-cosmic-accent' 
+                              : 'bg-transparent hover:bg-gray-700 text-gray-300'
                           }`}
                           disabled={isLoading}
                           whileHover={!isLoading ? { scale: 1.1 } : {}}

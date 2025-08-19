@@ -214,28 +214,6 @@ h1, h2, h3, h4, h5, h6 {
     -moz-osx-font-smoothing: grayscale;
     will-change: transform;
   }
-  
-  /* iOS ConversationDrawer 右侧图标按钮修复 - 精确选择器 */
-  div.conversation-right-buttons > button {
-    -webkit-appearance: none;
-    appearance: none;
-    background-color: transparent !important;
-    background-image: none !important; /* 新增：移除可能的默认渐变 */
-    border: none;
-    padding: 0; /* 新增：移除可能的默认内边距 */
-  }
-  
-  div.conversation-right-buttons > button:hover {
-    background-color: rgb(55 65 81) !important; /* gray-700 */
-  }
-  
-  div.conversation-right-buttons > button.recording {
-    background-color: rgb(220 38 38) !important; /* red-600 */
-  }
-  
-  div.conversation-right-buttons > button.recording:hover {
-    background-color: rgb(185 28 28) !important; /* red-700 */
-  }
 }
 
 .star-card-wrapper {
@@ -721,4 +699,14 @@ h1, h2, h3, h4, h5, h6 {
 
 .float {
   animation: float 6s infinite ease-in-out;
+}
+
+/*
+ * 关键修复：重置 iOS/Safari 上按钮的默认原生外观。
+ * 这会移除 iOS 强加的灰色背景和边框，
+ * 从而让我们的 Tailwind CSS 类可以正常、无干扰地生效。
+ */
+button {
+  -webkit-appearance: none;
+  appearance: none;
 }
