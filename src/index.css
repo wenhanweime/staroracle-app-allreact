@@ -23,6 +23,15 @@ input, textarea, button, select {
   touch-action: manipulation;
 }
 
+/* 重置输入框默认样式 - 移除浏览器默认边框 */
+input {
+  border: none !important;
+  outline: none !important;
+  box-shadow: none !important;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
 /* 全局禁用缩放和滚动 */
 html {
   overflow: hidden;
