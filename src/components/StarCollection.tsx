@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { X, Grid, List, Search, Filter, Star as StarIcon } from 'lucide-react';
+import { X, Search, Filter, Star as StarIcon } from 'lucide-react';
 import { useStarStore } from '../store/useStarStore';
 import { playSound } from '../utils/soundUtils';
 import { getMobileModalStyles, getMobileModalClasses, fixIOSZIndex, createTopLevelContainer, hideOtherElements } from '../utils/mobileUtils';
@@ -29,7 +29,6 @@ interface StarCollectionProps {
 
 const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
   const { constellation, drawInspirationCard } = useStarStore();
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'special' | 'recent'>('all');
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
@@ -194,26 +193,11 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
                   <option value="special">Special Stars</option>
                   <option value="recent">Recent (7 days)</option>
                 </select>
-                
-                <div className="view-toggle">
-                  <button
-                    className={`view-btn ${viewMode === 'grid' ? 'active' : ''}`}
-                    onClick={() => setViewMode('grid')}
-                  >
-                    <Grid className="w-4 h-4" />
-                  </button>
-                  <button
-                    className={`view-btn ${viewMode === 'list' ? 'active' : ''}`}
-                    onClick={() => setViewMode('list')}
-                  >
-                    <List className="w-4 h-4" />
-                  </button>
-                </div>
               </div>
             </div>
 
             {/* Star Cards */}
-            <div className={`collection-content ${viewMode}`}>
+            <div className="collection-content grid">
               <AnimatePresence>
                 {filteredStars.map((star, index) => {
                   const styleConfig = starStyleMap.get(star.id) || { style: 'standard', theme: 0 };

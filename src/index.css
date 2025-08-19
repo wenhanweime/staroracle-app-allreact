@@ -214,6 +214,26 @@ h1, h2, h3, h4, h5, h6 {
     -moz-osx-font-smoothing: grayscale;
     will-change: transform;
   }
+  
+  /* iOS ConversationDrawer 右侧图标按钮修复 - 精确选择器 */
+  .conversation-right-buttons button {
+    -webkit-appearance: none;
+    appearance: none;
+    background-color: transparent !important;
+    border: none;
+  }
+  
+  .conversation-right-buttons button:hover {
+    background-color: rgb(55 65 81) !important; /* gray-700 */
+  }
+  
+  .conversation-right-buttons button.recording {
+    background-color: rgb(220 38 38) !important; /* red-600 */
+  }
+  
+  .conversation-right-buttons button.recording:hover {
+    background-color: rgb(185 28 28) !important; /* red-700 */
+  }
 }
 
 .star-card-wrapper {

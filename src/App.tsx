@@ -27,6 +27,7 @@ function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
+  const [appReady, setAppReady] = useState(false);
   const { 
     applyTemplate, 
     currentInspirationCard, 
@@ -40,12 +41,18 @@ function App() {
         // 设置状态栏为暗色模式，文字为亮色
         await StatusBar.setStyle({ style: Style.Dark });
         
+        // 标记应用准备就绪
+        setAppReady(true);
+        
         // 延迟隐藏启动屏，让应用完全加载
         setTimeout(async () => {
           await SplashScreen.hide({
             fadeOutDuration: 300
           });
-        }, 1500);
+        }, 500);
+      } else {
+        // Web环境立即设置为准备就绪
+        setAppReady(true);
       }
     };
     setupNative();
@@ -78,11 +85,20 @@ function App() {
     }
   }, [currentInspirationCard]);
 
-  // Start ambient sound when app loads（保持Web版本逻辑）
+  // Start ambient sound when user interacts（延迟到用户交互后）
   useEffect(() => {
-    startAmbientSound();
+    const handleFirstInteraction = () => {
+      startAmbientSound();
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
+    };
+    
+    document.addEventListener('touchstart', handleFirstInteraction);
+    document.addEventListener('click', handleFirstInteraction);
     
     return () => {
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
       stopAmbientSound();
     };
   }, []);
@@ -152,8 +168,8 @@ function App() {
   
   return (
     <div className="min-h-screen cosmic-bg overflow-hidden relative">
-      {/* Background with stars */}
-      <StarryBackground starCount={150} />
+      {/* Background with stars - 延迟渲染 */}
+      {appReady && <StarryBackground starCount={75} />}
       
       {/* Header */}
       <Header />
@@ -187,8 +203,8 @@ function App() {
         </button>
       </div>
       
-      {/* User's constellation */}
-      <Constellation />
+      {/* User's constellation - 延迟渲染 */}
+      {appReady && <Constellation />}
       
       {/* Inspiration card */}
       {currentInspirationCard && (
@@ -199,7 +215,7 @@ function App() {
       )}
       
       {/* Star detail modal */}
-      <StarDetail />
+      {appReady && <StarDetail />}
       
       {/* Star collection modal */}
       <StarCollection 

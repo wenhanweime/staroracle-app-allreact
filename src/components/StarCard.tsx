@@ -513,26 +513,13 @@ const StarCard: React.FC<StarCardProps> = ({
         >
           {/* Front Side - Star Design */}
           <div className="star-card-face star-card-front">
-            <div className="star-card-bg"
+            <div 
+              className="star-card-bg"
               style={{
-                background: `radial-gradient(circle, ${currentTheme.inner} 0%, ${currentTheme.outer} 100%)`,
-                display: 'flex',
-                flexDirection: 'column',
-                justifyContent: 'center', // 确保内容垂直居中
-                alignItems: 'center', // 确保内容水平居中
-                position: 'relative'
+                background: `radial-gradient(circle, ${currentTheme.inner} 0%, ${currentTheme.outer} 100%)`
               }}
             >
-              <div className="star-card-constellation" style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                position: 'relative',
-                flex: '1', // 改为占据剩余空间
-                height: '200px', // 固定高度
-                width: '100%',
-                minHeight: '200px' // 确保最小高度
-              }}>
+              <div className="star-card-constellation">
                 {/* 渲染行星类型星星 */}
                 {style.startsWith('planet_') && (
                   <canvas 
@@ -542,11 +529,7 @@ const StarCard: React.FC<StarCardProps> = ({
                     className="planet-canvas"
                     style={{
                       width: '160px',
-                      height: '160px',
-                      maxWidth: '160px',
-                      maxHeight: '160px',
-                      display: 'block', // 确保canvas是块级元素
-                      margin: '0 auto' // 水平居中
+                      height: '160px'
                     }}
                   />
                 )}

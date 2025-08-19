@@ -25,7 +25,7 @@ interface Nebula {
   pulsePhase: number;
 }
 
-const StarryBackground: React.FC<StarryBackgroundProps> = ({ starCount = 200 }) => {
+const StarryBackground: React.FC<StarryBackgroundProps> = ({ starCount = 100 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   

@@ -123,7 +123,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
             />
 
             {/* Right side icons container */}
-            <div className="flex items-center space-x-2 mr-3">
+            <div className="flex items-center space-x-2 mr-3 conversation-right-buttons">
               
               {/* Microphone button */}
               <button
@@ -131,7 +131,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
                 onClick={handleMicClick}
                 className={`p-2 rounded-full transition-colors duration-200 focus:outline-none ${
                   isRecording 
-                    ? 'bg-red-600 hover:bg-red-500 text-white' 
+                    ? 'recording bg-red-600 hover:bg-red-500 text-white' 
                     : 'bg-transparent hover:bg-gray-700 text-gray-300'
                 }`}
                 disabled={isLoading}
