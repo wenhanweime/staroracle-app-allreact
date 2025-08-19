@@ -93,7 +93,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 p-4" style={{ paddingBottom: `var(--safe-area-inset-bottom)` }}>
+    <div className="fixed bottom-0 left-0 right-0 z-40 p-4" style={{ paddingBottom: `max(1rem, env(safe-area-inset-bottom))` }}>
       <div className="w-full max-w-md mx-auto">
         <div className="relative">
           {/* Main container with dark background */}
