@@ -214,6 +214,32 @@ h1, h2, h3, h4, h5, h6 {
     -moz-osx-font-smoothing: grayscale;
     will-change: transform;
   }
+
+  /* iOS 对话框透明按钮强制修复 - 最高优先级 */
+  button.dialog-transparent-button {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    border: none !important;
+    padding: 8px !important; /* p-2 = 8px */
+  }
+  
+  button.dialog-transparent-button:hover {
+    background: rgb(55 65 81) !important; /* gray-700 */
+    background-color: rgb(55 65 81) !important;
+  }
+  
+  button.dialog-transparent-button.recording {
+    background: rgb(220 38 38) !important; /* red-600 */
+    background-color: rgb(220 38 38) !important;
+  }
+  
+  button.dialog-transparent-button.recording:hover {
+    background: rgb(185 28 28) !important; /* red-700 */
+    background-color: rgb(185 28 28) !important;
+  }
 }
 
 .star-card-wrapper {
@@ -709,4 +735,27 @@ h1, h2, h3, h4, h5, h6 {
 button {
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* 对话框透明按钮样式 - 解决iOS Safari bg-transparent失效问题 */
+.dialog-transparent-button {
+  background: transparent !important;
+  background-color: transparent !important;
+  background-image: none !important;
+  border: none !important;
+}
+
+.dialog-transparent-button:hover {
+  background: rgb(55 65 81) !important; /* gray-700 */
+  background-color: rgb(55 65 81) !important;
+}
+
+.dialog-transparent-button.recording {
+  background: rgb(220 38 38) !important; /* red-600 */
+  background-color: rgb(220 38 38) !important;
+}
+
+.dialog-transparent-button.recording:hover {
+  background: rgb(185 28 28) !important; /* red-700 */
+  background-color: rgb(185 28 28) !important;
 }

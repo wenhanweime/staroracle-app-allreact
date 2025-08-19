@@ -104,25 +104,25 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
             />
 
             <div className="flex items-center space-x-2 mr-3">
-              {/* 修正点 1: 麦克风按钮 - 明确添加bg-transparent */}
+              {/* 修正点 1: 麦克风按钮 - 使用新的CSS类解决iOS问题 */}
               <button
                 type="button"
                 onClick={handleMicClick}
-                className={`p-2 rounded-full transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
+                className={`p-2 rounded-full dialog-transparent-button transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
                   isRecording 
-                    ? 'bg-red-600 hover:bg-red-500 text-white' 
-                    : 'bg-transparent hover:bg-gray-700 text-gray-300'
+                    ? 'recording text-white' 
+                    : 'text-gray-300'
                 }`}
                 disabled={isLoading}
               >
                 <Mic className="w-4 h-4" strokeWidth={2} />
               </button>
 
-              {/* 修正点 2: 星星按钮 - 明确添加bg-transparent */}
+              {/* 修正点 2: 星星按钮 - 使用新的CSS类解决iOS问题 */}
               <button
                 type="button"
                 onClick={handleStarClick}
-                className="p-2 rounded-full bg-transparent hover:bg-gray-700 text-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                className="p-2 rounded-full dialog-transparent-button text-gray-300 transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
                 disabled={isLoading}
               >
                 <StarRayIcon 
