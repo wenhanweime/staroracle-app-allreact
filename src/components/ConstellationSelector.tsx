@@ -115,7 +115,7 @@ const ConstellationSelector: React.FC<ConstellationSelectorProps> = ({
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <StarRayIcon size={24} className="text-cosmic-accent" animated={true} />
-                  <h2 className="text-xl font-heading text-white">选择星座模板</h2>
+                  <h2 className="stellar-title text-white">选择星座模板</h2>
                 </div>
                 <button
                   className="w-8 h-8 rounded-full cosmic-button flex items-center justify-center"

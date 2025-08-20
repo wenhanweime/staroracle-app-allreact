@@ -307,7 +307,7 @@ const AIConfigPanel: React.FC<AIConfigPanelProps> = ({ isOpen, onClose }) => {
               <div className="flex items-center justify-between mb-6">
                 <div className="flex items-center gap-3">
                   <Settings className="w-6 h-6 text-cosmic-accent" />
-                  <h2 className="text-xl font-heading text-white">AI Configuration</h2>
+                  <h2 className="stellar-title text-white">AI Configuration</h2>
                 </div>
                 <button
                   className="w-8 h-8 rounded-full cosmic-button flex items-center justify-center"
