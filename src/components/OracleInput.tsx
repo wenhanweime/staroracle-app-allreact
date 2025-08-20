@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Mic } from 'lucide-react';
@@ -17,6 +17,8 @@ const OracleInput: React.FC = () => {
   const [question, setQuestion] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [starAnimated, setStarAnimated] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   
   const handleCloseInput = () => {
     if (!isLoading) {
@@ -59,6 +61,44 @@ const OracleInput: React.FC = () => {
     }
   };
   
+  // iOS键盘监听和视口调整
+  useEffect(() => {
+    if (!isIOS() || !isAsking) return;
+
+    const handleViewportChange = () => {
+      const viewport = window.visualViewport;
+      if (viewport) {
+        const keyboardHeight = window.innerHeight - viewport.height;
+        const isVisible = keyboardHeight > 0;
+        
+        setKeyboardHeight(keyboardHeight);
+        setIsKeyboardVisible(isVisible);
+      }
+    };
+
+    // 监听视口变化
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      return () => {
+        window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      };
+    } else {
+      // 备用方案
+      let initialHeight = window.innerHeight;
+      const handleResize = () => {
+        const currentHeight = window.innerHeight;
+        const keyboardHeight = Math.max(0, initialHeight - currentHeight);
+        const isVisible = keyboardHeight > 100;
+        
+        setKeyboardHeight(keyboardHeight);
+        setIsKeyboardVisible(isVisible);
+      };
+      
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, [isAsking]);
+  
   // iOS专用的输入框点击处理
   const handleInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
     if (isIOS()) {
@@ -71,6 +111,21 @@ const OracleInput: React.FC = () => {
         input.setSelectionRange(length, length);
       }, 100);
     }
+  };
+  
+  // 计算模态框的动态样式
+  const getModalStyle = () => {
+    if (isIOS() && isKeyboardVisible && keyboardHeight > 0) {
+      // 键盘弹起时，将模态框向上移动
+      return {
+        transform: `translateY(-${keyboardHeight / 2}px)`,
+        transition: 'transform 0.25s ease-out'
+      };
+    }
+    return {
+      transform: 'translateY(0)',
+      transition: 'transform 0.25s ease-out'
+    };
   };
   
   const handleSubmit = async (e: React.FormEvent) => {
@@ -122,6 +177,7 @@ const OracleInput: React.FC = () => {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: 20 }}
+                style={getModalStyle()}
               >
                 {/* Title */}
                 <h2 className="stellar-title text-white mb-6 text-center">Ask the Stars</h2>

@@ -73,6 +73,15 @@ input {
     border: none !important;
     box-shadow: none !important;
   }
+  
+  /* iOS键盘同步动画优化 */
+  .keyboard-aware-container {
+    will-change: transform;
+    -webkit-backface-visibility: hidden;
+    backface-visibility: hidden;
+    -webkit-perspective: 1000px;
+    perspective: 1000px;
+  }
 }
 
 /* 全局禁用缩放和滚动 */

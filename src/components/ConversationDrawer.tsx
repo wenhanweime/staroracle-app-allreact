@@ -22,7 +22,10 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [starAnimated, setStarAnimated] = useState(false);
+  const [keyboardHeight, setKeyboardHeight] = useState(0);
+  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   const { addStar, isAsking } = useStarStore();
 
   useEffect(() => {
@@ -30,6 +33,52 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
       inputRef.current.focus();
     }
   }, [isAsking]);
+
+  // iOS键盘监听和视口调整
+  useEffect(() => {
+    if (!isIOS()) return;
+
+    const handleViewportChange = () => {
+      const viewport = window.visualViewport;
+      if (viewport) {
+        const keyboardHeight = window.innerHeight - viewport.height;
+        const isVisible = keyboardHeight > 0;
+        
+        setKeyboardHeight(keyboardHeight);
+        setIsKeyboardVisible(isVisible);
+        
+        // 调试信息
+        console.log('Viewport change:', {
+          windowHeight: window.innerHeight,
+          viewportHeight: viewport.height,
+          keyboardHeight,
+          isVisible
+        });
+      }
+    };
+
+    // 监听视口变化
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', handleViewportChange);
+      return () => {
+        window.visualViewport?.removeEventListener('resize', handleViewportChange);
+      };
+    } else {
+      // 备用方案：监听窗口resize
+      let initialHeight = window.innerHeight;
+      const handleResize = () => {
+        const currentHeight = window.innerHeight;
+        const keyboardHeight = Math.max(0, initialHeight - currentHeight);
+        const isVisible = keyboardHeight > 100; // 阈值100px
+        
+        setKeyboardHeight(keyboardHeight);
+        setIsKeyboardVisible(isVisible);
+      };
+      
+      window.addEventListener('resize', handleResize);
+      return () => window.removeEventListener('resize', handleResize);
+    }
+  }, []);
 
   const handleMicClick = () => {
     setIsRecording(!isRecording);
@@ -92,8 +141,34 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
     }
   };
 
+  // 计算容器的动态样式
+  const getContainerStyle = () => {
+    const baseStyle = {
+      paddingBottom: `max(1rem, env(safe-area-inset-bottom))`
+    };
+
+    if (isIOS() && isKeyboardVisible && keyboardHeight > 0) {
+      // 键盘弹起时，将输入框移动到键盘上方
+      return {
+        ...baseStyle,
+        transform: `translateY(-${keyboardHeight}px)`,
+        transition: 'transform 0.25s ease-out'
+      };
+    }
+
+    return {
+      ...baseStyle,
+      transform: 'translateY(0)',
+      transition: 'transform 0.25s ease-out'
+    };
+  };
+
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 p-4" style={{ paddingBottom: `max(1rem, env(safe-area-inset-bottom))` }}>
+    <div 
+      ref={containerRef}
+      className="fixed bottom-0 left-0 right-0 z-40 p-4 keyboard-aware-container" 
+      style={getContainerStyle()}
+    >
       <div className="w-full max-w-md mx-auto">
         <div className="relative">
           <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
