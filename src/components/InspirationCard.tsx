@@ -30,14 +30,14 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     setAnswerReflection(reflection);
   }, []);
     
-  // 当卡片翻转到背面时，自动聚焦输入框
-  useEffect(() => {
-    if (isFlipped && inputRef.current) {
-      setTimeout(() => {
-        inputRef.current?.focus();
-      }, 600); // 等待卡片翻转动画完成
-    }
-  }, [isFlipped]);
+  // 移除自动聚焦功能 - 只有用户手动点击输入框时才触发键盘
+  // useEffect(() => {
+  //   if (isFlipped && inputRef.current) {
+  //     setTimeout(() => {
+  //       inputRef.current?.focus();
+  //     }, 600); // 等待卡片翻转动画完成
+  //   }
+  // }, [isFlipped]);
 
   const handleDismiss = () => {
     playSound('starClick');
