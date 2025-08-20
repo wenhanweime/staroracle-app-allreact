@@ -26,11 +26,11 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
         <div className="flex justify-between items-center h-full">
         {/* 左侧菜单按钮 */}
         <button
-          className="cosmic-button rounded-full p-2 flex items-center justify-center"
+          className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
           onClick={onOpenDrawerMenu}
           title="菜单"
         >
-          <Menu className="w-4 h-4 text-white" />
+          <Menu className="w-4 h-4" />
         </button>
 
         {/* 中间标题 */}
@@ -42,7 +42,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
 
         {/* 右侧logo按钮 */}
         <button
-          className="cosmic-button rounded-full p-2 flex items-center justify-center"
+          className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
           onClick={onLogoClick}
           title="星座收藏"
         >

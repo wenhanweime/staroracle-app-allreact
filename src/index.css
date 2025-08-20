@@ -763,9 +763,25 @@ button {
   border: none !important;
   color: rgba(255, 255, 255, 0.6) !important;
   transition: color 0.3s ease !important;
+  outline: none !important;
+  box-shadow: none !important;
 }
 
 .dialog-transparent-button:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 1) !important;
+}
+
+.dialog-transparent-button:focus {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 1) !important;
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.dialog-transparent-button:active {
   background: transparent !important;
   background-color: transparent !important;
   color: rgba(255, 255, 255, 1) !important;
@@ -778,6 +794,20 @@ button {
 }
 
 .dialog-transparent-button.recording:hover {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgb(220 38 38) !important; /* red-600 */
+}
+
+.dialog-transparent-button.recording:focus {
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgb(220 38 38) !important; /* red-600 */
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.dialog-transparent-button.recording:active {
   background: transparent !important;
   background-color: transparent !important;
   color: rgb(220 38 38) !important; /* red-600 */

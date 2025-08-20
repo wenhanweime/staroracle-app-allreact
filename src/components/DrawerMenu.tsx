@@ -75,9 +75,9 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                 <div className="text-xl font-semibold text-white">星谕菜单</div>
                 <button
                   onClick={onClose}
-                  className="cosmic-button rounded-full p-3 flex items-center justify-center"
+                  className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
                 >
-                  <X className="w-5 h-5 text-white" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
             </div>

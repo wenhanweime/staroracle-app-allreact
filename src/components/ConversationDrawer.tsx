@@ -94,7 +94,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
               <button
                 type="button"
                 onClick={handleMicClick}
-                className={`p-2 rounded-full dialog-transparent-button transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500 ${
+                className={`p-2 rounded-full dialog-transparent-button transition-colors duration-200 ${
                   isRecording 
                     ? 'recording' 
                     : ''
@@ -108,7 +108,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
               <button
                 type="button"
                 onClick={handleStarClick}
-                className="p-2 rounded-full dialog-transparent-button transition-colors duration-200 focus:outline-none focus:ring-2 focus:ring-gray-500"
+                className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
                 disabled={isLoading}
               >
                 <StarRayIcon 
