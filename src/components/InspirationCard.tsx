@@ -154,8 +154,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   fill="rgba(255,255,255,0.6)"
                   initial={{ opacity: 0.3 }}
                   animate={isCardReady ? { 
-                    opacity: [0.3, 0.8, 0.3],
-                    scale: [1, 1.2, 1]
+                    opacity: [0.3, 0.8, 0.3]
                   } : { opacity: 0.3 }}
                   transition={{
                     duration: star.duration,
