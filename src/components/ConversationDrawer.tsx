@@ -6,6 +6,12 @@ import { triggerHapticFeedback } from '../utils/hapticUtils';
 import StarRayIcon from './StarRayIcon';
 import { Capacitor } from '@capacitor/core';
 
+// iOS设备检测
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
 interface ConversationDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
@@ -71,6 +77,21 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
     }
   };
 
+  // iOS专用的输入框点击处理
+  const handleInputClick = () => {
+    if (isIOS() && inputRef.current) {
+      // 确保iOS键盘弹起
+      inputRef.current.focus();
+      // 设置光标到末尾
+      setTimeout(() => {
+        if (inputRef.current) {
+          const length = inputRef.current.value.length;
+          inputRef.current.setSelectionRange(length, length);
+        }
+      }, 100);
+    }
+  };
+
   return (
     <div className="fixed bottom-0 left-0 right-0 z-40 p-4" style={{ paddingBottom: `max(1rem, env(safe-area-inset-bottom))` }}>
       <div className="w-full max-w-md mx-auto">
@@ -83,10 +104,15 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
               value={inputValue}
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
+              onClick={handleInputClick}
               placeholder="询问任何问题"
-              className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none text-sm font-normal"
-              style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
+              className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none stellar-body"
               disabled={isLoading}
+              // iOS专用属性确保键盘弹起
+              inputMode="text"
+              autoComplete="off"
+              autoCapitalize="sentences"
+              spellCheck="false"
             />
 
             <div className="flex items-center space-x-2 mr-3">

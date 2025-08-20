@@ -12,6 +12,26 @@
   --safe-area-inset-left: env(safe-area-inset-left, 0px);
 }
 
+/* 二层级字体系统 - 按照用户需求重新设计 */
+
+/* 第一层级：标题和Title层级 */
+/* 用于: 首页"星谕"、DrawerMenu"星谕菜单"、模态框标题等所有标题性文字 */
+.stellar-title {
+  font-family: var(--font-heading);
+  font-size: 1.125rem; /* 18px */
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* 第二层级：正文层级 */  
+/* 用于: 菜单项文字、输入框文字、按钮文字、大部分界面文字 */
+.stellar-body {
+  font-family: var(--font-body);
+  font-size: 0.875rem; /* 14px */
+  font-weight: 400;
+  line-height: 1.5;
+}
+
 /* 移动端触摸优化 */
 * {
   -webkit-tap-highlight-color: transparent;
@@ -30,6 +50,29 @@ input {
   box-shadow: none !important;
   -webkit-appearance: none;
   appearance: none;
+}
+
+/* iOS专用输入框优化 - 确保键盘弹起 */
+@supports (-webkit-touch-callout: none) {
+  input[type="text"] {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    border-radius: 0 !important;
+    /* 强制iOS显示文本键盘 */
+    -webkit-user-select: text !important;
+    user-select: text !important;
+    /* 防止iOS缩放 */
+    font-size: 16px !important;
+  }
+  
+  /* 确保输入框在iOS上可点击 */
+  input[type="text"]:focus {
+    -webkit-appearance: none !important;
+    appearance: none !important;
+    outline: none !important;
+    border: none !important;
+    box-shadow: none !important;
+  }
 }
 
 /* 全局禁用缩放和滚动 */

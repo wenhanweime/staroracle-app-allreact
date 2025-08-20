@@ -1,18 +1,9 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Settings, 
   X, 
-  Search, 
-  Package, 
-  Hash, 
-  Users, 
-  MapPin, 
-  Filter, 
-  Download, 
   ChevronRight 
 } from 'lucide-react';
-import StarRayIcon from './StarRayIcon';
 
 interface DrawerMenuProps {
   isOpen: boolean;
@@ -24,10 +15,9 @@ interface DrawerMenuProps {
 const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings, onOpenTemplateSelector }) => {
   // 菜单项配置（基于demo的设计）
   const menuItems = [
-    { icon: Search, label: '所有项目', active: true },
-    { icon: Package, label: '记忆', count: 0 },
+    { label: '所有项目', active: true },
+    { label: '记忆', count: 0 },
     { 
-      icon: () => <StarRayIcon size={18} />, 
       label: '选择星座', 
       hasArrow: true,
       onClick: () => {
@@ -35,13 +25,12 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
         onClose();
       }
     },
-    { icon: Hash, label: '智能标签', count: 9, section: '资料库' },
-    { icon: Users, label: '人物', count: 0 },
-    { icon: Package, label: '事物', count: 0 },
-    { icon: MapPin, label: '地点', count: 0 },
-    { icon: Filter, label: '类型' },
+    { label: '智能标签', count: 9, section: '资料库' },
+    { label: '人物', count: 0 },
+    { label: '事物', count: 0 },
+    { label: '地点', count: 0 },
+    { label: '类型' },
     { 
-      icon: Settings, 
       label: 'AI配置', 
       hasArrow: true,
       onClick: () => {
@@ -49,7 +38,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
         onClose();
       }
     },
-    { icon: Download, label: '导入', hasArrow: true }
+    { label: '导入', hasArrow: true }
   ];
 
   return (
@@ -92,7 +81,6 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
             {/* 菜单项列表 */}
             <div className="flex-1 overflow-y-auto">
               {menuItems.map((item, index) => {
-                const IconComponent = item.icon;
                 return (
                   <div key={index}>
                     {/* 分组标题 */}
@@ -111,10 +99,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                       }`}
                       onClick={item.onClick}
                     >
-                      <div className="flex items-center gap-3">
-                        <div className={`transition-colors ${item.active ? 'text-blue-400' : 'text-current'}`}>
-                          <IconComponent className="w-5 h-5" />
-                        </div>
+                      <div className="flex items-center">
                         <span className="stellar-body">{item.label}</span>
                       </div>
                       

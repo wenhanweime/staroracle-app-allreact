@@ -6,6 +6,12 @@ import { useStarStore } from '../store/useStarStore';
 import { playSound } from '../utils/soundUtils';
 import StarRayIcon from './StarRayIcon';
 
+// iOS设备检测
+const isIOS = () => {
+  return /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+         (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+};
+
 const OracleInput: React.FC = () => {
   const { isAsking, setIsAsking, addStar, pendingStarPosition, isLoading } = useStarStore();
   const [question, setQuestion] = useState('');
@@ -50,6 +56,20 @@ const OracleInput: React.FC = () => {
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSubmit(e as any);
+    }
+  };
+  
+  // iOS专用的输入框点击处理
+  const handleInputClick = (e: React.MouseEvent<HTMLInputElement>) => {
+    if (isIOS()) {
+      const input = e.target as HTMLInputElement;
+      // 确保iOS键盘弹起
+      input.focus();
+      // 设置光标到末尾
+      setTimeout(() => {
+        const length = input.value.length;
+        input.setSelectionRange(length, length);
+      }, 100);
     }
   };
   
@@ -104,7 +124,7 @@ const OracleInput: React.FC = () => {
                 exit={{ opacity: 0, y: 20 }}
               >
                 {/* Title */}
-                <h2 className="text-2xl font-heading text-white mb-6 text-center">Ask the Stars</h2>
+                <h2 className="stellar-title text-white mb-6 text-center">Ask the Stars</h2>
                 
                 {/* Dark Input Bar */}
                 <form onSubmit={handleSubmit}>
@@ -118,11 +138,16 @@ const OracleInput: React.FC = () => {
                         value={question}
                         onChange={handleInputChange}
                         onKeyPress={handleKeyPress}
+                        onClick={handleInputClick}
                         placeholder="What wisdom do you seek from the cosmos?"
-                        className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none text-sm font-normal"
-                        style={{ fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif' }}
+                        className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none stellar-body"
                         autoFocus
                         disabled={isLoading}
+                        // iOS专用属性确保键盘弹起
+                        inputMode="text"
+                        autoComplete="off"
+                        autoCapitalize="sentences"
+                        spellCheck="false"
                       />
 
                       {/* Right side icons container */}
