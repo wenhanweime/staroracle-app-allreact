@@ -12,12 +12,13 @@ import CollectionButton from './components/CollectionButton';
 import TemplateButton from './components/TemplateButton';
 import ConstellationSelector from './components/ConstellationSelector';
 import AIConfigPanel from './components/AIConfigPanel';
+import DrawerMenu from './components/DrawerMenu';
 import Header from './components/Header';
 import ConversationDrawer from './components/ConversationDrawer';
 import OracleInput from './components/OracleInput';
 import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
 import { triggerHapticFeedback } from './utils/hapticUtils';
-import { Settings } from 'lucide-react';
+import { Menu } from 'lucide-react';
 import { useStarStore } from './store/useStarStore';
 import { ConstellationTemplate } from './types';
 import { checkApiConfiguration } from './utils/aiTaggingUtils';
@@ -27,6 +28,7 @@ function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
   const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
+  const [isDrawerMenuOpen, setIsDrawerMenuOpen] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const { 
     applyTemplate, 
@@ -140,6 +142,34 @@ function App() {
     // 静默模式：移除配置检查和UI提示
   };
 
+  const handleOpenDrawerMenu = () => {
+    console.log('🍔 Menu button clicked - handleOpenDrawerMenu triggered!');
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starClick');
+    setIsDrawerMenuOpen(true);
+  };
+
+  const handleCloseDrawerMenu = () => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    setIsDrawerMenuOpen(false);
+  };
+
+  const handleLogoClick = () => {
+    console.log('✦ Logo button clicked - opening StarCollection!');
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starLight');
+    setIsCollectionOpen(true);
+  };
+
   const handleOpenTemplateSelector = () => {
     // 添加触感反馈（仅原生环境）
     if (Capacitor.isNativePlatform()) {
@@ -174,19 +204,24 @@ function App() {
       {/* Header */}
       <Header />
       
-      {/* Left side buttons - 避免与Header重叠 */}
+      {/* Left side menu button - 避免与Header重叠 */}
       <div 
-        className="fixed z-50 flex flex-col gap-3"
+        className="fixed z-50"
         style={{
           top: `calc(5rem + var(--safe-area-inset-top, 0px))`, // Header高度4rem + 1rem间距
           left: `calc(1rem + var(--safe-area-inset-left, 0px))`
         }}
       >
-        <CollectionButton onClick={handleOpenCollection} />
-        <TemplateButton onClick={handleOpenTemplateSelector} />
+        <button
+          className="cosmic-button rounded-full p-3 flex items-center justify-center"
+          onClick={handleOpenDrawerMenu}
+          title="菜单"
+        >
+          <Menu className="w-5 h-5 text-white" />
+        </button>
       </div>
 
-      {/* AI Config Button - 避免与Header重叠 */}
+      {/* Right side logo button - 避免与Header重叠 */}
       <div 
         className="fixed z-50"
         style={{
@@ -196,11 +231,24 @@ function App() {
       >
         <button
           className="cosmic-button rounded-full p-3 flex items-center justify-center"
-          onClick={handleOpenConfig}
-          title="AI Configuration"
+          onClick={handleLogoClick}
+          title="星座收藏"
         >
-          <Settings className="w-5 h-5 text-white" />
+          <div className="text-xl bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent filter drop-shadow-lg hover:rotate-45 transition-transform duration-300">
+            ✦
+          </div>
         </button>
+      </div>
+
+      {/* Collection and Template buttons - 移动到更下方的位置 */}
+      <div 
+        className="fixed z-50 flex flex-col gap-3"
+        style={{
+          top: `calc(9rem + var(--safe-area-inset-top, 0px))`, // 避开顶部按钮
+          left: `calc(1rem + var(--safe-area-inset-left, 0px))`
+        }}
+      >
+        <TemplateButton onClick={handleOpenTemplateSelector} />
       </div>
       
       {/* User's constellation - 延迟渲染 */}
@@ -234,6 +282,13 @@ function App() {
       <AIConfigPanel
         isOpen={isConfigOpen}
         onClose={handleCloseConfig}
+      />
+
+      {/* Drawer Menu */}
+      <DrawerMenu
+        isOpen={isDrawerMenuOpen}
+        onClose={handleCloseDrawerMenu}
+        onOpenSettings={handleOpenConfig}
       />
 
       {/* Oracle Input for star creation */}
