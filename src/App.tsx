@@ -199,44 +199,11 @@ function App() {
       {/* Background with stars - 延迟渲染 */}
       {appReady && <StarryBackground starCount={75} />}
       
-      {/* Header */}
-      <Header />
-      
-      {/* Left side menu button - 避免与Header重叠 */}
-      <div 
-        className="fixed z-50"
-        style={{
-          top: `calc(5rem + var(--safe-area-inset-top, 0px))`, // Header高度4rem + 1rem间距
-          left: `calc(1rem + var(--safe-area-inset-left, 0px))`
-        }}
-      >
-        <button
-          className="cosmic-button rounded-full p-3 flex items-center justify-center"
-          onClick={handleOpenDrawerMenu}
-          title="菜单"
-        >
-          <Menu className="w-5 h-5 text-white" />
-        </button>
-      </div>
-
-      {/* Right side logo button - 避免与Header重叠 */}
-      <div 
-        className="fixed z-50"
-        style={{
-          top: `calc(5rem + var(--safe-area-inset-top, 0px))`, // Header高度4rem + 1rem间距
-          right: `calc(1rem + var(--safe-area-inset-right, 0px))`
-        }}
-      >
-        <button
-          className="cosmic-button rounded-full p-3 flex items-center justify-center"
-          onClick={handleLogoClick}
-          title="星座收藏"
-        >
-          <div className="text-xl bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent filter drop-shadow-lg hover:rotate-45 transition-transform duration-300">
-            ✦
-          </div>
-        </button>
-      </div>
+      {/* Header - 现在包含三个元素在一行 */}
+      <Header 
+        onOpenDrawerMenu={handleOpenDrawerMenu}
+        onLogoClick={handleLogoClick}
+      />
 
       {/* User's constellation - 延迟渲染 */}
       {appReady && <Constellation />}
