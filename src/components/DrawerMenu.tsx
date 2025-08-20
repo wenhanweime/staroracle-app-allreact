@@ -12,18 +12,29 @@ import {
   Download, 
   ChevronRight 
 } from 'lucide-react';
+import StarRayIcon from './StarRayIcon';
 
 interface DrawerMenuProps {
   isOpen: boolean;
   onClose: () => void;
   onOpenSettings: () => void;
+  onOpenTemplateSelector: () => void;
 }
 
-const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings }) => {
+const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings, onOpenTemplateSelector }) => {
   // 菜单项配置（基于demo的设计）
   const menuItems = [
     { icon: Search, label: '所有项目', active: true },
     { icon: Package, label: '记忆', count: 0 },
+    { 
+      icon: () => <StarRayIcon size={18} />, 
+      label: '选择星座', 
+      hasArrow: true,
+      onClick: () => {
+        onOpenTemplateSelector();
+        onClose();
+      }
+    },
     { icon: Hash, label: '智能标签', count: 9, section: '资料库' },
     { icon: Users, label: '人物', count: 0 },
     { icon: Package, label: '事物', count: 0 },

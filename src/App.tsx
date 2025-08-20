@@ -8,8 +8,6 @@ import Constellation from './components/Constellation';
 import InspirationCard from './components/InspirationCard';
 import StarDetail from './components/StarDetail';
 import StarCollection from './components/StarCollection';
-import CollectionButton from './components/CollectionButton';
-import TemplateButton from './components/TemplateButton';
 import ConstellationSelector from './components/ConstellationSelector';
 import AIConfigPanel from './components/AIConfigPanel';
 import DrawerMenu from './components/DrawerMenu';
@@ -240,17 +238,6 @@ function App() {
         </button>
       </div>
 
-      {/* Collection and Template buttons - 移动到更下方的位置 */}
-      <div 
-        className="fixed z-50 flex flex-col gap-3"
-        style={{
-          top: `calc(9rem + var(--safe-area-inset-top, 0px))`, // 避开顶部按钮
-          left: `calc(1rem + var(--safe-area-inset-left, 0px))`
-        }}
-      >
-        <TemplateButton onClick={handleOpenTemplateSelector} />
-      </div>
-      
       {/* User's constellation - 延迟渲染 */}
       {appReady && <Constellation />}
       
@@ -289,6 +276,7 @@ function App() {
         isOpen={isDrawerMenuOpen}
         onClose={handleCloseDrawerMenu}
         onOpenSettings={handleOpenConfig}
+        onOpenTemplateSelector={handleOpenTemplateSelector}
       />
 
       {/* Oracle Input for star creation */}
