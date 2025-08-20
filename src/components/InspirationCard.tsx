@@ -23,6 +23,27 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   const [isCardReady, setIsCardReady] = useState(false); // 控制内部动画何时开始
   const inputRef = useRef<HTMLInputElement>(null);
   
+  // 预生成固定的星星位置，避免重新渲染时跳变
+  const [starPositions] = useState(() => 
+    Array.from({ length: 12 }).map((_, i) => ({
+      cx: 20 + (i % 4) * 40 + Math.random() * 20,
+      cy: 20 + Math.floor(i / 4) * 40 + Math.random() * 20,
+      r: Math.random() * 1.5 + 0.5,
+      duration: 2 + Math.random() * 2,
+      delay: Math.random() * 2
+    }))
+  );
+  
+  // 预生成固定的装饰粒子位置
+  const [particlePositions] = useState(() => 
+    Array.from({ length: 6 }).map(() => ({
+      left: `${20 + Math.random() * 60}%`,
+      top: `${20 + Math.random() * 60}%`,
+      duration: 3 + Math.random() * 2,
+      delay: Math.random() * 2
+    }))
+  );
+  
   // 在组件挂载时生成答案，确保答案在整个卡片生命周期内保持不变
   useEffect(() => {
     const answer = getBookAnswer();
@@ -124,12 +145,12 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
               </defs>
               
               {/* Background stars */}
-                    {Array.from({ length: 12 }).map((_, i) => (
+                    {starPositions.map((star, i) => (
                 <motion.circle
                   key={i}
-                        cx={20 + (i % 4) * 40 + Math.random() * 20}
-                        cy={20 + Math.floor(i / 4) * 40 + Math.random() * 20}
-                  r={Math.random() * 1.5 + 0.5}
+                        cx={star.cx}
+                        cy={star.cy}
+                  r={star.r}
                   fill="rgba(255,255,255,0.6)"
                   initial={{ opacity: 0.3 }}
                   animate={isCardReady ? { 
@@ -137,9 +158,9 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                     scale: [1, 1.2, 1]
                   } : { opacity: 0.3 }}
                   transition={{
-                    duration: 2 + Math.random() * 2,
+                    duration: star.duration,
                     repeat: isCardReady ? Infinity : 0,
-                    delay: isCardReady ? Math.random() * 2 : 0
+                    delay: isCardReady ? star.delay : 0
                   }}
                 />
               ))}
@@ -194,22 +215,22 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
 
                 {/* Decorative elements */}
                 <div className="star-card-decorations">
-                  {Array.from({ length: 6 }).map((_, i) => (
+                  {particlePositions.map((particle, i) => (
             <motion.div
               key={i}
               className="floating-particle"
               style={{
-                left: `${20 + Math.random() * 60}%`,
-                top: `${20 + Math.random() * 60}%`,
+                left: particle.left,
+                top: particle.top,
               }}
               animate={isCardReady ? {
                         y: [-5, 5, -5],
                         opacity: [0.3, 0.7, 0.3],
               } : { y: 0, opacity: 0.3 }}
               transition={{
-                duration: 3 + Math.random() * 2,
+                duration: particle.duration,
                 repeat: isCardReady ? Infinity : 0,
-                delay: isCardReady ? Math.random() * 2 : 0,
+                delay: isCardReady ? particle.delay : 0,
               }}
             />
           ))}
