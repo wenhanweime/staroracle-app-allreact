@@ -69,8 +69,16 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               border: '1px solid rgba(255, 255, 255, 0.1)'
             }}
           >
-            {/* 抽屉顶部 */}
-            <div className="px-5 py-6 border-b border-white/10">
+            {/* 抽屉顶部 - 与主页Header位置对齐 */}
+            <div 
+              className="px-5 border-b border-white/10"
+              style={{
+                paddingLeft: `calc(1.25rem + var(--safe-area-inset-left, 0px))`, // 20px + 安全区域
+                paddingRight: `calc(1.25rem + var(--safe-area-inset-right, 0px))`, // 20px + 安全区域
+                paddingTop: '3rem', // 48px - 与Header完全一致
+                paddingBottom: '0.5rem' // 8px - 与Header完全一致
+              }}
+            >
               <div className="flex items-center justify-between">
                 <div className="text-xl font-semibold text-white">星谕菜单</div>
                 <button
