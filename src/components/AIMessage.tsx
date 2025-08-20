@@ -32,7 +32,7 @@ const AIMessage: React.FC<AIMessageProps> = ({ message }) => {
     <div className="flex justify-start mb-4">
       <div className="max-w-[80%]">
         <div className="py-2 text-white stellar-body">
-          <div className="whitespace-pre-wrap break-words">
+          <div className="whitespace-pre-wrap break-words chat-message-content">
             {message.text}
           </div>
         </div>

@@ -38,6 +38,30 @@
   -webkit-touch-callout: none;
 }
 
+/* 全局禁用文本选择和长按复制，提升交互体验 */
+* {
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
+/* 允许输入框和对话框内容可以选择 */
+input, textarea, [contenteditable="true"] {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
+/* 专门允许聊天消息内容可以选择复制 */
+.chat-message-content {
+  -webkit-user-select: text !important;
+  -moz-user-select: text !important;
+  -ms-user-select: text !important;
+  user-select: text !important;
+}
+
 /* 禁用双击缩放 */
 input, textarea, button, select {
   touch-action: manipulation;
@@ -58,9 +82,6 @@ input {
     -webkit-appearance: none !important;
     appearance: none !important;
     border-radius: 0 !important;
-    /* 强制iOS显示文本键盘 */
-    -webkit-user-select: text !important;
-    user-select: text !important;
     /* 防止iOS缩放 */
     font-size: 16px !important;
   }
