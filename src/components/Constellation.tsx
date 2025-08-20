@@ -83,18 +83,12 @@ const Constellation: React.FC = () => {
       const y = ((e.clientY - rect.top) / rect.height) * 100;
       
       createSparkle(e.clientX, e.clientY);
-      playSound('starClick');
+      playSound('starReveal'); // 改为使用右键的音效
       
-      // 检测双击 (300ms内的两次点击)
-      if (timeDiff < 300) {
-        console.log('🌟 Double click detected - drawing inspiration card');
-        // 双击：摘星模式
-        drawInspirationCard();
-        playSound('starReveal');
-      } else {
-        // 单击：普通提问模式
-        setIsAsking(true, { x, y });
-      }
+      // 移动端单击直接走右键链路 - 弹出灵感卡片
+      console.log('🌟 主屏幕点击 - 显示灵感卡片（复用右键逻辑）');
+      const card = drawInspirationCard();
+      console.log('📇 灵感卡片已生成:', card.question);
       
       setLastClickTime(currentTime);
     } else {
