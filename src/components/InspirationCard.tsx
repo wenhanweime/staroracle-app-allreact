@@ -119,10 +119,9 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
       
       <motion.div
         className="star-card-container"
-        initial={{ opacity: 0, y: 20, scale: 0.8 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.9 }}
+        animate={{ opacity: 1, scale: 1 }}
         transition={{ type: "spring", damping: 20 }}
-        whileHover={{ y: -5 }}
       >
         <div className="star-card-wrapper">
           <motion.div
