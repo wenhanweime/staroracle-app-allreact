@@ -20,6 +20,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   const [bookAnswer, setBookAnswer] = useState('');
   const [answerReflection, setAnswerReflection] = useState('');
   const [inputValue, setInputValue] = useState('');
+  const [isCardReady, setIsCardReady] = useState(false); // 控制内部动画何时开始
   const inputRef = useRef<HTMLInputElement>(null);
   
   // 在组件挂载时生成答案，确保答案在整个卡片生命周期内保持不变
@@ -28,6 +29,15 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     const reflection = getAnswerReflection(answer);
     setBookAnswer(answer);
     setAnswerReflection(reflection);
+  }, []);
+
+  // 延迟启动内部动画，等待卡片容器动画完成
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setIsCardReady(true);
+    }, 800); // 等待卡片弹出动画完成后再启动内部动画
+
+    return () => clearTimeout(timer);
   }, []);
     
   // 移除自动聚焦功能 - 只有用户手动点击输入框时才触发键盘
@@ -122,14 +132,14 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   r={Math.random() * 1.5 + 0.5}
                   fill="rgba(255,255,255,0.6)"
                   initial={{ opacity: 0.3 }}
-                  animate={{ 
+                  animate={isCardReady ? { 
                     opacity: [0.3, 0.8, 0.3],
                     scale: [1, 1.2, 1]
-                  }}
+                  } : { opacity: 0.3 }}
                   transition={{
                     duration: 2 + Math.random() * 2,
-                    repeat: Infinity,
-                    delay: Math.random() * 2
+                    repeat: isCardReady ? Infinity : 0,
+                    delay: isCardReady ? Math.random() * 2 : 0
                   }}
                 />
               ))}
@@ -141,8 +151,8 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                       r="8"
                       fill={`url(#starGlow-${cardId})`}
                       initial={{ scale: 0 }}
-                      animate={{ scale: 1 }}
-                      transition={{ delay: 0.3, type: "spring" }}
+                      animate={isCardReady ? { scale: 1 } : { scale: 0 }}
+                      transition={{ delay: isCardReady ? 0.3 : 0, type: "spring" }}
                     />
                     
                     {/* Star rays - 使用星星动画阶段的动画效果 */}
@@ -156,15 +166,15 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                         stroke="#ffffff"
                         strokeWidth="2"
                         initial={{ pathLength: 0, opacity: 0 }}
-                        animate={{ 
+                        animate={isCardReady ? { 
                           pathLength: 1,
                           opacity: [0, 0.8, 0],
-                        }}
+                        } : { pathLength: 0, opacity: 0 }}
                         transition={{
                           duration: 1.5,
-                          delay: i * 0.1,
-                          repeat: Infinity,
-                          repeatDelay: 1,
+                          delay: isCardReady ? i * 0.1 : 0,
+                          repeat: isCardReady ? Infinity : 0,
+                          repeatDelay: isCardReady ? 1 : 0,
                         }}
               />
                     ))}
@@ -174,8 +184,8 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                 <motion.div
                   className="card-prompt"
                   initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 0.7, y: 0 }}
-                  transition={{ delay: 0.5 }}
+                  animate={isCardReady ? { opacity: 0.7, y: 0 } : { opacity: 0, y: 20 }}
+                  transition={{ delay: isCardReady ? 0.5 : 0 }}
                 >
                   <p className="text-center text-base text-neutral-300 font-normal">
                     翻开卡片，宇宙会回答你
@@ -192,14 +202,14 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                 left: `${20 + Math.random() * 60}%`,
                 top: `${20 + Math.random() * 60}%`,
               }}
-              animate={{
+              animate={isCardReady ? {
                         y: [-5, 5, -5],
                         opacity: [0.3, 0.7, 0.3],
-              }}
+              } : { y: 0, opacity: 0.3 }}
               transition={{
                 duration: 3 + Math.random() * 2,
-                repeat: Infinity,
-                delay: Math.random() * 2,
+                repeat: isCardReady ? Infinity : 0,
+                delay: isCardReady ? Math.random() * 2 : 0,
               }}
             />
           ))}
