@@ -34,21 +34,22 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
         </button>
 
         {/* 中间标题 */}
-        <h1 className="text-lg font-heading text-white flex items-center">
-          <StarRayIcon size={16} className="mr-2 text-cosmic-accent" animated={true} />
+        <h1 className="stellar-title text-white flex items-center">
           <span>星谕</span>
-          <span className="ml-2 text-xs opacity-70">(StellOracle)</span>
+          <span className="ml-2 text-xs opacity-70">(StarOracle)</span>
         </h1>
 
         {/* 右侧logo按钮 */}
         <button
           className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
           onClick={onLogoClick}
-          title="星座收藏"
+          title="集星"
         >
-          <div className="text-lg bg-gradient-to-r from-blue-400 to-cyan-400 bg-clip-text text-transparent filter drop-shadow-lg hover:rotate-45 transition-transform duration-300">
-            ✦
-          </div>
+          <StarRayIcon 
+            size={18} 
+            animated={false} 
+            iconColor="#a855f7"
+          />
         </button>
       </div>
     </header>

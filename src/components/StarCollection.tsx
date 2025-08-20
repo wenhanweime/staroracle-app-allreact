@@ -157,13 +157,13 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
             {/* Header */}
             <div className="collection-header">
               <div className="header-left">
-                <StarIcon className="w-6 h-6 text-cosmic-accent" />
-                <h2 className="collection-title">Star Collection</h2>
+                {/* English: Star Collection - for future internationalization */}
+                <h2 className="stellar-title text-white">集星</h2>
                 <span className="star-count">{filteredStars.length} stars</span>
               </div>
               
               <button
-                className="close-btn"
+                className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
                 onClick={handleClose}
               >
                 <X className="w-5 h-5" />
@@ -173,13 +173,13 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
             {/* Controls */}
             <div className="collection-controls">
               <div className="search-bar">
-                <Search className="w-4 h-4 text-gray-400" />
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
                 <input
                   type="text"
                   placeholder="Search your stars..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="search-input"
+                  className="stellar-body w-full bg-transparent text-white placeholder-gray-400 pl-10 pr-4 py-2 focus:outline-none"
                 />
               </div>
               
@@ -187,7 +187,7 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
                 <select
                   value={filterType}
                   onChange={(e) => setFilterType(e.target.value as any)}
-                  className="filter-select"
+                  className="stellar-body bg-transparent text-white focus:outline-none p-2 rounded-full dialog-transparent-button"
                 >
                   <option value="all">All Stars</option>
                   <option value="special">Special Stars</option>

@@ -65,8 +65,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
             className="w-80 h-full shadow-2xl"
             style={{
               background: 'linear-gradient(135deg, rgba(27, 39, 53, 0.95) 0%, rgba(9, 10, 15, 0.98) 100%)',
-              backdropFilter: 'blur(20px)',
-              border: '1px solid rgba(255, 255, 255, 0.1)'
+              backdropFilter: 'blur(20px)'
             }}
           >
             {/* 抽屉顶部 - 与主页Header位置对齐 */}
@@ -80,25 +79,13 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               }}
             >
               <div className="flex items-center justify-between">
-                <div className="text-xl font-semibold text-white">星谕菜单</div>
+                <div className="stellar-title text-white">StarOracle</div>
                 <button
                   onClick={onClose}
                   className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
                 >
                   <X className="w-5 h-5" />
                 </button>
-              </div>
-            </div>
-
-            {/* 搜索栏 */}
-            <div className="px-5 py-4 border-b border-white/10">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-white/60 w-4 h-4" />
-                <input
-                  type="text"
-                  placeholder="搜索"
-                  className="w-full pl-10 pr-4 py-2 bg-white/5 rounded-lg text-white placeholder-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400 border border-white/10 backdrop-blur-sm"
-                />
               </div>
             </div>
 
@@ -128,7 +115,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                         <div className={`transition-colors ${item.active ? 'text-blue-400' : 'text-current'}`}>
                           <IconComponent className="w-5 h-5" />
                         </div>
-                        <span className="font-medium">{item.label}</span>
+                        <span className="stellar-body">{item.label}</span>
                       </div>
                       
                       <div className="flex items-center gap-2">
@@ -159,7 +146,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                   ✦
                 </div>
                 <div className="flex-1">
-                  <div className="font-medium text-white">星谕用户</div>
+                  <div className="stellar-body text-white">星谕用户</div>
                   <div className="text-xs text-white/60">探索星辰的奥秘</div>
                 </div>
               </div>
