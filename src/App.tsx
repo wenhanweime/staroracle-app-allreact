@@ -5,6 +5,7 @@ import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
 import StarryBackground from './components/StarryBackground';
 import Constellation from './components/Constellation';
+import ChatMessages from './components/ChatMessages';
 import InspirationCard from './components/InspirationCard';
 import StarDetail from './components/StarDetail';
 import StarCollection from './components/StarCollection';
@@ -207,6 +208,9 @@ function App() {
 
       {/* User's constellation - 延迟渲染 */}
       {appReady && <Constellation />}
+      
+      {/* Chat Messages - 显示聊天消息 */}
+      {appReady && <ChatMessages />}
       
       {/* Inspiration card */}
       {currentInspirationCard && (

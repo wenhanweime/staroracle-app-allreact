@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Mic } from 'lucide-react';
 import { useStarStore } from '../store/useStarStore';
+import { useChatStore } from '../store/useChatStore';
 import { playSound } from '../utils/soundUtils';
 import { triggerHapticFeedback } from '../utils/hapticUtils';
 import StarRayIcon from './StarRayIcon';
@@ -27,6 +28,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { addStar, isAsking } = useStarStore();
+  const { addUserMessage, addAIMessage, setLoading, isLoading: chatIsLoading } = useChatStore();
 
   useEffect(() => {
     if (isAsking && inputRef.current) {
@@ -105,18 +107,40 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   };
 
   const handleSend = async () => {
-    if (!inputValue.trim() || isLoading) return;
-    setIsLoading(true);
+    if (!inputValue.trim() || isLoading || chatIsLoading) return;
+    
     const trimmedQuestion = inputValue.trim();
+    
+    // 添加用户消息到聊天
+    addUserMessage(trimmedQuestion);
     setInputValue('');
+    
+    // 播放发送音效
+    playSound('starClick');
+    
+    // 设置AI回复加载状态
+    setLoading(true);
+    
     try {
-      const newStar = await addStar(trimmedQuestion);
-      console.log("✨ 新星星已创建:", newStar.id);
-      playSound('starReveal');
+      // 模拟AI回复延迟
+      setTimeout(() => {
+        const responses = [
+          "这是一个很有趣的问题！让我来为您解答...",
+          "根据星辰的指引，我建议您...",
+          "从宇宙的角度来看，这个问题的答案可能是...",
+          "星谕告诉我，您可能需要考虑...",
+          "这是一个深奥的问题，让我思考一下...",
+        ];
+        
+        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
+        addAIMessage(randomResponse);
+        setLoading(false);
+        playSound('starReveal');
+      }, 1500);
+      
     } catch (error) {
-      console.error('Error creating star:', error);
-    } finally {
-      setIsLoading(false);
+      console.error('Error in chat:', error);
+      setLoading(false);
     }
   };
 
