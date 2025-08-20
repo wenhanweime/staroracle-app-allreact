@@ -113,10 +113,11 @@ h1, h2, h3, h4, h5, h6 {
   min-width: 48px;
   -webkit-appearance: none;
   appearance: none;
+  color: rgba(255, 255, 255, 0.7);
 }
 
 .cosmic-button:hover {
-  background: rgba(55, 65, 81, 0.6); /* 匹配dialog-transparent-button的gray-700 */
+  color: rgba(255, 255, 255, 1);
   transform: translateY(-2px);
 }
 
@@ -225,7 +226,7 @@ h1, h2, h3, h4, h5, h6 {
     will-change: transform;
   }
 
-  /* iOS 对话框透明按钮强制修复 - 最高优先级 */
+  /* iOS 对话框透明按钮强制修复 - 最高优先级，移除背景色变化 */
   button.dialog-transparent-button {
     -webkit-appearance: none !important;
     appearance: none !important;
@@ -234,21 +235,26 @@ h1, h2, h3, h4, h5, h6 {
     background-image: none !important;
     border: none !important;
     padding: 8px !important; /* p-2 = 8px */
+    color: rgba(255, 255, 255, 0.6) !important;
+    transition: color 0.3s ease !important;
   }
   
   button.dialog-transparent-button:hover {
-    background: rgb(55 65 81) !important; /* gray-700 */
-    background-color: rgb(55 65 81) !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    color: rgba(255, 255, 255, 1) !important;
   }
   
   button.dialog-transparent-button.recording {
-    background: rgb(220 38 38) !important; /* red-600 */
-    background-color: rgb(220 38 38) !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    color: rgb(239 68 68) !important; /* red-500 */
   }
   
   button.dialog-transparent-button.recording:hover {
-    background: rgb(185 28 28) !important; /* red-700 */
-    background-color: rgb(185 28 28) !important;
+    background: transparent !important;
+    background-color: transparent !important;
+    color: rgb(220 38 38) !important; /* red-600 */
   }
 }
 
@@ -623,7 +629,7 @@ h1, h2, h3, h4, h5, h6 {
   text-align: center;
 }
 
-/* Collection Button Styles - 更新为透明无描边风格 */
+/* Collection Button Styles - 更新为透明无背景色变化风格 */
 .collection-trigger-btn {
   position: relative;
   padding: 16px 24px;
@@ -633,7 +639,7 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(10px);
   border: none;
   border-radius: 12px;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.8);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   -webkit-appearance: none;
@@ -641,7 +647,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .collection-trigger-btn:hover {
-  background: rgba(55, 65, 81, 0.6);
+  color: rgba(255, 255, 255, 1);
   transform: translateY(-2px);
 }
 
@@ -654,7 +660,7 @@ h1, h2, h3, h4, h5, h6 {
   backdrop-filter: blur(10px);
   border: none;
   border-radius: 12px;
-  color: #fff;
+  color: rgba(255, 255, 255, 0.8);
   transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
   overflow: hidden;
   min-width: 160px;
@@ -663,7 +669,7 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .template-trigger-btn:hover {
-  background: rgba(55, 65, 81, 0.6);
+  color: rgba(255, 255, 255, 1);
   transform: translateY(-2px);
 }
 
@@ -749,25 +755,30 @@ button {
   appearance: none;
 }
 
-/* 对话框透明按钮样式 - 解决iOS Safari bg-transparent失效问题 */
+/* 对话框透明按钮样式 - 解决iOS Safari bg-transparent失效问题，移除背景色变化 */
 .dialog-transparent-button {
   background: transparent !important;
   background-color: transparent !important;
   background-image: none !important;
   border: none !important;
+  color: rgba(255, 255, 255, 0.6) !important;
+  transition: color 0.3s ease !important;
 }
 
 .dialog-transparent-button:hover {
-  background: rgb(55 65 81) !important; /* gray-700 */
-  background-color: rgb(55 65 81) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgba(255, 255, 255, 1) !important;
 }
 
 .dialog-transparent-button.recording {
-  background: rgb(220 38 38) !important; /* red-600 */
-  background-color: rgb(220 38 38) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgb(239 68 68) !important; /* red-500 */
 }
 
 .dialog-transparent-button.recording:hover {
-  background: rgb(185 28 28) !important; /* red-700 */
-  background-color: rgb(185 28 28) !important;
+  background: transparent !important;
+  background-color: transparent !important;
+  color: rgb(220 38 38) !important; /* red-600 */
 }

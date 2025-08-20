@@ -111,13 +111,13 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                     <div 
                       className={`flex items-center justify-between px-5 py-4 cursor-pointer transition-all duration-200 ${
                         item.active 
-                          ? 'bg-blue-500/20 text-white border-r-2 border-blue-400 backdrop-blur-sm' 
-                          : 'text-white/80 hover:bg-white/5 hover:text-white'
+                          ? 'text-white border-r-2 border-blue-400' 
+                          : 'text-white/60 hover:text-white'
                       }`}
                       onClick={item.onClick}
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`transition-colors ${item.active ? 'text-blue-400' : 'text-white/60'}`}>
+                        <div className={`transition-colors ${item.active ? 'text-blue-400' : 'text-current'}`}>
                           <IconComponent className="w-5 h-5" />
                         </div>
                         <span className="font-medium">{item.label}</span>
@@ -125,10 +125,10 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                       
                       <div className="flex items-center gap-2">
                         {typeof item.count === 'number' && (
-                          <span className={`text-sm px-2 py-1 rounded-full ${
+                          <span className={`text-sm ${
                             item.active 
-                              ? 'text-blue-300 bg-blue-400/20' 
-                              : 'text-white/40 bg-white/10'
+                              ? 'text-blue-300' 
+                              : 'text-white/40'
                           }`}>
                             {item.count}
                           </span>
