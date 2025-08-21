@@ -6,6 +6,7 @@ import { playSound } from '../utils/soundUtils';
 import { triggerHapticFeedback } from '../utils/hapticUtils';
 import StarRayIcon from './StarRayIcon';
 import { Capacitor } from '@capacitor/core';
+import { generateAIResponse } from '../utils/aiTaggingUtils'; // 导入真实AI功能
 
 // iOS设备检测
 const isIOS = () => {
@@ -122,25 +123,31 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
     setLoading(true);
     
     try {
-      // 模拟AI回复延迟
-      setTimeout(() => {
-        const responses = [
-          "这是一个很有趣的问题！让我来为您解答...",
-          "根据星辰的指引，我建议您...",
-          "从宇宙的角度来看，这个问题的答案可能是...",
-          "星谕告诉我，您可能需要考虑...",
-          "这是一个深奥的问题，让我思考一下...",
-        ];
-        
-        const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-        addAIMessage(randomResponse);
-        setLoading(false);
-        playSound('starReveal');
-      }, 1500);
+      console.log('🤖 开始生成AI回复...');
+      // 使用真实的AI API生成回复
+      const aiResponse = await generateAIResponse(trimmedQuestion);
+      
+      // 添加AI回复到聊天
+      addAIMessage(aiResponse);
+      setLoading(false);
+      playSound('starReveal');
+      
+      console.log('✅ AI回复生成成功:', aiResponse);
       
     } catch (error) {
-      console.error('Error in chat:', error);
+      console.error('❌ AI回复生成失败:', error);
+      
+      // 如果AI调用失败，使用备用回复
+      const fallbackResponses = [
+        "抱歉，星辰暂时无法为您提供指引。请稍后再试。",
+        "宇宙的连接似乎暂时中断了，请稍后重新提问。",
+        "星谕正在重新校准，请耐心等待片刻再询问。",
+      ];
+      
+      const fallbackResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
+      addAIMessage(fallbackResponse);
       setLoading(false);
+      playSound('starClick');
     }
   };
 
