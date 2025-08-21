@@ -158,7 +158,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   transition={{
                     duration: star.duration,
                     repeat: isCardReady ? Infinity : 0,
-                    delay: isCardReady ? star.delay : 0
+                    delay: isCardReady ? 2.0 + star.delay : 0  // 在主星星动画完成后(2s)再开始
                   }}
                 />
               ))}
@@ -228,7 +228,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
               transition={{
                 duration: particle.duration,
                 repeat: isCardReady ? Infinity : 0,
-                delay: isCardReady ? particle.delay : 0,
+                delay: isCardReady ? 2.0 + particle.delay : 0,  // 同样在主星星动画完成后开始
               }}
             />
           ))}
