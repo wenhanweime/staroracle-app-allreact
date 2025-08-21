@@ -151,14 +151,12 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                         cy={star.cy}
                   r={star.r}
                   fill="rgba(255,255,255,0.6)"
-                  initial={{ opacity: 0.3 }}
-                  animate={isCardReady ? { 
-                    opacity: [0.3, 0.8, 0.3]
-                  } : { opacity: 0.3 }}
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: [0.3, 0.8, 0.3] }}  // 始终使用同一个动画配置
                   transition={{
                     duration: star.duration,
-                    repeat: isCardReady ? Infinity : 0,
-                    delay: isCardReady ? 2.0 + star.delay : 0  // 在主星星动画完成后(2s)再开始
+                    repeat: Infinity,
+                    delay: isCardReady ? 2.0 + star.delay : 999999  // 用极长延迟代替条件控制
                   }}
                 />
               ))}
@@ -221,14 +219,15 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                 left: particle.left,
                 top: particle.top,
               }}
-              animate={isCardReady ? {
+              initial={{ y: 0, opacity: 0.3 }}
+              animate={{
                         y: [-5, 5, -5],
                         opacity: [0.3, 0.7, 0.3],
-              } : { y: 0, opacity: 0.3 }}
+              }}
               transition={{
                 duration: particle.duration,
-                repeat: isCardReady ? Infinity : 0,
-                delay: isCardReady ? 2.0 + particle.delay : 0,  // 同样在主星星动画完成后开始
+                repeat: Infinity,
+                delay: isCardReady ? 2.0 + particle.delay : 999999,  // 同样用极长延迟代替条件控制
               }}
             />
           ))}
