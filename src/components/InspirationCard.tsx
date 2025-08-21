@@ -275,7 +275,6 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   initial={{ opacity: 0 }}
                   animate={{ opacity: 1 }}
                   transition={{ delay: 0.7 }}
-                  onClick={(e) => e.stopPropagation()} // 防止点击输入框时触发卡片翻转
                 >
                   <motion.div 
                     className="input-ghost-wrapper w-full"
@@ -292,12 +291,16 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                         value={inputValue}
                         onChange={(e) => setInputValue(e.target.value)}
                         onKeyPress={handleKeyPress}
+                        onClick={(e) => e.stopPropagation()} // 只有输入框本身阻止传播
                       />
                       <motion.button
                         className={`w-7 h-7 rounded-full flex items-center justify-center transition-colors ${
                           inputValue.trim() ? 'bg-cosmic-accent/80 text-white' : 'bg-transparent text-neutral-400'
                         }`}
-                        onClick={handleSendMessage}
+                        onClick={(e) => {
+                          e.stopPropagation(); // 只有按钮本身阻止传播
+                          handleSendMessage();
+                        }}
                         disabled={!inputValue.trim()}
                         whileHover={inputValue.trim() ? { scale: 1.1 } : {}}
                         whileTap={inputValue.trim() ? { scale: 0.95 } : {}}
