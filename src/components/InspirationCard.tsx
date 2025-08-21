@@ -56,7 +56,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsCardReady(true);
-    }, 800); // 等待卡片弹出动画完成后再启动内部动画
+    }, 500); // 减少延迟时间，加快主星星出现
 
     return () => clearTimeout(timer);
   }, []);
@@ -169,7 +169,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                       fill={`url(#starGlow-${cardId})`}
                       initial={{ scale: 0 }}
                       animate={isCardReady ? { scale: 1 } : { scale: 0 }}
-                      transition={{ delay: isCardReady ? 0.3 : 0, type: "spring" }}
+                      transition={{ delay: isCardReady ? 0.1 : 0, type: "spring", damping: 15 }}
                     />
                     
                     {/* Star rays - 使用星星动画阶段的动画效果 */}
