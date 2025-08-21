@@ -56,7 +56,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   useEffect(() => {
     const timer = setTimeout(() => {
       setIsCardReady(true);
-    }, 500); // 减少延迟时间，加快主星星出现
+    }, 0); // 减少延迟时间，加快主星星出现
 
     return () => clearTimeout(timer);
   }, []);
