@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic } from 'lucide-react';
 import { useStarStore } from '../store/useStarStore';
 import { useChatStore } from '../store/useChatStore';
@@ -18,9 +18,16 @@ const isIOS = () => {
 interface ConversationDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
+  followUpQuestion?: string; // 外部传入的后续问题
+  onFollowUpProcessed?: () => void; // 后续问题处理完成的回调
 }
 
-const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ isOpen, onToggle }) => {
+const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ 
+  isOpen, 
+  onToggle, 
+  followUpQuestion, 
+  onFollowUpProcessed 
+}) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -37,6 +44,28 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ isOpen, onToggl
       inputRef.current.focus();
     }
   }, [isAsking]);
+
+  // 处理外部传入的后续问题
+  useEffect(() => {
+    if (followUpQuestion && followUpQuestion.trim()) {
+      console.log('🔄 ConversationDrawer接收到后续问题:', followUpQuestion);
+      setInputValue(followUpQuestion);
+      
+      // 延迟发送，确保输入框已更新
+      setTimeout(() => {
+        if (!isLoading && !chatIsLoading) {
+          // 直接调用发送逻辑，避免handleSend的初始化问题
+          sendMessage(followUpQuestion);
+          // 清空输入框
+          setInputValue('');
+          // 通知外部已处理完成
+          if (onFollowUpProcessed) {
+            onFollowUpProcessed();
+          }
+        }
+      }, 200);
+    }
+  }, [followUpQuestion, isLoading, chatIsLoading, onFollowUpProcessed]);
 
   // iOS键盘监听和视口调整
   useEffect(() => {
@@ -108,14 +137,14 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ isOpen, onToggl
     setInputValue(e.target.value);
   };
 
-  const handleSend = async () => {
-    if (!inputValue.trim() || isLoading || chatIsLoading) return;
+  // 发送消息的核心逻辑，独立函数避免useCallback依赖问题
+  const sendMessage = async (messageText: string) => {
+    if (!messageText.trim() || isLoading || chatIsLoading) return;
     
-    const trimmedQuestion = inputValue.trim();
+    const trimmedQuestion = messageText.trim();
     
     // 添加用户消息到聊天
     addUserMessage(trimmedQuestion);
-    setInputValue('');
     
     // 播放发送音效
     playSound('starClick');
@@ -184,6 +213,17 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ isOpen, onToggl
     }
   };
 
+  const handleSend = useCallback(async () => {
+    if (!inputValue.trim()) return;
+    
+    const currentInput = inputValue;
+    // 立即清空输入框，这样用户点击发送后输入框马上变空
+    setInputValue('');
+    
+    // 然后发送消息
+    await sendMessage(currentInput);
+  }, [inputValue]);
+
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
       handleSend();
@@ -203,16 +243,6 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ isOpen, onToggl
         }
       }, 100);
     }
-  };
-
-  // 处理后续提问（从觉察功能触发）
-  const handleFollowUpQuestion = (question: string) => {
-    console.log('🔄 处理后续提问:', question);
-    setInputValue(question);
-    // 自动发送问题
-    setTimeout(() => {
-      handleSend();
-    }, 100);
   };
 
   // 计算容器的动态样式

@@ -1792,6 +1792,14 @@ AI回答: "${aiResponse}"
 3. LOW（低价值）：一般性建议、事实性信息、浅层交流
 4. NONE（无价值）：纯粹的信息咨询、技术问题、日常闲聊
 
+重要要求：后续问题必须以用户第一人称视角表达，像用户自己在思考和提问，而不是AI询问用户。
+
+例如：
+- 错误："你觉得这种情绪是什么时候开始的？"
+- 正确："我这种情绪是什么时候开始的呢？"
+- 错误："你希望这种关系如何发展？"  
+- 正确："我希望这种关系如何发展呢？"
+
 请严格按照以下JSON格式返回分析结果，不要添加任何其他文字：
 
 {
@@ -1801,7 +1809,7 @@ AI回答: "${aiResponse}"
   "keyInsights": ["<string: 关键洞察点1>", "<string: 关键洞察点2>"],
   "emotionalPattern": "<string: 识别到的情绪或行为模式>",
   "suggestedReflection": "<string: 建议的深入思考方向>",
-  "followUpQuestions": ["<string: 后续探索问题1>", "<string: 后续探索问题2>"]
+  "followUpQuestions": ["<string: 用户第一人称后续探索问题1>", "<string: 用户第一人称后续探索问题2>"]
 }
 `;
 
@@ -1915,27 +1923,27 @@ const mockAwarenessAnalysis = (userQuestion: string, aiResponse: string): Awaren
   let insightType = '自我探索';
   let emotionalPattern = '思考模式';
   let suggestedReflection = '继续深入思考这个话题';
-  let followUpQuestions = ['你对此还有什么其他想法？', '这让你想到了什么？'];
+  let followUpQuestions = ['我对此还有什么其他想法？', '这让我想到了什么？'];
   
   if (combinedText.includes('感受') || combinedText.includes('情绪')) {
     insightType = '情绪洞察';
     emotionalPattern = '情绪觉察模式';
     suggestedReflection = '观察和理解自己的情绪反应';
-    followUpQuestions = ['这种情绪是什么时候开始的？', '什么情况下你会有类似感受？'];
+    followUpQuestions = ['我这种情绪是什么时候开始的？', '在什么情况下我会有类似感受？'];
   }
   
   if (combinedText.includes('关系') || combinedText.includes('家庭') || combinedText.includes('朋友')) {
     insightType = '关系反思';
     emotionalPattern = '人际互动模式';
     suggestedReflection = '思考人际关系中的互动模式';
-    followUpQuestions = ['在其他关系中是否也有类似情况？', '你希望这种关系如何发展？'];
+    followUpQuestions = ['在其他关系中我是否也有类似情况？', '我希望这种关系如何发展？'];
   }
   
   if (combinedText.includes('目标') || combinedText.includes('未来') || combinedText.includes('梦想')) {
     insightType = '人生规划';
     emotionalPattern = '目标导向思维';
     suggestedReflection = '明确自己真正想要的人生方向';
-    followUpQuestions = ['什么阻碍了你实现这个目标？', '如果没有任何限制，你会如何规划？'];
+    followUpQuestions = ['什么阻碍了我实现这个目标？', '如果没有任何限制，我会如何规划？'];
   }
   
   const keyInsights = hasInsight ? [

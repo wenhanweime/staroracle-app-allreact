@@ -30,20 +30,23 @@ function App() {
   const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
   const [isDrawerMenuOpen, setIsDrawerMenuOpen] = useState(false);
   const [appReady, setAppReady] = useState(false);
+  const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>(''); // 待处理的后续问题
   const { 
     applyTemplate, 
     currentInspirationCard, 
     dismissInspirationCard 
   } = useStarStore();
-  
-  // 添加聊天store的访问
-  const { addUserMessage } = useChatStore();
 
   // 处理后续提问的回调
   const handleFollowUpQuestion = (question: string) => {
     console.log('📱 App层接收到后续提问:', question);
-    // 直接添加用户消息，ConversationDrawer会处理AI回复
-    addUserMessage(question);
+    setPendingFollowUpQuestion(question);
+  };
+  
+  // 后续问题处理完成的回调
+  const handleFollowUpProcessed = () => {
+    console.log('📱 后续问题处理完成，清空pending状态');
+    setPendingFollowUpQuestion('');
   };
 
   // 添加原生平台效果（只在原生环境下执行）
@@ -265,7 +268,12 @@ function App() {
       <OracleInput />
 
       {/* Conversation Drawer */}
-      <ConversationDrawer isOpen={true} onToggle={() => {}} />
+      <ConversationDrawer 
+        isOpen={true} 
+        onToggle={() => {}} 
+        followUpQuestion={pendingFollowUpQuestion}
+        onFollowUpProcessed={handleFollowUpProcessed}
+      />
     </div>
   );
 }
