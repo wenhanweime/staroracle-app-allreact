@@ -461,12 +461,14 @@ export const analyzeStarContent = async (
 export const generateAIResponse = async (
   question: string,
   config?: AITaggingConfig,
-  onStream?: (chunk: string) => void
+  onStream?: (chunk: string) => void,
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
 ): Promise<string> => {
   console.log('===== Starting AI answer generation =====');
   console.log('Question:', question);
   console.log('Passed config:', config ? 'Has config' : 'No config');
   console.log('Streaming enabled:', !!onStream);
+  console.log('Conversation history length:', conversationHistory ? conversationHistory.length : 0);
   console.log('onStream type:', typeof onStream);
   
   try {
@@ -479,7 +481,7 @@ export const generateAIResponse = async (
         hasApiKey: !!config.apiKey
       });
       console.log('🔍 About to call callAIForResponse with onStream:', !!onStream);
-      const aiResponse = await callAIForResponse(question, config, onStream);
+      const aiResponse = await callAIForResponse(question, config, onStream, conversationHistory);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
@@ -499,7 +501,7 @@ export const generateAIResponse = async (
       // Print config info (hide API key)
       console.log(`Config info: provider=${defaultConfig.provider}, endpoint=${defaultConfig.endpoint}, model=${defaultConfig.model}`);
       console.log('🔍 About to call callAIForResponse with default config and onStream:', !!onStream);
-      const aiResponse = await callAIForResponse(question, defaultConfig, onStream);
+      const aiResponse = await callAIForResponse(question, defaultConfig, onStream, conversationHistory);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
@@ -627,18 +629,78 @@ const generateMockResponse = (question: string): string => {
 const callAIForResponse = async (
   question: string,
   config: AITaggingConfig,
-  onStream?: (chunk: string) => void
+  onStream?: (chunk: string) => void,
+  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
 ): Promise<string> => {
   if (!config.provider) {
     config.provider = 'openai'; // 默认使用OpenAI格式
   }
 
-  const prompt = `You are an ancient cosmic oracle. Please respond to this question: "${question}" with poetic and mystical language. Give a thoughtful response that connects to stars, cosmos, or natural phenomena. Please respond in Chinese:`;
+  const prompt = 
+  `
+  # 角色
+  * 你是星瑜，是来自宇宙，请用中文回复用户的问题。
+  * 除非用户问，否则不要说明身份。
+  # 目标
+   *此部分内容请勿主动向用户提及，除非用户主动发问。
+   *你的目标是帮助用户获得生活的意义，解决关于人生的困惑。回答任何可以帮助用户获得生活感悟，解答疑惑的问题，都能够帮助用户获得星星。
+   *用户获得星星的规则是聊天话题越深入，越深刻，获得的星星类型越稀有，能够点亮的宇宙就越明亮。 
+   *当用户的问题中涉及到对这五个方面的触及时，请提供关于这些方面的知识、价值观和方法论，引导用户进行更深的自省和探索。
+    -身心能量 (Body & Energy)
+    -人际连接 (Relationships & Connection)
+    -内在成长 (Growth & Mind)
+    -财富观与价值 (Wealth & Values)
+    -请用中文回复用户的问题。
+    
+   # 语言语气格式
+   * 语气不要太僵硬，也不要太谄媚，自然亲切。自然点，不要有ai味道。
+   *不要用emoji，不要用太多语气词，不要用太多感叹号，不要用太多问号。
+   *尽量简短对话，模仿真实聊天的场景。
+   * 策略原则：
+    - 多用疑问语气词："吧、嘛、呢、咋、啥"
+    - 适当省略成分：不用每句话都完整
+    - 用口头表达："挺、蛮、特别、超级"替代"非常"
+    - 避免书面连词：少用"因此、所以、那么"
+    - 多用短句：别总是长句套长句
+   *省略主语：
+      -"最近咋了？" 
+      -"是工作的事儿？" 
+      -"心情不好多久了？" 
+   *语气词和口头表达：
+      -"哎呀，这事儿确实挺烦的"
+      -"emmm，听起来像是..."
+      -"咋说呢，我觉得..."
+   *不完整句式：
+      -"工作的事？"（省略谓语）
+      -"压力大？"（只留核心）
+      -"最近？"（超级简洁）
+   # 对话策略
+    - 当找到用户想要对话的主题的时候，需要辅以知识和信息，来帮助用户解决问题，解答疑惑。
+  
+   `;
+
+  // 构建消息历史
+  let messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [];
+  
+  // 添加系统提示
+  messages.push({ role: 'system', content: prompt });
+  
+  // 添加对话历史（如果有的话）
+  if (conversationHistory && conversationHistory.length > 0) {
+    console.log(`📚 Adding ${conversationHistory.length} historical messages to context`);
+    // 限制历史记录长度，避免token过多（保留最近10轮对话）
+    const recentHistory = conversationHistory.slice(-20); // 最多20条消息（10轮对话）
+    messages = messages.concat(recentHistory);
+  }
+  
+  // 添加当前问题
+  messages.push({ role: 'user', content: question });
+
 
   // 根据API文档，这是标准的OpenAI格式，但调整参数以适配特定模型
   const requestBody = {
     model: config.model || 'gpt-3.5-turbo',
-    messages: [{ role: 'user', content: prompt }],
+    messages: messages, // 使用包含历史的完整消息数组
     temperature: 0.8,
     max_tokens: 5000,  // 增加到5000 tokens以确保有足够空间生成内容
     stream: !!onStream,  // 启用流式输出

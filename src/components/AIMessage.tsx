@@ -29,6 +29,24 @@ const AIMessage: React.FC<AIMessageProps> = ({ message }) => {
     console.log('Download message');
   };
 
+  // 标准化文本格式，统一换行符和段落间距
+  const normalizeText = (text: string): string => {
+    if (!text) return '';
+    
+    return text
+      // 统一换行符为 \n
+      .replace(/\r\n/g, '\n')
+      .replace(/\r/g, '\n')
+      // 将连续的多个换行符（2个或以上）替换为单个段落分隔符
+      .replace(/\n{2,}/g, '\n\n')
+      // 移除行首行尾的空白字符，但保留换行结构
+      .split('\n')
+      .map(line => line.trim())
+      .join('\n')
+      // 最后清理开头结尾的多余换行
+      .replace(/^\n+|\n+$/g, '');
+  };
+
   return (
     <div className="flex justify-start mb-4">
       <div className="max-w-[80%]">
@@ -39,7 +57,7 @@ const AIMessage: React.FC<AIMessageProps> = ({ message }) => {
           ) : (
             // 显示消息内容
             <div className="whitespace-pre-wrap break-words chat-message-content">
-              {message.text}
+              {normalizeText(message.text)}
               {message.isStreaming && message.text && (
                 // 流式输出时在文字后显示光标
                 <span className="inline-block w-2 h-4 bg-white ml-1 animate-pulse"></span>

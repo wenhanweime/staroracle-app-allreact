@@ -36,6 +36,23 @@
 .chat-message-content {
   line-height: 1.7 !important; /* 增加行间距到1.7 */
   letter-spacing: 0.02em; /* 轻微增加字符间距 */
+  /* 确保段落间距一致 */
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+/* 统一段落间距 - 为段落间的空行添加适当间距 */
+.chat-message-content {
+  /* 使用伪元素处理连续换行的渲染 */
+}
+
+/* 确保段落间有一致的间距 */
+.chat-message-content p {
+  margin: 0 0 1em 0;
+}
+
+.chat-message-content p:last-child {
+  margin-bottom: 0;
 }
 
 /* 移动端触摸优化 */

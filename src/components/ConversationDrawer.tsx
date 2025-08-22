@@ -29,7 +29,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { addStar, isAsking } = useStarStore();
-  const { addUserMessage, addAIMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, isLoading: chatIsLoading } = useChatStore();
+  const { addUserMessage, addAIMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, isLoading: chatIsLoading, messages } = useChatStore();
 
   useEffect(() => {
     if (isAsking && inputRef.current) {
@@ -135,8 +135,21 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
         updateStreamingMessage(messageId, streamingText);
       };
       
-      // 使用真实的AI API生成回复，带流式输出
-      const aiResponse = await generateAIResponse(trimmedQuestion, undefined, onStream);
+      // 构建对话历史（转换ChatMessage格式为API格式）
+      const conversationHistory = messages.map(msg => ({
+        role: msg.isUser ? 'user' as const : 'assistant' as const,
+        content: msg.text
+      }));
+      
+      console.log('📚 Conversation history:', conversationHistory.length, 'messages');
+      
+      // 使用真实的AI API生成回复，带流式输出和对话历史
+      const aiResponse = await generateAIResponse(
+        trimmedQuestion, 
+        undefined, 
+        onStream, 
+        conversationHistory
+      );
       
       // 确保最终内容一致
       if (streamingText !== aiResponse) {
