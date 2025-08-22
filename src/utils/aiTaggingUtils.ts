@@ -32,7 +32,7 @@ export const validateAIConfig = async (config: AITaggingConfig): Promise<APIVali
   let requestBody;
   let requestHeaders = {
     'Content-Type': 'application/json',
-    'Authorization': `Bearer ${config.apiKey}`,
+    'Authorization': `Bearer ${config.apiKey?.replace(/[^\x20-\x7E]/g, '') || ''}`,
   };
   
   try {
@@ -462,36 +462,52 @@ export const generateAIResponse = async (
   question: string,
   config?: AITaggingConfig
 ): Promise<string> => {
-  console.log('🌟 为问题生成回答:', question);
+  console.log('===== Starting AI answer generation =====');
+  console.log('Question:', question);
+  console.log('Passed config:', config ? 'Has config' : 'No config');
   
   try {
     if (config?.apiKey && config?.endpoint) {
-      console.log(`🤖 使用${config.provider || 'openai'}服务生成回答`);
+      console.log(`Using passed ${config.provider || 'openai'} service to generate answer`);
+      console.log('Config details:', {
+        provider: config.provider,
+        endpoint: config.endpoint,
+        model: config.model,
+        hasApiKey: !!config.apiKey
+      });
       const aiResponse = await callAIForResponse(question, config);
-      console.log('✨ AI生成的回答:', aiResponse);
+      console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
     
-    // 尝试使用默认配置
+    // Try using default config
     const defaultConfig = getAIConfig();
+    console.log('Retrieved default config:', {
+      hasApiKey: !!defaultConfig.apiKey,
+      hasEndpoint: !!defaultConfig.endpoint,
+      provider: defaultConfig.provider,
+      model: defaultConfig.model,
+      endpoint: defaultConfig.endpoint
+    });
+    
     if (defaultConfig.apiKey && defaultConfig.endpoint) {
-      console.log(`🤖 使用默认${defaultConfig.provider || 'openai'}配置生成回答`);
-      // 打印配置信息（隐藏API密钥）
-      console.log(`📋 配置信息: 提供商=${defaultConfig.provider}, 端点=${defaultConfig.endpoint}, 模型=${defaultConfig.model}`);
+      console.log(`Using default ${defaultConfig.provider || 'openai'} config to generate answer`);
+      // Print config info (hide API key)
+      console.log(`Config info: provider=${defaultConfig.provider}, endpoint=${defaultConfig.endpoint}, model=${defaultConfig.model}`);
       const aiResponse = await callAIForResponse(question, defaultConfig);
-      console.log('✨ AI生成的回答:', aiResponse);
+      console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
     
-    console.log('🎭 使用模拟回答生成');
+    console.log('Using mock answer generation');
     // Fallback to mock responses
     const mockResponse = generateMockResponse(question);
-    console.log('✨ 模拟生成的回答:', mockResponse);
+    console.log('Mock generated answer:', mockResponse);
     return mockResponse;
   } catch (error) {
-    console.warn('❌ AI回答生成失败，使用备用方案:', error);
+    console.warn('AI answer generation failed, using fallback:', error);
     const fallbackResponse = generateMockResponse(question);
-    console.log('🔄 备用回答:', fallbackResponse);
+    console.log('Fallback answer:', fallbackResponse);
     return fallbackResponse;
   }
 };
@@ -598,98 +614,92 @@ const callAIForResponse = async (
     config.provider = 'openai'; // 默认使用OpenAI格式
   }
 
-  const prompt = `你是一位古老智慧的宇宙神谕。请用充满诗意和神秘感的语言回答这个问题："${question}"。答案应该简短而深刻，与星辰、宇宙或自然现象产生联系，给人启发。请用中文回答：`;
+  const prompt = `You are an ancient cosmic oracle. Please respond to this question: "${question}" with poetic and mystical language. Your answer should be short but profound, connecting to stars, cosmos, or natural phenomena to inspire. Please respond in Chinese:`;
 
-  let requestBody;
-  
-  // 根据 provider 构建请求体
-  switch (config.provider) {
-    case 'gemini':  
-      requestBody = { 
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: {
-          temperature: 0.8,
-          maxOutputTokens: 50000
-        }
-      };
-      break;
-    case 'openai':
-    default:
-      requestBody = {
-        model: config.model || 'gpt-3.5-turbo',
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.8,
-        max_tokens: 50000,
-      };
-      break;
-  }
+  // 根据API文档，这是标准的OpenAI格式，但调整参数以适配特定模型
+  const requestBody = {
+    model: config.model || 'gpt-3.5-turbo',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.8,
+    max_tokens: 5000,  // 增加到5000 tokens以确保有足够空间生成内容
+    // max_completion_tokens: 5000,  // 一些模型可能需要这个参数
+  };
 
   try {
-    console.log(`🔍 发送回答生成请求到 ${config.provider} API...`);
-    console.log(`📤 请求体: ${JSON.stringify(requestBody)}`);
+    console.log('🚀 Sending AI request with config:', {
+      endpoint: config.endpoint,
+      model: config.model,
+      provider: config.provider
+    });
+    console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
+    
+    // 确保API key是纯ASCII字符
+    const cleanApiKey = config.apiKey?.replace(/[^\x20-\x7E]/g, '') || '';
     
     const response = await fetch(config.endpoint!, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cleanApiKey}`,
       },
       body: JSON.stringify(requestBody),
     });
 
+    console.log(`📨 Response status: ${response.status} ${response.statusText}`);
+
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ API响应错误 (${response.status}): ${errorText}`);
+      console.error(`API response error (${response.status}): ${errorText}`);
       throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
     const data = await response.json();
-    console.log(`📥 原始API响应完整结构: `, JSON.stringify(data, null, 2));
+    console.log(`📦 Complete API response structure:`, JSON.stringify(data, null, 2));
     
-    // 根据 provider 解析响应
+    // 根据API文档，使用标准OpenAI响应格式解析
     let answer = '';
-    switch (config.provider) {
-      case 'gemini':
-        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-          answer = data.candidates[0].content.parts[0].text.trim();
-          console.log(`✅ Gemini响应解析: "${answer}"`);
-        } else {
-          console.warn('⚠️ Gemini响应结构异常:', JSON.stringify(data, null, 2));
-        }
-        break;
-      case 'openai':
-      default:
-        console.log('🔍 完整响应数据:', data);
-        console.log('🔍 choices数组:', data.choices);
-        console.log('🔍 第一个choice:', data.choices?.[0]);
-        console.log('🔍 message内容:', data.choices?.[0]?.message);
-        console.log('🔍 content字段:', data.choices?.[0]?.message?.content);
-        
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          answer = data.choices[0].message.content?.trim() || '';
-          console.log(`✅ 解析到的回答: "${answer}"`);
-          console.log(`✅ 回答长度: ${answer.length}`);
-        } else {
-          console.warn('⚠️ OpenAI响应结构异常:', JSON.stringify(data, null, 2));
-        }
-        break;
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      const messageContent = data.choices[0].message.content;
+      answer = messageContent ? messageContent.trim() : '';
+      
+      console.log(`📝 Raw message content:`, JSON.stringify(messageContent));
+      console.log(`📏 Content length: ${messageContent ? messageContent.length : 0}`);
+      console.log(`🔧 Trimmed answer:`, JSON.stringify(answer));
+      console.log(`📏 Final answer length: ${answer.length}`);
+      
+      // 检查usage信息以了解token使用情况
+      if (data.usage) {
+        console.log('📊 Token usage:', {
+          prompt_tokens: data.usage.prompt_tokens,
+          completion_tokens: data.usage.completion_tokens,
+          total_tokens: data.usage.total_tokens,
+          reasoning_tokens: data.usage.completion_tokens_details?.reasoning_tokens || 0
+        });
+      }
+      
+      // 特殊处理：如果content为空但有reasoning_tokens，说明模型在推理但没有输出
+      if (!answer && data.usage?.completion_tokens_details?.reasoning_tokens > 0) {
+        console.log('⚠️ Model generated reasoning tokens but no visible content');
+        console.log('🔄 This might be due to model configuration, trying fallback...');
+        throw new Error('Empty content despite reasoning tokens generated');
+      }
+    } else {
+      console.warn('⚠️ Unexpected API response structure:', JSON.stringify(data, null, 2));
+      throw new Error('Invalid API response structure');
     }
     
-    // 验证回答是否为空
-    console.log('📊 解析到的最终答案:', JSON.stringify(answer));
-    console.log('📊 答案类型:', typeof answer);
-    console.log('📊 答案长度:', answer?.length || 0);
-    
+    // Validate if answer is empty
     if (!answer || answer.trim() === '') {
-      console.warn('⚠️ API返回了空回答或无效内容，使用备用方案');
-      console.log('📊 实际返回内容:', JSON.stringify(answer));
-      return generateMockResponse(question);
+      console.warn('⚠️ API returned empty answer, response details:');
+      console.log('  - Response status:', response.status);
+      console.log('  - Response data:', JSON.stringify(data, null, 2));
+      throw new Error('API returned empty content');
     }
     
-    console.log(`✅ 成功生成回答: "${answer}"`);
+    console.log(`✅ Successfully generated answer: "${answer}"`);
     return answer;
   } catch (error) {
-    console.error('❌ 回答生成请求失败:', error);
+    console.error('❌ Answer generation request failed:', error);
     return generateMockResponse(question);
   }
 };
@@ -806,28 +816,14 @@ const callAIService = async (
     "card_summary": "我认识到我的讨好行为，源于对被接纳的深层渴望。"
   }`;
 
-  let requestBody;
-  
-  // 根据 provider 构建请求体
-  switch (config.provider) {
-    case 'gemini':
-      requestBody = {
-            contents: [{ parts: [{ text: prompt }] }],
-            // 可以为gemini添加generationConfig
-            generationConfig: { temperature: 0.3, maxOutputTokens: 50000 }
-          };
-      break;
-    case 'openai':
-    default:
-      requestBody = {
-                    model: config.model || 'gpt-3.5-turbo',
-            messages: [{ role: 'user', content: prompt }],
-            temperature: 0.3,
-            max_tokens: 50000,
-            response_format: { type: "json_object" }, // 强制JSON输出，对新模型支持很好
-      };
-      break;
-  }
+  // 根据API文档，使用标准OpenAI格式
+  const requestBody = {
+    model: config.model || 'gpt-3.5-turbo',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.3,
+    max_tokens: 5000,  // 增加到5000 tokens
+    response_format: { type: "json_object" }, // 强制JSON输出
+  };
 
   try {
     console.log(`🔍 发送标签分析请求到 ${config.provider} API...`);
@@ -835,11 +831,14 @@ const callAIService = async (
     console.log(`🔑 使用端点: ${config.endpoint}`);
     console.log(`📋 使用模型: ${config.model}`);
     
+    // 确保API key是纯ASCII字符
+    const cleanApiKey = config.apiKey?.replace(/[^\x20-\x7E]/g, '') || '';
+    
     const response = await fetch(config.endpoint!, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${config.apiKey}`,
         'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cleanApiKey}`,
       },
       body: JSON.stringify(requestBody),
     });
@@ -851,36 +850,17 @@ const callAIService = async (
     }
 
     const data = await response.json();
-    console.log(`📥 原始API响应: `, JSON.stringify(data, null, 2));
+    console.log(`Raw API response: `, JSON.stringify(data, null, 2));
     
     let content = '';
     
-    // 根据 provider 解析响应
-    switch (config.provider) {
-      case 'gemini':
-        if (data.candidates && data.candidates[0] && data.candidates[0].content) {
-          content = data.candidates[0].content.parts[0].text || '';
-          console.log(`✅ Gemini响应解析: "${content.slice(0, 100)}..."`);
-        } else {
-          console.warn('⚠️ Gemini响应结构异常:', JSON.stringify(data, null, 2));
-        }
-        break;
-      case 'openai':
-      default:
-        console.log('🔍 标签分析 - 完整响应数据:', JSON.stringify(data, null, 2));
-        console.log('🔍 标签分析 - choices数组:', data.choices);
-        console.log('🔍 标签分析 - 第一个choice:', data.choices?.[0]);
-        console.log('🔍 标签分析 - message内容:', data.choices?.[0]?.message);
-        console.log('🔍 标签分析 - content字段:', data.choices?.[0]?.message?.content);
-        
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-          content = data.choices[0].message.content?.trim() || '';
-          console.log(`✅ 标签分析 - 解析到的内容: "${content.slice(0, 100)}..."`);
-          console.log(`✅ 标签分析 - 内容长度: ${content.length}`);
-        } else {
-          console.warn('⚠️ OpenAI响应结构异常:', JSON.stringify(data, null, 2));
-        }
-        break;
+    // 根据API文档，使用标准OpenAI响应格式解析
+    if (data.choices && data.choices[0] && data.choices[0].message) {
+      content = data.choices[0].message.content?.trim() || '';
+      console.log(`Tag analysis - Parsed content: "${content.slice(0, 100)}..."`);
+      console.log(`Tag analysis - Content length: ${content.length}`);
+    } else {
+      console.warn('API response structure abnormal:', JSON.stringify(data, null, 2));
     }
     
     if (!content) {
@@ -1236,24 +1216,63 @@ export const generateSmartConnections = (stars: Star[]): Connection[] => {
   return connections;
 };
 
-// 获取系统默认配置（从.env.local读取）
+// 获取系统默认配置（从.env.local读取或使用内置默认配置）
 const getSystemDefaultConfig = (): AITaggingConfig => {
   try {
-    const provider = (import.meta.env.VITE_DEFAULT_PROVIDER as ApiProvider) || 'openai';
-    const apiKey = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.VITE_DEFAULT_API_KEY;
-    const endpoint = import.meta.env.VITE_OPENAI_ENDPOINT || import.meta.env.VITE_DEFAULT_ENDPOINT;
-    const model = import.meta.env.VITE_OPENAI_MODEL || import.meta.env.VITE_DEFAULT_MODEL || 'gpt-3.5-turbo';
+    console.log('🔍 === getSystemDefaultConfig: Starting debug ===');
+    console.log('🔍 All available env vars:', Object.keys(import.meta.env));
+    
+    // 首先尝试从环境变量读取
+    const envProvider = (import.meta.env.VITE_DEFAULT_PROVIDER as ApiProvider);
+    const envApiKey = import.meta.env.VITE_OPENAI_API_KEY || import.meta.env.VITE_DEFAULT_API_KEY;
+    const envEndpoint = import.meta.env.VITE_OPENAI_ENDPOINT || import.meta.env.VITE_DEFAULT_ENDPOINT;
+    const envModel = import.meta.env.VITE_OPENAI_MODEL || import.meta.env.VITE_DEFAULT_MODEL;
 
-    if (apiKey && endpoint) {
-      console.log('📋 使用系统默认配置（后台配置）');
-      console.log(`🌍 提供商: ${provider}, 模型: ${model}`);
-      return { provider, apiKey, endpoint, model };
+    // 超详细的调试信息
+    console.log('🔍 Raw environment variables:');
+    console.log('  VITE_DEFAULT_PROVIDER =', JSON.stringify(envProvider));
+    console.log('  VITE_DEFAULT_API_KEY =', envApiKey ? `"${envApiKey.slice(0, 8)}..." (length: ${envApiKey.length})` : 'undefined/empty');
+    console.log('  VITE_DEFAULT_ENDPOINT =', JSON.stringify(envEndpoint));
+    console.log('  VITE_DEFAULT_MODEL =', JSON.stringify(envModel));
+    console.log('🔍 import.meta.env contains:');
+    for (const [key, value] of Object.entries(import.meta.env)) {
+      if (key.startsWith('VITE_')) {
+        console.log(`  ${key} =`, JSON.stringify(value));
+      }
+    }
+
+    if (envApiKey && envEndpoint) {
+      const provider = envProvider || 'openai';
+      const model = envModel || (provider === 'gemini' ? 'gemini-1.5-flash-latest' : 'gpt-3.5-turbo');
+      
+      console.log('✅ Found complete environment configuration!');
+      console.log(`  Provider: ${provider}`);
+      console.log(`  Model: ${model}`);
+      console.log(`  Endpoint: ${envEndpoint}`);
+      console.log(`  API Key: ${envApiKey.slice(0, 8)}... (${envApiKey.length} chars)`);
+      
+      const config = { provider, apiKey: envApiKey, endpoint: envEndpoint, model };
+      console.log('🔍 Returning config:', JSON.stringify({ ...config, apiKey: '[HIDDEN]' }));
+      return config;
     }
     
-    console.log('⚠️ 系统默认配置不完整，缺少API密钥或端点');
+    console.log('❌ Incomplete environment configuration');
+    console.log(`  envApiKey exists: ${!!envApiKey}`);
+    console.log(`  envEndpoint exists: ${!!envEndpoint}`);
+    
+    // 检查环境变量是否被替换为占位符文本
+    if (envEndpoint && typeof envEndpoint === 'string' && envEndpoint.includes('请填入')) {
+      console.log('⚠️  Endpoint contains Chinese placeholder text - this suggests .env.local is not being loaded properly');
+      console.log('⚠️  Current endpoint value:', envEndpoint);
+    }
+    
+    console.log('🔍 No complete API config in environment variables, checking for built-in config...');
+    
   } catch (error) {
-    console.warn('❌ 无法读取环境变量中的默认配置:', error);
+    console.error('❌ Error reading environment config:', error);
   }
+  
+  console.log('⚠️  No default config found, please check .env.local file');
   return {};
 };
 
@@ -1284,27 +1303,44 @@ export const setAIConfig = (config: AITaggingConfig) => {
 
 export const getAIConfig = (): AITaggingConfig => {
   try {
+    // 强制清除可能的缓存配置 - 用于调试
+    console.log('🔧 === getAIConfig: Starting fresh config load ===');
+    
+    // 检查URL参数是否有强制刷新标志
+    const shouldClearCache = window.location.search.includes('clearconfig') || 
+                           sessionStorage.getItem('force-config-refresh') === 'true';
+    
+    if (shouldClearCache) {
+      console.log('🧹 Force clearing all cached configurations...');
+      localStorage.removeItem(CONFIG_STORAGE_KEY);
+      localStorage.removeItem(`${CONFIG_STORAGE_KEY}-backup`);
+      sessionStorage.removeItem('force-config-refresh');
+      aiConfig = {}; // Clear in-memory config
+    }
+    
     // 优先检查用户配置（前端配置）
     const stored = localStorage.getItem(CONFIG_STORAGE_KEY);
+    console.log('📦 localStorage content for', CONFIG_STORAGE_KEY, ':', stored);
     
-    if (stored) {
+    if (stored && !shouldClearCache) {
       const parsedConfig = JSON.parse(stored);
+      console.log('📋 Parsed stored config:', parsedConfig);
       // 检查用户是否配置了有效的API信息
       if (parsedConfig.apiKey && parsedConfig.endpoint) {
         aiConfig = parsedConfig;
-        console.log('✅ 使用用户前端配置');
-        console.log(`📋 配置: 提供商=${aiConfig.provider}, 模型=${aiConfig.model}`);
+        console.log('✅ Using stored user configuration');
+        console.log(`📋 Config: provider=${aiConfig.provider}, model=${aiConfig.model}, endpoint=${aiConfig.endpoint}`);
         return aiConfig;
       }
     }
     
     // 尝试从备份中恢复用户配置
     const backup = localStorage.getItem(`${CONFIG_STORAGE_KEY}-backup`);
-    if (backup) {
+    if (backup && !shouldClearCache) {
       const backupConfig = JSON.parse(backup);
       if (backupConfig.apiKey && backupConfig.endpoint) {
         aiConfig = backupConfig;
-        console.log('⚠️ 从备份恢复用户配置');
+        console.log('⚠️ Restored from backup user config');
         // 恢复后立即保存到主存储
         localStorage.setItem(CONFIG_STORAGE_KEY, backup);
         return aiConfig;
@@ -1312,25 +1348,27 @@ export const getAIConfig = (): AITaggingConfig => {
     }
     
     // 如果用户没有配置，使用系统默认配置（后台配置）
-    console.log('🔍 用户未配置，检查系统默认配置...');
+    console.log('🔍 No user config found, checking system default...');
     const defaultConfig = getSystemDefaultConfig();
+    console.log('🔍 System default config result:', defaultConfig);
     if (Object.keys(defaultConfig).length > 0) {
       aiConfig = defaultConfig;
-      console.log('🔄 使用系统默认配置（后台配置）');
+      console.log('🔄 Using system default configuration');
+      console.log('🔍 Final config being returned:', JSON.stringify({ ...aiConfig, apiKey: '[HIDDEN]' }));
       return aiConfig;
     }
     
-    console.warn('⚠️ 未找到任何有效配置，将使用模拟数据');
+    console.warn('⚠️ No valid configuration found anywhere, will use mock data');
     aiConfig = {};
     
   } catch (error) {
-    console.error('❌ 获取AI配置时出错:', error);
+    console.error('❌ Error getting AI config:', error);
     
     // 出错时尝试使用系统默认配置
     const defaultConfig = getSystemDefaultConfig();
     if (Object.keys(defaultConfig).length > 0) {
       aiConfig = defaultConfig;
-      console.log('🔄 出错时使用系统默认配置');
+      console.log('🔄 Using system default config after error');
     } else {
       aiConfig = {};
     }

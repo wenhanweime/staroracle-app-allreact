@@ -68,31 +68,38 @@ export const useStarStore = create<StarState>((set, get) => {
       const { constellation, pendingStarPosition } = get();
       const { stars } = constellation;
       
-      console.log(`🤔 User asked: "${question}"`);
+      console.log(`===== User asked a question =====`);
+      console.log(`Question: "${question}"`);
       
       // Set loading state to true
       set({ isLoading: true });
       
       // Get AI configuration
       const aiConfig = getAIConfig();
+      console.log('Retrieved AI config result:', {
+        hasApiKey: !!aiConfig.apiKey,
+        hasEndpoint: !!aiConfig.endpoint,
+        provider: aiConfig.provider,
+        model: aiConfig.model
+      });
       
       // Generate AI response with proper error handling
-      console.log('🤖 Generating AI response...');
+      console.log('Starting AI response generation...');
       let answer: string;
       
       try {
         answer = await generateAIResponse(question, aiConfig);
-        console.log(`💫 AI responded: "${answer}"`);
+        console.log(`Got AI response: "${answer}"`);
         
         // Ensure we have a valid answer
         if (!answer || answer.trim().length === 0) {
           throw new Error('Empty AI response');
         }
       } catch (error) {
-        console.warn('❌ AI response failed, using fallback:', error);
+        console.warn('AI response failed, using fallback:', error);
         // Use fallback response generation
         answer = generateFallbackResponse(question);
-        console.log(`🔄 Fallback response: "${answer}"`);
+        console.log(`Fallback response: "${answer}"`);
       }
       
       // Analyze content with AI for tags and categorization
