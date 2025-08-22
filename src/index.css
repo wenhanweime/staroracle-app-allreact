@@ -32,6 +32,12 @@
   line-height: 1.5;
 }
 
+/* 聊天消息专用样式 - 优化行间距 */
+.chat-message-content {
+  line-height: 1.7 !important; /* 增加行间距到1.7 */
+  letter-spacing: 0.02em; /* 轻微增加字符间距 */
+}
+
 /* 移动端触摸优化 */
 * {
   -webkit-tap-highlight-color: transparent;

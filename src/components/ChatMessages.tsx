@@ -52,8 +52,7 @@ const ChatMessages: React.FC = () => {
         )
       ))}
       
-      {/* 加载状态 */}
-      {isLoading && <LoadingMessage />}
+      {/* 加载状态现在由 AIMessage 组件内部处理 */}
       
       {/* 自动滚动锚点 */}
       <div ref={messagesEndRef} />

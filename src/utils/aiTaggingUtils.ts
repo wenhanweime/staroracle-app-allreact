@@ -633,7 +633,7 @@ const callAIForResponse = async (
     config.provider = 'openai'; // 默认使用OpenAI格式
   }
 
-  const prompt = `You are an ancient cosmic oracle. Please respond to this question: "${question}" with poetic and mystical language. Your answer should be short but profound, connecting to stars, cosmos, or natural phenomena to inspire. Please respond in Chinese:`;
+  const prompt = `You are an ancient cosmic oracle. Please respond to this question: "${question}" with poetic and mystical language. Give a thoughtful response that connects to stars, cosmos, or natural phenomena. Please respond in Chinese:`;
 
   // 根据API文档，这是标准的OpenAI格式，但调整参数以适配特定模型
   const requestBody = {
@@ -645,6 +645,7 @@ const callAIForResponse = async (
   };
 
   try {
+    const startTime = Date.now();
     console.log('🚀 Sending AI request with config:', {
       endpoint: config.endpoint,
       model: config.model,
@@ -665,7 +666,8 @@ const callAIForResponse = async (
       body: JSON.stringify(requestBody),
     });
 
-    console.log(`📨 Response status: ${response.status} ${response.statusText}`);
+    const responseTime = Date.now() - startTime;
+    console.log(`📨 Response status: ${response.status} ${response.statusText} (${responseTime}ms)`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -676,13 +678,19 @@ const callAIForResponse = async (
     // Handle streaming response
     if (onStream && response.body) {
       console.log('📡 Processing streaming response...');
-      return await processStreamingResponse(response, onStream);
+      const firstTokenTime = Date.now();
+      const result = await processStreamingResponse(response, onStream, firstTokenTime);
+      return result;
     }
     
     // Check if stream was requested but not properly handled
     if (onStream) {
       console.warn('⚠️ Streaming was requested but response.body is not available');
       console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+      
+      // Fallback to test streaming if API doesn't support it
+      console.log('🔄 Falling back to test streaming...');
+      return await testStreamingResponse(onStream);
     }
 
     // Handle regular response
@@ -740,52 +748,86 @@ const callAIForResponse = async (
 // Process streaming response from API
 const processStreamingResponse = async (
   response: Response,
-  onStream: (chunk: string) => void
+  onStream: (chunk: string) => void,
+  firstTokenTime?: number
 ): Promise<string> => {
+  console.log('📡 === Starting processStreamingResponse ===');
+  
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let fullAnswer = '';
+  let buffer = ''; // Buffer for incomplete lines
   
   try {
+    console.log('📡 Starting to read stream...');
+    let chunkCount = 0;
+    
     while (true) {
+      console.log(`📡 Reading chunk ${++chunkCount}...`);
       const { done, value } = await reader.read();
       
-      if (done) break;
+      if (done) {
+        console.log('📡 Stream reading completed');
+        break;
+      }
       
+      // Decode and add to buffer
       const chunk = decoder.decode(value, { stream: true });
-      const lines = chunk.split('\n');
+      buffer += chunk;
+      console.log(`📡 Added to buffer, buffer length: ${buffer.length}`);
       
-      for (const line of lines) {
+      // Process complete lines from buffer
+      const lines = buffer.split('\n');
+      // Keep the last potentially incomplete line in buffer
+      buffer = lines.pop() || '';
+      
+      console.log(`📡 Processing ${lines.length} complete lines`);
+      
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
         const trimmedLine = line.trim();
         
-        // Skip empty lines and comments
-        if (!trimmedLine || trimmedLine.startsWith(':')) continue;
+        if (!trimmedLine || trimmedLine.startsWith(':')) {
+          continue;
+        }
         
-        // Process data lines
         if (trimmedLine.startsWith('data: ')) {
-          const jsonStr = trimmedLine.slice(6); // Remove 'data: '
+          const jsonStr = trimmedLine.slice(6);
           
-          // Check for end of stream
           if (jsonStr === '[DONE]') {
-            console.log('📡 Stream completed');
-            break;
+            console.log('📡 Stream end marker found');
+            return fullAnswer.trim();
           }
           
           try {
             const data = JSON.parse(jsonStr);
             
-            // Extract content from streaming chunk
             if (data.choices && data.choices[0] && data.choices[0].delta) {
               const content = data.choices[0].delta.content;
               
               if (content) {
-                console.log('📡 Stream chunk:', JSON.stringify(content));
+                // Log first token timing
+                if (firstTokenTime && fullAnswer === '') {
+                  const firstTokenDelay = Date.now() - firstTokenTime;
+                  console.log(`⏱️ First token received after ${firstTokenDelay}ms`);
+                }
+                
+                console.log(`📡 Stream chunk ${chunkCount}-${i}:`, JSON.stringify(content));
                 fullAnswer += content;
-                onStream(content);
+                
+                // Simulate character-by-character streaming for better UX
+                if (content.length > 3) {
+                  console.log('📡 Breaking down chunk into characters...');
+                  await simulateStreamingText(content, onStream, 30); // 30ms per character
+                } else {
+                  onStream(content);
+                }
+                
+                console.log(`📡 Full answer so far: ${fullAnswer.length} chars`);
               }
             }
           } catch (parseError) {
-            console.warn('⚠️ Failed to parse streaming chunk:', jsonStr);
+            console.warn('⚠️ Failed to parse streaming chunk:', jsonStr, parseError);
           }
         }
       }
@@ -798,11 +840,26 @@ const processStreamingResponse = async (
     console.error('❌ Streaming error:', error);
     throw error;
   } finally {
+    console.log('📡 Releasing reader lock');
     reader.releaseLock();
   }
 };
 
-// Simulate streaming text for mock responses
+// Test function to simulate streaming for debugging
+const testStreamingResponse = async (onStream: (chunk: string) => void): Promise<string> => {
+  const testText = "这是一个测试流式输出的回复，用来验证前端流式功能是否正常工作。";
+  const chars = Array.from(testText);
+  
+  let fullText = '';
+  for (let i = 0; i < chars.length; i++) {
+    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay per character
+    fullText += chars[i];
+    onStream(chars[i]);
+    console.log(`🔥 Test stream chunk: "${chars[i]}", full so far: "${fullText}"`);
+  }
+  
+  return fullText;
+};
 const simulateStreamingText = async (
   text: string,
   onStream: (chunk: string) => void,
