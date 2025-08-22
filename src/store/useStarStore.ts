@@ -83,12 +83,71 @@ export const useStarStore = create<StarState>((set, get) => {
         model: aiConfig.model
       });
       
-      // Generate AI response with proper error handling
-      console.log('Starting AI response generation...');
+      // Create new star at the clicked position or random position first (with placeholder answer)
+      const x = pendingStarPosition?.x ?? (Math.random() * 70 + 15); // 15-85%
+      const y = pendingStarPosition?.y ?? (Math.random() * 70 + 15); // 15-85%
+      
+      // Create placeholder star (we'll update it with AI response later)
+      const newStar: Star = {
+        id: `star-${Date.now()}`,
+        x,
+        y,
+        size: Math.random() * 1.5 + 2.0, // Will be updated based on AI analysis
+        brightness: 0.6, // Placeholder brightness
+        question,
+        answer: '', // Empty initially, will be filled by streaming
+        imageUrl: generateRandomStarImage(),
+        createdAt: new Date(),
+        isSpecial: false, // Will be updated based on AI analysis
+        tags: [], // Will be filled by AI analysis
+        primary_category: 'philosophy_and_existence', // Placeholder
+        emotional_tone: ['探寻中'], // Placeholder
+        question_type: '探索型', // Placeholder
+        insight_level: { value: 1, description: '星尘' }, // Placeholder
+        initial_luminosity: 10, // Placeholder
+        connection_potential: 3, // Placeholder
+        suggested_follow_up: '', // Will be filled by AI analysis
+        card_summary: question, // Placeholder
+        isTemplate: false,
+        isStreaming: true, // Mark as currently streaming
+      };
+      
+      // Add placeholder star to constellation immediately for better UX
+      const updatedStars = [...stars, newStar];
+      set({
+        constellation: {
+          stars: updatedStars,
+          connections: constellation.connections, // Keep existing connections for now
+        },
+        activeStarId: newStar.id, // Show the star being created
+        isAsking: false,
+        pendingStarPosition: null,
+      });
+      
+      // Generate AI response with streaming
+      console.log('Starting AI response generation with streaming...');
       let answer: string;
+      let streamingAnswer = '';
       
       try {
-        answer = await generateAIResponse(question, aiConfig);
+        // Set up streaming callback
+        const onStream = (chunk: string) => {
+          streamingAnswer += chunk;
+          
+          // Update star with streaming content in real time
+          set(state => ({
+            constellation: {
+              ...state.constellation,
+              stars: state.constellation.stars.map(star => 
+                star.id === newStar.id 
+                  ? { ...star, answer: streamingAnswer }
+                  : star
+              )
+            }
+          }));
+        };
+        
+        answer = await generateAIResponse(question, aiConfig, onStream);
         console.log(`Got AI response: "${answer}"`);
         
         // Ensure we have a valid answer
@@ -100,28 +159,22 @@ export const useStarStore = create<StarState>((set, get) => {
         // Use fallback response generation
         answer = generateFallbackResponse(question);
         console.log(`Fallback response: "${answer}"`);
+        
+        // Update with fallback answer
+        streamingAnswer = answer;
       }
       
       // Analyze content with AI for tags and categorization
       const analysis = await analyzeStarContent(question, answer, aiConfig);
       
-      // Create new star at the clicked position or random position
-      const x = pendingStarPosition?.x ?? (Math.random() * 70 + 15); // 15-85%
-      const y = pendingStarPosition?.y ?? (Math.random() * 70 + 15); // 15-85%
-      
-      // Create new star with AI-generated tags and properties
-      const newStar: Star = {
-        id: `star-${Date.now()}`,
-        x,
-        y,
+      // Update star with final AI analysis results
+      const finalStar: Star = {
+        ...newStar,
         // 根据洞察等级调整星星大小，洞察等级越高，星星越大
         size: Math.random() * 1.5 + 2.0 + (analysis.insight_level?.value || 0) * 0.5, // 2.0-6.5px
         // 亮度也受洞察等级影响
         brightness: (analysis.initial_luminosity || 60) / 100, // 转换为0-1范围
-        question,
-        answer, // Ensure answer is always set
-        imageUrl: generateRandomStarImage(),
-        createdAt: new Date(),
+        answer: streamingAnswer || answer, // Use final streamed answer
         isSpecial: Math.random() < 0.12 || (analysis.insight_level?.value || 0) >= 4, // 启明星和超新星自动成为特殊星
         tags: analysis.tags,
         primary_category: analysis.primary_category,
@@ -132,38 +185,35 @@ export const useStarStore = create<StarState>((set, get) => {
         connection_potential: analysis.connection_potential,
         suggested_follow_up: analysis.suggested_follow_up,
         card_summary: analysis.card_summary,
-        isTemplate: false, // User-created stars are not templates
+        isStreaming: false, // Streaming completed
       };
       
-      console.log('⭐ Adding new star:', {
-        question: newStar.question,
-        answer: newStar.answer,
-        answerLength: newStar.answer.length,
-        tags: newStar.tags,
-        primary_category: newStar.primary_category,
-        emotional_tone: newStar.emotional_tone,
-        insight_level: newStar.insight_level,
-        connection_potential: newStar.connection_potential
+      console.log('⭐ Final star with AI analysis:', {
+        question: finalStar.question,
+        answer: finalStar.answer,
+        answerLength: finalStar.answer.length,
+        tags: finalStar.tags,
+        primary_category: finalStar.primary_category,
+        emotional_tone: finalStar.emotional_tone,
+        insight_level: finalStar.insight_level,
+        connection_potential: finalStar.connection_potential
       });
       
-      // Add new star to constellation
-      const updatedStars = [...stars, newStar];
-      
-      // Regenerate all connections based on tag similarity
-      const smartConnections = generateSmartConnections(updatedStars);
+      // Update with final star and regenerate connections
+      const finalStars = updatedStars.map(star => 
+        star.id === newStar.id ? finalStar : star
+      );
+      const smartConnections = generateSmartConnections(finalStars);
       
       set({
         constellation: {
-          stars: updatedStars,
+          stars: finalStars,
           connections: smartConnections,
         },
-        activeStarId: null, // 不自动显示星星详情，避免阻止按钮点击
-        isAsking: false,
         isLoading: false, // Set loading state back to false
-        pendingStarPosition: null,
       });
       
-      return newStar;
+      return finalStar;
     },
 
     drawInspirationCard: () => {

@@ -29,7 +29,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { addStar, isAsking } = useStarStore();
-  const { addUserMessage, addAIMessage, setLoading, isLoading: chatIsLoading } = useChatStore();
+  const { addUserMessage, addAIMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, isLoading: chatIsLoading } = useChatStore();
 
   useEffect(() => {
     if (isAsking && inputRef.current) {
@@ -124,11 +124,27 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
     
     try {
       console.log('🤖 开始生成AI回复...');
-      // 使用真实的AI API生成回复
-      const aiResponse = await generateAIResponse(trimmedQuestion);
       
-      // 添加AI回复到聊天
-      addAIMessage(aiResponse);
+      // 创建流式AI消息
+      const messageId = addStreamingAIMessage('');
+      let streamingText = '';
+      
+      // 设置流式回调
+      const onStream = (chunk: string) => {
+        streamingText += chunk;
+        updateStreamingMessage(messageId, streamingText);
+      };
+      
+      // 使用真实的AI API生成回复，带流式输出
+      const aiResponse = await generateAIResponse(trimmedQuestion, undefined, onStream);
+      
+      // 确保最终内容一致
+      if (streamingText !== aiResponse) {
+        updateStreamingMessage(messageId, aiResponse);
+      }
+      
+      // 完成流式输出
+      finalizeStreamingMessage(messageId);
       setLoading(false);
       playSound('starReveal');
       
@@ -145,7 +161,10 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
       ];
       
       const fallbackResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      addAIMessage(fallbackResponse);
+      
+      // 更新消息为错误回复
+      const messageId = addStreamingAIMessage(fallbackResponse);
+      finalizeStreamingMessage(messageId);
       setLoading(false);
       playSound('starClick');
     }

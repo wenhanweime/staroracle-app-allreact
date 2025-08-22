@@ -24,6 +24,7 @@ export interface Star {
   similarity?: number; // For connection strength
   isTemplate?: boolean; // 标记是否为模板星星
   templateType?: string; // 模板类型（星座名称）
+  isStreaming?: boolean; // 标记是否正在流式输出回答
 }
 
 export interface Connection {

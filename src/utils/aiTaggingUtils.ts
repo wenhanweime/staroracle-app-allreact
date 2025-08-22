@@ -457,14 +457,17 @@ export const analyzeStarContent = async (
   }
 };
 
-// Generate AI response for oracle answers
+// Generate AI response for oracle answers with optional streaming
 export const generateAIResponse = async (
   question: string,
-  config?: AITaggingConfig
+  config?: AITaggingConfig,
+  onStream?: (chunk: string) => void
 ): Promise<string> => {
   console.log('===== Starting AI answer generation =====');
   console.log('Question:', question);
   console.log('Passed config:', config ? 'Has config' : 'No config');
+  console.log('Streaming enabled:', !!onStream);
+  console.log('onStream type:', typeof onStream);
   
   try {
     if (config?.apiKey && config?.endpoint) {
@@ -475,7 +478,8 @@ export const generateAIResponse = async (
         model: config.model,
         hasApiKey: !!config.apiKey
       });
-      const aiResponse = await callAIForResponse(question, config);
+      console.log('🔍 About to call callAIForResponse with onStream:', !!onStream);
+      const aiResponse = await callAIForResponse(question, config, onStream);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
@@ -494,19 +498,33 @@ export const generateAIResponse = async (
       console.log(`Using default ${defaultConfig.provider || 'openai'} config to generate answer`);
       // Print config info (hide API key)
       console.log(`Config info: provider=${defaultConfig.provider}, endpoint=${defaultConfig.endpoint}, model=${defaultConfig.model}`);
-      const aiResponse = await callAIForResponse(question, defaultConfig);
+      console.log('🔍 About to call callAIForResponse with default config and onStream:', !!onStream);
+      const aiResponse = await callAIForResponse(question, defaultConfig, onStream);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
     
     console.log('Using mock answer generation');
-    // Fallback to mock responses
+    // Fallback to mock responses - simulate streaming for mock too
     const mockResponse = generateMockResponse(question);
+    
+    if (onStream) {
+      // Simulate streaming for mock response
+      console.log('Simulating stream for mock response');
+      await simulateStreamingText(mockResponse, onStream);
+    }
+    
     console.log('Mock generated answer:', mockResponse);
     return mockResponse;
   } catch (error) {
     console.warn('AI answer generation failed, using fallback:', error);
     const fallbackResponse = generateMockResponse(question);
+    
+    if (onStream) {
+      // Simulate streaming for fallback too
+      await simulateStreamingText(fallbackResponse, onStream);
+    }
+    
     console.log('Fallback answer:', fallbackResponse);
     return fallbackResponse;
   }
@@ -605,10 +623,11 @@ const generateMockResponse = (question: string): string => {
   return generalResponses[Math.floor(Math.random() * generalResponses.length)];
 };
 
-// Real AI service integration for responses
+// Real AI service integration for responses with streaming support
 const callAIForResponse = async (
   question: string,
-  config: AITaggingConfig
+  config: AITaggingConfig,
+  onStream?: (chunk: string) => void
 ): Promise<string> => {
   if (!config.provider) {
     config.provider = 'openai'; // 默认使用OpenAI格式
@@ -622,14 +641,15 @@ const callAIForResponse = async (
     messages: [{ role: 'user', content: prompt }],
     temperature: 0.8,
     max_tokens: 5000,  // 增加到5000 tokens以确保有足够空间生成内容
-    // max_completion_tokens: 5000,  // 一些模型可能需要这个参数
+    stream: !!onStream,  // 启用流式输出
   };
 
   try {
     console.log('🚀 Sending AI request with config:', {
       endpoint: config.endpoint,
       model: config.model,
-      provider: config.provider
+      provider: config.provider,
+      streaming: !!onStream
     });
     console.log('📤 Request body:', JSON.stringify(requestBody, null, 2));
     
@@ -653,6 +673,19 @@ const callAIForResponse = async (
       throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
+    // Handle streaming response
+    if (onStream && response.body) {
+      console.log('📡 Processing streaming response...');
+      return await processStreamingResponse(response, onStream);
+    }
+    
+    // Check if stream was requested but not properly handled
+    if (onStream) {
+      console.warn('⚠️ Streaming was requested but response.body is not available');
+      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
+    }
+
+    // Handle regular response
     const data = await response.json();
     console.log(`📦 Complete API response structure:`, JSON.stringify(data, null, 2));
     
@@ -701,6 +734,85 @@ const callAIForResponse = async (
   } catch (error) {
     console.error('❌ Answer generation request failed:', error);
     return generateMockResponse(question);
+  }
+};
+
+// Process streaming response from API
+const processStreamingResponse = async (
+  response: Response,
+  onStream: (chunk: string) => void
+): Promise<string> => {
+  const reader = response.body!.getReader();
+  const decoder = new TextDecoder();
+  let fullAnswer = '';
+  
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      
+      if (done) break;
+      
+      const chunk = decoder.decode(value, { stream: true });
+      const lines = chunk.split('\n');
+      
+      for (const line of lines) {
+        const trimmedLine = line.trim();
+        
+        // Skip empty lines and comments
+        if (!trimmedLine || trimmedLine.startsWith(':')) continue;
+        
+        // Process data lines
+        if (trimmedLine.startsWith('data: ')) {
+          const jsonStr = trimmedLine.slice(6); // Remove 'data: '
+          
+          // Check for end of stream
+          if (jsonStr === '[DONE]') {
+            console.log('📡 Stream completed');
+            break;
+          }
+          
+          try {
+            const data = JSON.parse(jsonStr);
+            
+            // Extract content from streaming chunk
+            if (data.choices && data.choices[0] && data.choices[0].delta) {
+              const content = data.choices[0].delta.content;
+              
+              if (content) {
+                console.log('📡 Stream chunk:', JSON.stringify(content));
+                fullAnswer += content;
+                onStream(content);
+              }
+            }
+          } catch (parseError) {
+            console.warn('⚠️ Failed to parse streaming chunk:', jsonStr);
+          }
+        }
+      }
+    }
+    
+    console.log(`✅ Streaming completed. Full answer: "${fullAnswer}"`);
+    return fullAnswer.trim();
+    
+  } catch (error) {
+    console.error('❌ Streaming error:', error);
+    throw error;
+  } finally {
+    reader.releaseLock();
+  }
+};
+
+// Simulate streaming text for mock responses
+const simulateStreamingText = async (
+  text: string,
+  onStream: (chunk: string) => void,
+  delayMs: number = 50
+): Promise<void> => {
+  const chars = Array.from(text); // Handle Unicode properly
+  
+  for (let i = 0; i < chars.length; i++) {
+    await new Promise(resolve => setTimeout(resolve, delayMs));
+    onStream(chars[i]);
   }
 };
 
