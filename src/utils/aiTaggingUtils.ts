@@ -1,5 +1,6 @@
 // AI Tagging and Analysis Utilities
 import { Star, Connection, TagAnalysis } from '../types';
+import { AwarenessInsight } from '../types/chat'; // 新增导入
 import type { ApiProvider } from '../vite-env';
 
 export interface AITaggingConfig {
@@ -1743,3 +1744,212 @@ setTimeout(() => {
   console.log('🚀 初始化AI服务配置...');
   checkApiConfiguration();
 }, 1000);
+
+// 觉察价值分析 - 分析对话是否具有自我觉察的价值
+export const analyzeAwarenessValue = async (
+  userQuestion: string,
+  aiResponse: string,
+  config?: AITaggingConfig
+): Promise<AwarenessInsight> => {
+  console.log('🧠 开始分析对话的觉察价值...');
+  console.log('用户问题:', userQuestion);
+  console.log('AI回复:', aiResponse);
+  
+  try {
+    const activeConfig = config || getAIConfig();
+    
+    if (!activeConfig.apiKey || !activeConfig.endpoint) {
+      console.warn('⚠️ 没有AI配置，使用模拟觉察分析');
+      return mockAwarenessAnalysis(userQuestion, aiResponse);
+    }
+    
+    console.log('🤖 使用AI进行觉察价值分析');
+    return await callAIForAwarenessAnalysis(userQuestion, aiResponse, activeConfig);
+    
+  } catch (error) {
+    console.warn('❌ 觉察分析失败，使用备用方案:', error);
+    return mockAwarenessAnalysis(userQuestion, aiResponse);
+  }
+};
+
+// AI觉察分析服务调用
+const callAIForAwarenessAnalysis = async (
+  userQuestion: string,
+  aiResponse: string,
+  config: AITaggingConfig
+): Promise<AwarenessInsight> => {
+  const prompt = `
+你是一位专业的心理洞察分析师。请分析以下对话是否具有自我觉察的价值。
+
+用户问题: "${userQuestion}"
+AI回答: "${aiResponse}"
+
+请判断这段对话是否帮助用户产生了自我觉察、情绪洞察或个人成长的洞见。
+
+觉察价值的判断标准：
+1. HIGH（高价值）：触及深层自我认知、价值观反思、行为模式认识、情绪根源探索
+2. MEDIUM（中等价值）：涉及个人情感、人际关系思考、生活态度调整
+3. LOW（低价值）：一般性建议、事实性信息、浅层交流
+4. NONE（无价值）：纯粹的信息咨询、技术问题、日常闲聊
+
+请严格按照以下JSON格式返回分析结果，不要添加任何其他文字：
+
+{
+  "hasInsight": <boolean: 是否有觉察价值>,
+  "insightLevel": "<string: low/medium/high>",
+  "insightType": "<string: 觉察类型，如'自我认知'、'情绪洞察'、'关系反思'等>",
+  "keyInsights": ["<string: 关键洞察点1>", "<string: 关键洞察点2>"],
+  "emotionalPattern": "<string: 识别到的情绪或行为模式>",
+  "suggestedReflection": "<string: 建议的深入思考方向>",
+  "followUpQuestions": ["<string: 后续探索问题1>", "<string: 后续探索问题2>"]
+}
+`;
+
+  const requestBody = {
+    model: config.model || 'gpt-3.5-turbo',
+    messages: [{ role: 'user', content: prompt }],
+    temperature: 0.3, // 较低温度确保一致性
+    max_tokens: 2000,
+    response_format: { type: "json_object" }
+  };
+
+  try {
+    const cleanApiKey = config.apiKey?.replace(/[^\x20-\x7E]/g, '') || '';
+    
+    const response = await fetch(config.endpoint!, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${cleanApiKey}`,
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`觉察分析API错误 (${response.status}): ${errorText}`);
+      throw new Error(`Awareness API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    console.log('觉察分析原始响应:', JSON.stringify(data, null, 2));
+    
+    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+      throw new Error('Invalid awareness analysis response structure');
+    }
+
+    const content = data.choices[0].message.content?.trim() || '';
+    console.log('觉察分析内容:', content);
+    
+    // 解析JSON响应
+    const cleanedContent = content
+      .replace(/^```json\n?/, '')
+      .replace(/\n?```$/, '')
+      .trim();
+    
+    const parsedResult = JSON.parse(cleanedContent);
+    
+    // 验证必要字段
+    if (typeof parsedResult.hasInsight !== 'boolean') {
+      throw new Error('Invalid hasInsight field');
+    }
+    
+    console.log('✅ 觉察分析完成:', parsedResult);
+    return parsedResult as AwarenessInsight;
+    
+  } catch (error) {
+    console.error('❌ AI觉察分析调用失败:', error);
+    throw error;
+  }
+};
+
+// 模拟觉察分析 - 备用方案
+const mockAwarenessAnalysis = (userQuestion: string, aiResponse: string): AwarenessInsight => {
+  const lowerQuestion = userQuestion.toLowerCase();
+  const lowerResponse = aiResponse.toLowerCase();
+  
+  // 高觉察价值关键词
+  const highInsightKeywords = [
+    '为什么', '原因', '内心', '感受', '恐惧', '焦虑', '担心', '困惑', 
+    '意义', '价值观', '目标', '梦想', '关系', '家庭', '自己', '成长',
+    '改变', '选择', '决定', '未来', '过去', '痛苦', '快乐', '孤独',
+    '自信', '自我', '认识', '理解', '接受', '原谅'
+  ];
+  
+  // 中等觉察价值关键词  
+  const mediumInsightKeywords = [
+    '感觉', '想法', '看法', '态度', '习惯', '行为', '情绪', '心情',
+    '压力', '疲惫', '兴奋', '满足', '失望', '希望', '期待', '担忧'
+  ];
+  
+  // 统计关键词出现次数
+  let highCount = 0;
+  let mediumCount = 0;
+  
+  const combinedText = `${lowerQuestion} ${lowerResponse}`;
+  
+  highInsightKeywords.forEach(keyword => {
+    if (combinedText.includes(keyword)) highCount++;
+  });
+  
+  mediumInsightKeywords.forEach(keyword => {
+    if (combinedText.includes(keyword)) mediumCount++;
+  });
+  
+  // 判断觉察价值等级
+  let insightLevel: 'low' | 'medium' | 'high' = 'low';
+  let hasInsight = false;
+  
+  if (highCount >= 2) {
+    insightLevel = 'high';
+    hasInsight = true;
+  } else if (highCount >= 1 || mediumCount >= 3) {
+    insightLevel = 'medium';
+    hasInsight = true;
+  } else if (mediumCount >= 1) {
+    insightLevel = 'low';
+    hasInsight = true;
+  }
+  
+  // 根据内容生成洞察类型和建议
+  let insightType = '自我探索';
+  let emotionalPattern = '思考模式';
+  let suggestedReflection = '继续深入思考这个话题';
+  let followUpQuestions = ['你对此还有什么其他想法？', '这让你想到了什么？'];
+  
+  if (combinedText.includes('感受') || combinedText.includes('情绪')) {
+    insightType = '情绪洞察';
+    emotionalPattern = '情绪觉察模式';
+    suggestedReflection = '观察和理解自己的情绪反应';
+    followUpQuestions = ['这种情绪是什么时候开始的？', '什么情况下你会有类似感受？'];
+  }
+  
+  if (combinedText.includes('关系') || combinedText.includes('家庭') || combinedText.includes('朋友')) {
+    insightType = '关系反思';
+    emotionalPattern = '人际互动模式';
+    suggestedReflection = '思考人际关系中的互动模式';
+    followUpQuestions = ['在其他关系中是否也有类似情况？', '你希望这种关系如何发展？'];
+  }
+  
+  if (combinedText.includes('目标') || combinedText.includes('未来') || combinedText.includes('梦想')) {
+    insightType = '人生规划';
+    emotionalPattern = '目标导向思维';
+    suggestedReflection = '明确自己真正想要的人生方向';
+    followUpQuestions = ['什么阻碍了你实现这个目标？', '如果没有任何限制，你会如何规划？'];
+  }
+  
+  const keyInsights = hasInsight ? [
+    `识别到${insightType}的重要性`,
+    '开始深入思考个人内在体验'
+  ] : [];
+  
+  return {
+    hasInsight,
+    insightLevel,
+    insightType,
+    keyInsights,
+    emotionalPattern,
+    suggestedReflection,
+    followUpQuestions
+  };
+};

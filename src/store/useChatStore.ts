@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ChatMessage, ChatState } from '../types/chat';
+import { ChatMessage, ChatState, AwarenessInsight } from '../types/chat';
 
 interface ChatStore extends ChatState {
   addUserMessage: (text: string) => void;
@@ -9,6 +9,9 @@ interface ChatStore extends ChatState {
   finalizeStreamingMessage: (id: string) => void;
   setLoading: (loading: boolean) => void;
   clearMessages: () => void;
+  // 觉察分析相关方法
+  startAwarenessAnalysis: (messageId: string) => void;
+  completeAwarenessAnalysis: (messageId: string, insight: AwarenessInsight) => void;
 }
 
 export const useChatStore = create<ChatStore>((set, get) => ({
@@ -84,5 +87,31 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
   clearMessages: () => {
     set({ messages: [], isLoading: false });
+  },
+
+  // 开始觉察分析
+  startAwarenessAnalysis: (messageId: string) => {
+    set(state => ({
+      messages: state.messages.map(msg => 
+        msg.id === messageId 
+          ? { ...msg, isAnalyzingAwareness: true }
+          : msg
+      )
+    }));
+  },
+
+  // 完成觉察分析
+  completeAwarenessAnalysis: (messageId: string, insight: AwarenessInsight) => {
+    set(state => ({
+      messages: state.messages.map(msg => 
+        msg.id === messageId 
+          ? { 
+              ...msg, 
+              isAnalyzingAwareness: false,
+              awarenessInsight: insight 
+            }
+          : msg
+      )
+    }));
   }
 }));

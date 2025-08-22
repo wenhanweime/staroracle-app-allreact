@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>StarOracle Debug Config</title>
+    <script>
+        // Debug script to clear all cached configurations
+        function clearAllConfigurations() {
+            // Clear localStorage
+            localStorage.removeItem('stelloracle-ai-config');
+            localStorage.removeItem('stelloracle-ai-config-backup');
+            
+            // Set force refresh flag
+            sessionStorage.setItem('force-config-refresh', 'true');
+            
+            console.log('All configurations cleared. Reloading...');
+            alert('Configuration cache cleared! The app will now reload.');
+            
+            // Redirect to main app with clearconfig flag
+            window.location.href = 'http://localhost:3003/?clearconfig=true';
+        }
+        
+        function showCurrentConfig() {
+            const stored = localStorage.getItem('stelloracle-ai-config');
+            const backup = localStorage.getItem('stelloracle-ai-config-backup');
+            
+            console.log('Current stored config:', stored);
+            console.log('Current backup config:', backup);
+            
+            document.getElementById('config-display').innerHTML = `
+                <h3>Current localStorage configs:</h3>
+                <p><strong>Main config:</strong> ${stored || 'None'}</p>
+                <p><strong>Backup config:</strong> ${backup || 'None'}</p>
+            `;
+        }
+    </script>
+</head>
+<body>
+    <h1>StarOracle Configuration Debug Tool</h1>
+    <button onclick="clearAllConfigurations()">Clear All Cached Configurations</button>
+    <button onclick="showCurrentConfig()">Show Current Config</button>
+    
+    <div id="config-display"></div>
+    
+    <p>This tool helps debug configuration loading issues.</p>
+    <p>If the AI functionality isn't working, try clearing all cached configurations.</p>
+</body>
+</html>

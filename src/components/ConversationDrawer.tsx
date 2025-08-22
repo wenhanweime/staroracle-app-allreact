@@ -5,6 +5,7 @@ import { useChatStore } from '../store/useChatStore';
 import { playSound } from '../utils/soundUtils';
 import { triggerHapticFeedback } from '../utils/hapticUtils';
 import StarRayIcon from './StarRayIcon';
+import ChatMessages from './ChatMessages';
 import { Capacitor } from '@capacitor/core';
 import { generateAIResponse } from '../utils/aiTaggingUtils'; // 导入真实AI功能
 
@@ -19,7 +20,7 @@ interface ConversationDrawerProps {
   onToggle: () => void;
 }
 
-const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
+const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ isOpen, onToggle }) => {
   const [inputValue, setInputValue] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -202,6 +203,16 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = () => {
         }
       }, 100);
     }
+  };
+
+  // 处理后续提问（从觉察功能触发）
+  const handleFollowUpQuestion = (question: string) => {
+    console.log('🔄 处理后续提问:', question);
+    setInputValue(question);
+    // 自动发送问题
+    setTimeout(() => {
+      handleSend();
+    }, 100);
   };
 
   // 计算容器的动态样式

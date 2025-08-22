@@ -19,6 +19,7 @@ import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUti
 import { triggerHapticFeedback } from './utils/hapticUtils';
 import { Menu } from 'lucide-react';
 import { useStarStore } from './store/useStarStore';
+import { useChatStore } from './store/useChatStore'; // 添加导入
 import { ConstellationTemplate } from './types';
 import { checkApiConfiguration } from './utils/aiTaggingUtils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -34,6 +35,16 @@ function App() {
     currentInspirationCard, 
     dismissInspirationCard 
   } = useStarStore();
+  
+  // 添加聊天store的访问
+  const { addUserMessage } = useChatStore();
+
+  // 处理后续提问的回调
+  const handleFollowUpQuestion = (question: string) => {
+    console.log('📱 App层接收到后续提问:', question);
+    // 直接添加用户消息，ConversationDrawer会处理AI回复
+    addUserMessage(question);
+  };
 
   // 添加原生平台效果（只在原生环境下执行）
   useEffect(() => {
@@ -210,7 +221,7 @@ function App() {
       {appReady && <Constellation />}
       
       {/* Chat Messages - 显示聊天消息 */}
-      {appReady && <ChatMessages />}
+      {appReady && <ChatMessages onAskFollowUp={handleFollowUpQuestion} />}
       
       {/* Inspiration card */}
       {currentInspirationCard && (

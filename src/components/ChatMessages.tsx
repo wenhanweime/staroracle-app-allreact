@@ -10,7 +10,11 @@ const isIOS = () => {
          (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 };
 
-const ChatMessages: React.FC = () => {
+interface ChatMessagesProps {
+  onAskFollowUp?: (question: string) => void; // 后续提问回调
+}
+
+const ChatMessages: React.FC<ChatMessagesProps> = ({ onAskFollowUp }) => {
   const { messages, isLoading } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -35,6 +39,17 @@ const ChatMessages: React.FC = () => {
     }
   };
 
+  // 找到对应的用户问题
+  const getUserQuestionForMessage = (messageIndex: number) => {
+    // 往前查找最近的用户消息
+    for (let i = messageIndex - 1; i >= 0; i--) {
+      if (messages[i].isUser) {
+        return messages[i].text;
+      }
+    }
+    return undefined;
+  };
+
   return (
     <div 
       className="flex-1 overflow-y-auto p-4 space-y-0"
@@ -44,11 +59,16 @@ const ChatMessages: React.FC = () => {
       }}
     >
       {/* 渲染所有消息 */}
-      {messages.map((message) => (
+      {messages.map((message, index) => (
         message.isUser ? (
           <UserMessage key={message.id} message={message} />
         ) : (
-          <AIMessage key={message.id} message={message} />
+          <AIMessage 
+            key={message.id} 
+            message={message}
+            userQuestion={getUserQuestionForMessage(index)}
+            onAskFollowUp={onAskFollowUp}
+          />
         )
       ))}
       
