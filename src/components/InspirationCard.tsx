@@ -110,9 +110,10 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
       exit={{ opacity: 0 }}
     >
       <motion.div
-        className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm"
+        className="absolute inset-0 bg-black"
+        style={{ opacity: 0.7 }}
         initial={{ opacity: 0 }}
-        animate={{ opacity: 1 }}
+        animate={{ opacity: 0.7 }}
         exit={{ opacity: 0 }}
         onClick={handleDismiss}
       />
@@ -152,11 +153,15 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   r={star.r}
                   fill="rgba(255,255,255,0.6)"
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: [0.3, 0.8, 0.3] }}  // 始终使用同一个动画配置
+                  animate={isCardReady ? {
+                    opacity: [0.3, 0.8, 0.3]
+                  } : {
+                    opacity: 0
+                  }}
                   transition={{
                     duration: star.duration,
-                    repeat: Infinity,
-                    delay: isCardReady ? 2.0 + star.delay : 999999  // 用极长延迟代替条件控制
+                    repeat: isCardReady ? Infinity : 0,
+                    delay: isCardReady ? 2.0 + star.delay : 0
                   }}
                 />
               ))}
@@ -183,15 +188,18 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                         stroke="#ffffff"
                         strokeWidth="2"
                         initial={{ pathLength: 0, opacity: 0 }}
-                        animate={isCardReady ? { 
+                        animate={isCardReady ? {
                           pathLength: 1,
-                          opacity: [0, 0.8, 0],
-                        } : { pathLength: 0, opacity: 0 }}
+                          opacity: [0, 0.8, 0]
+                        } : {
+                          pathLength: 0,
+                          opacity: 0
+                        }}
                         transition={{
                           duration: 1.5,
                           delay: isCardReady ? i * 0.1 : 0,
                           repeat: isCardReady ? Infinity : 0,
-                          repeatDelay: isCardReady ? 1 : 0,
+                          repeatDelay: isCardReady ? 1 : 0
                         }}
               />
                     ))}
@@ -201,8 +209,17 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                 <motion.div
                   className="card-prompt"
                   initial={{ opacity: 0, y: 20 }}
-                  animate={isCardReady ? { opacity: 0.7, y: 0 } : { opacity: 0, y: 20 }}
-                  transition={{ delay: isCardReady ? 0.5 : 0 }}
+                  animate={isCardReady ? {
+                    opacity: 0.7,
+                    y: 0
+                  } : {
+                    opacity: 0,
+                    y: 20
+                  }}
+                  transition={{ 
+                    delay: isCardReady ? 0.5 : 0,
+                    duration: 0.3
+                  }}
                 >
                   <p className="text-center text-base text-neutral-300 font-normal">
                     翻开卡片，宇宙会回答你
@@ -220,14 +237,17 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                 top: particle.top,
               }}
               initial={{ y: 0, opacity: 0.3 }}
-              animate={{
-                        y: [-5, 5, -5],
-                        opacity: [0.3, 0.7, 0.3],
+              animate={isCardReady ? {
+                y: [-5, 5, -5],
+                opacity: [0.3, 0.7, 0.3]
+              } : {
+                y: 0,
+                opacity: 0
               }}
               transition={{
                 duration: particle.duration,
-                repeat: Infinity,
-                delay: isCardReady ? 2.0 + particle.delay : 999999,  // 同样用极长延迟代替条件控制
+                repeat: isCardReady ? Infinity : 0,
+                delay: isCardReady ? 2.0 + particle.delay : 0
               }}
             />
           ))}
@@ -263,10 +283,12 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                 <motion.div
                   className="reflection-section mt-auto mb-3 px-4"
                   initial={{ opacity: 0 }}
-                  animate={{ opacity: 0.45 }}
+                  animate={{ 
+                    opacity: 1 
+                  }}
                   transition={{ delay: 0.6 }}
                 >
-                  <p className="reflection-text text-[9px] text-neutral-500 italic text-center leading-tight tracking-wide">{answerReflection}</p>
+                  <p className="reflection-text text-[9px] text-neutral-400 italic text-center leading-tight tracking-wide">{answerReflection}</p>
                 </motion.div>
                 
                 {/* 抽屉式输入框 - 直接显示，无需点击按钮 */}

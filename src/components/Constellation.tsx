@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStarStore } from '../store/useStarStore';
+import { useChatStore } from '../store/useChatStore'; // 添加聊天状态导入
 import { playSound } from '../utils/soundUtils';
 import Star from './Star';
 import StarRayIcon from './StarRayIcon';
@@ -15,6 +16,10 @@ const Constellation: React.FC = () => {
     pendingStarPosition,
     isLoading
   } = useStarStore();
+  
+  // 添加聊天状态检查
+  const { messages, isLoading: chatIsLoading } = useChatStore();
+  
   const { stars, connections } = constellation;
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
@@ -55,6 +60,13 @@ const Constellation: React.FC = () => {
   const handleBackgroundClick = (e: React.MouseEvent) => {
     console.log('🌌 Constellation clicked at:', e.clientX, e.clientY);
     console.log('🎯 Click target:', e.target);
+    
+    // 检查是否有活跃的聊天会话
+    const hasActiveChat = messages.length > 0 || chatIsLoading;
+    if (hasActiveChat) {
+      console.log('💬 聊天会话活跃中，跳过灵感卡片显示');
+      return; // 有聊天记录时不显示灵感卡片
+    }
     
     // 检查点击是否在按钮区域 - 排除左上角和右上角按钮区域
     const isInButtonArea = (clientX: number, clientY: number) => {
@@ -100,6 +112,13 @@ const Constellation: React.FC = () => {
   const handleContextMenu = (e: React.MouseEvent) => {
     // If we're currently loading a star, don't allow new interactions
     if (isLoading) return;
+    
+    // 检查是否有活跃的聊天会话
+    const hasActiveChat = messages.length > 0 || chatIsLoading;
+    if (hasActiveChat) {
+      console.log('💬 聊天会话活跃中，跳过灵感卡片显示（右键）');
+      return; // 有聊天记录时不显示灵感卡片
+    }
     
     e.preventDefault(); // 阻止默认的右键菜单
     console.log('🔍 右键点击事件触发');

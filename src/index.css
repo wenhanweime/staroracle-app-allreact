@@ -105,8 +105,8 @@ input {
     -webkit-appearance: none !important;
     appearance: none !important;
     border-radius: 0 !important;
-    /* 防止iOS缩放 */
-    font-size: 16px !important;
+    /* 调整为14px与正文一致，但仍防止iOS缩放 */
+    font-size: 14px !important;
   }
   
   /* 确保输入框在iOS上可点击 */
