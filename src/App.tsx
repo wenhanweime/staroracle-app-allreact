@@ -19,7 +19,7 @@ import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUti
 import { triggerHapticFeedback } from './utils/hapticUtils';
 import { Menu } from 'lucide-react';
 import { useStarStore } from './store/useStarStore';
-import { useChatStore } from './store/useChatStore'; // 添加导入
+import { useChatStore } from './store/useChatStore';
 import { ConstellationTemplate } from './types';
 import { checkApiConfiguration } from './utils/aiTaggingUtils';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -36,6 +36,7 @@ function App() {
     currentInspirationCard, 
     dismissInspirationCard 
   } = useStarStore();
+  
 
   // 处理后续提问的回调
   const handleFollowUpQuestion = (question: string) => {
@@ -274,6 +275,7 @@ function App() {
         followUpQuestion={pendingFollowUpQuestion}
         onFollowUpProcessed={handleFollowUpProcessed}
       />
+      
     </div>
   );
 }

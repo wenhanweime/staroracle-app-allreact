@@ -59,6 +59,7 @@ const AIMessage: React.FC<AIMessageProps> = ({ message, userQuestion, onAskFollo
       });
     }
   };
+
   const handleCopy = () => {
     navigator.clipboard.writeText(message.text);
     console.log('Message copied to clipboard');
@@ -79,7 +80,7 @@ const AIMessage: React.FC<AIMessageProps> = ({ message, userQuestion, onAskFollo
   const handleDownload = () => {
     console.log('Download message');
   };
-
+  
   // 标准化文本格式，统一换行符和段落间距
   const normalizeText = (text: string): string => {
     if (!text) return '';

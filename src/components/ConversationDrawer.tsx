@@ -6,6 +6,7 @@ import { playSound } from '../utils/soundUtils';
 import { triggerHapticFeedback } from '../utils/hapticUtils';
 import StarRayIcon from './StarRayIcon';
 import ChatMessages from './ChatMessages';
+import FloatingAwarenessPlanet from './FloatingAwarenessPlanet';
 import { Capacitor } from '@capacitor/core';
 import { generateAIResponse } from '../utils/aiTaggingUtils'; // 导入真实AI功能
 
@@ -37,7 +38,17 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const { addStar, isAsking } = useStarStore();
-  const { addUserMessage, addAIMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, isLoading: chatIsLoading, messages } = useChatStore();
+  const { 
+    addUserMessage, 
+    addAIMessage, 
+    addStreamingAIMessage, 
+    updateStreamingMessage, 
+    finalizeStreamingMessage, 
+    setLoading, 
+    isLoading: chatIsLoading, 
+    messages,
+    conversationAwareness // 获取对话觉察状态
+  } = useChatStore();
 
   useEffect(() => {
     if (isAsking && inputRef.current) {
@@ -276,7 +287,20 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
       <div className="w-full max-w-md mx-auto">
         <div className="relative">
           <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
-            {/* Input field - 与目标样式完全对齐 */}
+            {/* 左侧：觉察动画 */}
+            <div className="ml-3 flex-shrink-0">
+              <FloatingAwarenessPlanet
+                level={conversationAwareness.overallLevel}
+                isAnalyzing={conversationAwareness.isAnalyzing}
+                conversationDepth={conversationAwareness.conversationDepth}
+                onTogglePanel={() => {
+                  console.log('觉察动画被点击');
+                  // TODO: 实现觉察详情面板
+                }}
+              />
+            </div>
+            
+            {/* Input field - 调整padding避免与左侧动画重叠 */}
             <input
               ref={inputRef}
               type="text"
@@ -285,7 +309,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
               onKeyPress={handleKeyPress}
               onClick={handleInputClick}
               placeholder="询问任何问题"
-              className="flex-1 bg-transparent text-white placeholder-gray-400 px-4 py-2 focus:outline-none stellar-body"
+              className="flex-1 bg-transparent text-white placeholder-gray-400 pl-2 pr-4 py-2 focus:outline-none stellar-body"
               disabled={isLoading}
               // iOS专用属性确保键盘弹起
               inputMode="text"
