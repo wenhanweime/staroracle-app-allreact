@@ -1,14 +1,11 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import { Mic } from 'lucide-react';
-import { useStarStore } from '../store/useStarStore';
-import { useChatStore } from '../store/useChatStore';
 import { playSound } from '../utils/soundUtils';
 import { triggerHapticFeedback } from '../utils/hapticUtils';
 import StarRayIcon from './StarRayIcon';
-import ChatMessages from './ChatMessages';
 import FloatingAwarenessPlanet from './FloatingAwarenessPlanet';
 import { Capacitor } from '@capacitor/core';
-import { generateAIResponse } from '../utils/aiTaggingUtils'; // 导入真实AI功能
+import { useChatStore } from '../store/useChatStore';
 
 // iOS设备检测
 const isIOS = () => {
@@ -19,6 +16,8 @@ const isIOS = () => {
 interface ConversationDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
+  onInputFocus?: (inputText?: string) => void; // 修改为可接收输入文本
+  showChatHistory?: boolean; // 新增是否显示聊天历史的开关
   followUpQuestion?: string; // 外部传入的后续问题
   onFollowUpProcessed?: () => void; // 后续问题处理完成的回调
 }
@@ -26,57 +25,23 @@ interface ConversationDrawerProps {
 const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ 
   isOpen, 
   onToggle, 
+  onInputFocus,
+  showChatHistory = true,
   followUpQuestion, 
   onFollowUpProcessed 
 }) => {
   const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [starAnimated, setStarAnimated] = useState(false);
   const [keyboardHeight, setKeyboardHeight] = useState(0);
   const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { addStar, isAsking } = useStarStore();
-  const { 
-    addUserMessage, 
-    addAIMessage, 
-    addStreamingAIMessage, 
-    updateStreamingMessage, 
-    finalizeStreamingMessage, 
-    setLoading, 
-    isLoading: chatIsLoading, 
-    messages,
-    conversationAwareness // 获取对话觉察状态
-  } = useChatStore();
+  
+  const { conversationAwareness } = useChatStore();
 
-  useEffect(() => {
-    if (isAsking && inputRef.current) {
-      inputRef.current.focus();
-    }
-  }, [isAsking]);
-
-  // 处理外部传入的后续问题
-  useEffect(() => {
-    if (followUpQuestion && followUpQuestion.trim()) {
-      console.log('🔄 ConversationDrawer接收到后续问题:', followUpQuestion);
-      setInputValue(followUpQuestion);
-      
-      // 延迟发送，确保输入框已更新
-      setTimeout(() => {
-        if (!isLoading && !chatIsLoading) {
-          // 直接调用发送逻辑，避免handleSend的初始化问题
-          sendMessage(followUpQuestion);
-          // 清空输入框
-          setInputValue('');
-          // 通知外部已处理完成
-          if (onFollowUpProcessed) {
-            onFollowUpProcessed();
-          }
-        }
-      }, 200);
-    }
-  }, [followUpQuestion, isLoading, chatIsLoading, onFollowUpProcessed]);
+  // 移除外部传入后续问题的处理，因为这现在在ChatOverlay中处理
+  // useEffect for followUpQuestion removed
 
   // iOS键盘监听和视口调整
   useEffect(() => {
@@ -148,92 +113,20 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
     setInputValue(e.target.value);
   };
 
-  // 发送消息的核心逻辑，独立函数避免useCallback依赖问题
-  const sendMessage = async (messageText: string) => {
-    if (!messageText.trim() || isLoading || chatIsLoading) return;
-    
-    const trimmedQuestion = messageText.trim();
-    
-    // 添加用户消息到聊天
-    addUserMessage(trimmedQuestion);
-    
-    // 播放发送音效
-    playSound('starClick');
-    
-    // 设置AI回复加载状态
-    setLoading(true);
-    
-    try {
-      console.log('🤖 开始生成AI回复...');
-      
-      // 创建流式AI消息
-      const messageId = addStreamingAIMessage('');
-      let streamingText = '';
-      
-      // 设置流式回调
-      const onStream = (chunk: string) => {
-        streamingText += chunk;
-        updateStreamingMessage(messageId, streamingText);
-      };
-      
-      // 构建对话历史（转换ChatMessage格式为API格式）
-      const conversationHistory = messages.map(msg => ({
-        role: msg.isUser ? 'user' as const : 'assistant' as const,
-        content: msg.text
-      }));
-      
-      console.log('📚 Conversation history:', conversationHistory.length, 'messages');
-      
-      // 使用真实的AI API生成回复，带流式输出和对话历史
-      const aiResponse = await generateAIResponse(
-        trimmedQuestion, 
-        undefined, 
-        onStream, 
-        conversationHistory
-      );
-      
-      // 确保最终内容一致
-      if (streamingText !== aiResponse) {
-        updateStreamingMessage(messageId, aiResponse);
-      }
-      
-      // 完成流式输出
-      finalizeStreamingMessage(messageId);
-      setLoading(false);
-      playSound('starReveal');
-      
-      console.log('✅ AI回复生成成功:', aiResponse);
-      
-    } catch (error) {
-      console.error('❌ AI回复生成失败:', error);
-      
-      // 如果AI调用失败，使用备用回复
-      const fallbackResponses = [
-        "抱歉，星辰暂时无法为您提供指引。请稍后再试。",
-        "宇宙的连接似乎暂时中断了，请稍后重新提问。",
-        "星谕正在重新校准，请耐心等待片刻再询问。",
-      ];
-      
-      const fallbackResponse = fallbackResponses[Math.floor(Math.random() * fallbackResponses.length)];
-      
-      // 更新消息为错误回复
-      const messageId = addStreamingAIMessage(fallbackResponse);
-      finalizeStreamingMessage(messageId);
-      setLoading(false);
-      playSound('starClick');
-    }
-  };
-
+  // 发送处理 - 打开对话浮层
   const handleSend = useCallback(async () => {
     if (!inputValue.trim()) return;
     
-    const currentInput = inputValue;
-    // 立即清空输入框，这样用户点击发送后输入框马上变空
+    // 如果有输入聚焦回调，调用它来打开对话浮层，并传递输入文本
+    if (onInputFocus) {
+      onInputFocus(inputValue.trim());
+    }
+    
+    // 清空当前输入框
     setInputValue('');
     
-    // 然后发送消息
-    await sendMessage(currentInput);
-  }, [inputValue]);
+    console.log('🔍 ConversationDrawer: 准备在ChatOverlay中发送消息');
+  }, [inputValue, onInputFocus]);
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -243,6 +136,11 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
 
   // iOS专用的输入框点击处理
   const handleInputClick = () => {
+    // 如果有输入聚焦回调，先调用它（无输入文本，仅打开浮层）
+    if (onInputFocus) {
+      onInputFocus();
+    }
+    
     if (isIOS() && inputRef.current) {
       // 确保iOS键盘弹起
       inputRef.current.focus();
@@ -310,7 +208,6 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
               onClick={handleInputClick}
               placeholder="询问任何问题"
               className="flex-1 bg-transparent text-white placeholder-gray-400 pl-2 pr-4 py-2 focus:outline-none stellar-body"
-              disabled={isLoading}
               // iOS专用属性确保键盘弹起
               inputMode="text"
               autoComplete="off"
@@ -328,7 +225,6 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
                     ? 'recording' 
                     : ''
                 }`}
-                disabled={isLoading}
               >
                 <Mic className="w-4 h-4" strokeWidth={2} />
               </button>
@@ -338,7 +234,6 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
                 type="button"
                 onClick={handleStarClick}
                 className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
-                disabled={isLoading}
               >
                 <StarRayIcon 
                   size={16} 

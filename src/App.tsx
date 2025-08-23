@@ -14,6 +14,7 @@ import AIConfigPanel from './components/AIConfigPanel';
 import DrawerMenu from './components/DrawerMenu';
 import Header from './components/Header';
 import ConversationDrawer from './components/ConversationDrawer';
+import ChatOverlay from './components/ChatOverlay'; // 新增对话浮层
 import OracleInput from './components/OracleInput';
 import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
 import { triggerHapticFeedback } from './utils/hapticUtils';
@@ -31,23 +32,46 @@ function App() {
   const [isDrawerMenuOpen, setIsDrawerMenuOpen] = useState(false);
   const [appReady, setAppReady] = useState(false);
   const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>(''); // 待处理的后续问题
+  const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false); // 新增对话浮层状态
+  const [initialChatInput, setInitialChatInput] = useState<string>(''); // 初始输入内容
+  
   const { 
     applyTemplate, 
     currentInspirationCard, 
     dismissInspirationCard 
   } = useStarStore();
   
-
+  const { messages } = useChatStore(); // 获取聊天消息以判断是否有对话历史
   // 处理后续提问的回调
   const handleFollowUpQuestion = (question: string) => {
     console.log('📱 App层接收到后续提问:', question);
     setPendingFollowUpQuestion(question);
+    // 如果收到后续问题，打开对话浮层
+    if (!isChatOverlayOpen) {
+      setIsChatOverlayOpen(true);
+    }
   };
   
   // 后续问题处理完成的回调
   const handleFollowUpProcessed = () => {
     console.log('📱 后续问题处理完成，清空pending状态');
     setPendingFollowUpQuestion('');
+  };
+
+  // 处理输入框聚焦，打开对话浮层
+  const handleInputFocus = (inputText?: string) => {
+    console.log('🔍 输入框被聚焦，打开对话浮层', inputText);
+    if (inputText) {
+      setInitialChatInput(inputText);
+    }
+    setIsChatOverlayOpen(true);
+  };
+
+  // 关闭对话浮层
+  const handleCloseChatOverlay = () => {
+    console.log('❌ 关闭对话浮层');
+    setIsChatOverlayOpen(false);
+    setInitialChatInput(''); // 清空初始输入
   };
 
   // 添加原生平台效果（只在原生环境下执行）
@@ -224,9 +248,6 @@ function App() {
       {/* User's constellation - 延迟渲染 */}
       {appReady && <Constellation />}
       
-      {/* Chat Messages - 显示聊天消息 */}
-      {appReady && <ChatMessages onAskFollowUp={handleFollowUpQuestion} />}
-      
       {/* Inspiration card */}
       {currentInspirationCard && (
         <InspirationCard
@@ -268,12 +289,21 @@ function App() {
       {/* Oracle Input for star creation */}
       <OracleInput />
 
-      {/* Conversation Drawer */}
+      {/* Conversation Drawer - 简化为输入入口 */}
       <ConversationDrawer 
         isOpen={true} 
         onToggle={() => {}} 
+        onInputFocus={handleInputFocus}
+        showChatHistory={false}
+      />
+      
+      {/* Chat Overlay - 对话浮层 */}
+      <ChatOverlay
+        isOpen={isChatOverlayOpen}
+        onClose={handleCloseChatOverlay}
         followUpQuestion={pendingFollowUpQuestion}
         onFollowUpProcessed={handleFollowUpProcessed}
+        initialInput={initialChatInput}
       />
       
     </div>
