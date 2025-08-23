@@ -20,6 +20,7 @@ interface ConversationDrawerProps {
   showChatHistory?: boolean; // 新增是否显示聊天历史的开关
   followUpQuestion?: string; // 外部传入的后续问题
   onFollowUpProcessed?: () => void; // 后续问题处理完成的回调
+  isFloatingAttached?: boolean; // 新增：是否有浮窗吸附状态
 }
 
 const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ 
@@ -28,7 +29,8 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
   onInputFocus,
   showChatHistory = true,
   followUpQuestion, 
-  onFollowUpProcessed 
+  onFollowUpProcessed,
+  isFloatingAttached = false // 新增参数
 }) => {
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
@@ -136,11 +138,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
 
   // iOS专用的输入框点击处理
   const handleInputClick = () => {
-    // 如果有输入聚焦回调，先调用它（无输入文本，仅打开浮层）
-    if (onInputFocus) {
-      onInputFocus();
-    }
-    
+    // 移除立即打开浮层的逻辑，只处理iOS键盘聚焦
     if (isIOS() && inputRef.current) {
       // 确保iOS键盘弹起
       inputRef.current.focus();
@@ -156,8 +154,11 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
 
   // 计算容器的动态样式
   const getContainerStyle = () => {
+    // 根据浮窗吸附状态调整底部空间
+    const bottomSpace = isFloatingAttached ? '70px' : `max(1rem, env(safe-area-inset-bottom))`;
+    
     const baseStyle = {
-      paddingBottom: `max(1rem, env(safe-area-inset-bottom))`
+      paddingBottom: bottomSpace
     };
 
     if (isIOS() && isKeyboardVisible && keyboardHeight > 0) {
@@ -172,14 +173,14 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
     return {
       ...baseStyle,
       transform: 'translateY(0)',
-      transition: 'transform 0.25s ease-out'
+      transition: 'transform 0.25s ease-out, padding-bottom 0.25s ease-out' // 添加padding过渡动画
     };
   };
 
   return (
     <div 
       ref={containerRef}
-      className="fixed bottom-0 left-0 right-0 z-40 p-4 keyboard-aware-container" 
+      className="fixed bottom-0 left-0 right-0 z-40 p-4 keyboard-aware-container" // 恢复正常层级 
       style={getContainerStyle()}
     >
       <div className="w-full max-w-md mx-auto">

@@ -65,6 +65,11 @@ function App() {
       setInitialChatInput(inputText);
     }
     setIsChatOverlayOpen(true);
+    
+    // 立即清空初始输入，确保不重复处理
+    setTimeout(() => {
+      setInitialChatInput('');
+    }, 500);
   };
 
   // 关闭对话浮层
@@ -235,78 +240,92 @@ function App() {
   };
   
   return (
-    <div className="min-h-screen cosmic-bg overflow-hidden relative">
-      {/* Background with stars - 延迟渲染 */}
-      {appReady && <StarryBackground starCount={75} />}
-      
-      {/* Header - 现在包含三个元素在一行 */}
-      <Header 
-        onOpenDrawerMenu={handleOpenDrawerMenu}
-        onLogoClick={handleLogoClick}
-      />
-
-      {/* User's constellation - 延迟渲染 */}
-      {appReady && <Constellation />}
-      
-      {/* Inspiration card */}
-      {currentInspirationCard && (
-        <InspirationCard
-          card={currentInspirationCard}
-          onDismiss={dismissInspirationCard}
+    <>
+      <div 
+        className="min-h-screen cosmic-bg overflow-hidden relative transition-all duration-500 ease-out"
+        style={{
+          transformStyle: 'preserve-3d',
+          perspective: '1000px',
+          transform: isChatOverlayOpen
+            ? 'scale(0.92) translateY(-15px) rotateX(4deg)' 
+            : 'scale(1) translateY(0px) rotateX(0deg)',
+          filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
+        }}
+      >
+        {/* Background with stars - 已屏蔽 */}
+        {/* {appReady && <StarryBackground starCount={75} />} */}
+        
+        {/* Header - 现在包含三个元素在一行 */}
+        <Header 
+          onOpenDrawerMenu={handleOpenDrawerMenu}
+          onLogoClick={handleLogoClick}
         />
-      )}
+
+        {/* User's constellation - 延迟渲染 */}
+        {appReady && <Constellation />}
+        
+        {/* Inspiration card */}
+        {currentInspirationCard && (
+          <InspirationCard
+            card={currentInspirationCard}
+            onDismiss={dismissInspirationCard}
+          />
+        )}
+        
+        {/* Star detail modal */}
+        {appReady && <StarDetail />}
+        
+        {/* Star collection modal */}
+        <StarCollection 
+          isOpen={isCollectionOpen} 
+          onClose={handleCloseCollection} 
+        />
+
+        {/* Template selector modal */}
+        <ConstellationSelector
+          isOpen={isTemplateSelectorOpen}
+          onClose={handleCloseTemplateSelector}
+          onSelectTemplate={handleSelectTemplate}
+        />
+
+        {/* AI Configuration Panel */}
+        <AIConfigPanel
+          isOpen={isConfigOpen}
+          onClose={handleCloseConfig}
+        />
+
+        {/* Drawer Menu */}
+        <DrawerMenu
+          isOpen={isDrawerMenuOpen}
+          onClose={handleCloseDrawerMenu}
+          onOpenSettings={handleOpenConfig}
+          onOpenTemplateSelector={handleOpenTemplateSelector}
+        />
+
+        {/* Oracle Input for star creation */}
+        <OracleInput />
+      </div>
       
-      {/* Star detail modal */}
-      {appReady && <StarDetail />}
-      
-      {/* Star collection modal */}
-      <StarCollection 
-        isOpen={isCollectionOpen} 
-        onClose={handleCloseCollection} 
-      />
-
-      {/* Template selector modal */}
-      <ConstellationSelector
-        isOpen={isTemplateSelectorOpen}
-        onClose={handleCloseTemplateSelector}
-        onSelectTemplate={handleSelectTemplate}
-      />
-
-      {/* AI Configuration Panel */}
-      <AIConfigPanel
-        isOpen={isConfigOpen}
-        onClose={handleCloseConfig}
-      />
-
-      {/* Drawer Menu */}
-      <DrawerMenu
-        isOpen={isDrawerMenuOpen}
-        onClose={handleCloseDrawerMenu}
-        onOpenSettings={handleOpenConfig}
-        onOpenTemplateSelector={handleOpenTemplateSelector}
-      />
-
-      {/* Oracle Input for star creation */}
-      <OracleInput />
-
-      {/* Conversation Drawer - 简化为输入入口 */}
+      {/* Conversation Drawer - 移到外层，不受3D变换影响 */}
       <ConversationDrawer 
         isOpen={true} 
         onToggle={() => {}} 
         onInputFocus={handleInputFocus}
         showChatHistory={false}
+        isFloatingAttached={!isChatOverlayOpen} // 浮窗关闭时为吸附状态
       />
       
-      {/* Chat Overlay - 对话浮层 */}
+      {/* Chat Overlay - 移到最外层，不受cosmic-bg的3D变换影响 */}
       <ChatOverlay
         isOpen={isChatOverlayOpen}
         onClose={handleCloseChatOverlay}
+        onReopen={() => setIsChatOverlayOpen(true)}
         followUpQuestion={pendingFollowUpQuestion}
         onFollowUpProcessed={handleFollowUpProcessed}
         initialInput={initialChatInput}
+        inputBottomSpace={isChatOverlayOpen ? 34 : 70} // 根据浮窗状态传递不同的底部空间
       />
-      
-    </div>
+    </>
   );
 }
 

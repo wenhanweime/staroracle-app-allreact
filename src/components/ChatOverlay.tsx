@@ -19,26 +19,28 @@ const isIOS = () => {
 interface ChatOverlayProps {
   isOpen: boolean;
   onClose: () => void;
+  onReopen?: () => void; // 新增重新打开的回调
   followUpQuestion?: string;
   onFollowUpProcessed?: () => void;
-  initialInput?: string; // 新增初始输入文本
+  initialInput?: string;
+  inputBottomSpace?: number; // 新增：输入框底部空间，用于计算吸附位置
 }
 
 const ChatOverlay: React.FC<ChatOverlayProps> = ({
   isOpen,
   onClose,
+  onReopen,
   followUpQuestion,
   onFollowUpProcessed,
-  initialInput
+  initialInput,
+  inputBottomSpace = 70 // 默认70px
 }) => {
-  const [inputValue, setInputValue] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [starAnimated, setStarAnimated] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragY, setDragY] = useState(0);
+  const [startY, setStartY] = useState(0);
+  
+  const floatingRef = useRef<HTMLDivElement>(null);
+  const hasProcessedInitialInput = useRef(false);
   
   const { 
     addUserMessage, 
@@ -51,103 +53,153 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
     conversationAwareness
   } = useChatStore();
 
-  // 处理初始输入文本
+  // 计算吸附位置：浮窗顶部 = 输入框底部 - 5px
+  const getAttachedBottomPosition = () => {
+    const gap = 5; // 浮窗顶部与输入框底部的间隙
+    const floatingHeight = 65; // 浮窗关闭时高度65px
+    
+    // 浮窗顶部绝对位置 = 屏幕高度 - (inputBottomSpace - gap)
+    // CSS bottom值 = 浮窗顶部距离屏幕底部的距离 - 浮窗高度
+    // bottom = (inputBottomSpace - gap) - floatingHeight
+    const bottomValue = (inputBottomSpace - gap) - floatingHeight;
+    
+    return bottomValue;
+  };
+
+  // 获取最后一条消息用于预览
+  const getLastMessagePreview = () => {
+    if (messages.length === 0) return '';
+    const lastMessage = messages[messages.length - 1];
+    const maxLength = 15; // 最大显示长度
+    
+    if (lastMessage.text.length <= maxLength) {
+      return lastMessage.text;
+    }
+    return lastMessage.text.substring(0, maxLength) + '...';
+  };
+
+  // 处理初始输入文本 - 自动发送初始输入
   useEffect(() => {
-    if (initialInput && initialInput.trim()) {
+    if (initialInput && initialInput.trim() && !hasProcessedInitialInput.current) {
       console.log('🔄 ChatOverlay接收到初始输入:', initialInput);
-      setInputValue(initialInput);
+      hasProcessedInitialInput.current = true;
       
       // 自动发送初始输入
       setTimeout(() => {
-        if (!isLoading && !chatIsLoading) {
-          sendMessage(initialInput);
-          setInputValue('');
-        }
+        sendMessage(initialInput);
       }, 300);
     }
-  }, [initialInput, isLoading, chatIsLoading]);
+  }, [initialInput]);
+
+  // 重置标记当组件关闭时
+  useEffect(() => {
+    if (!isOpen) {
+      hasProcessedInitialInput.current = false;
+      setDragY(0);
+    }
+  }, [isOpen]);
 
   // 处理外部传入的后续问题
   useEffect(() => {
     if (followUpQuestion && followUpQuestion.trim()) {
       console.log('🔄 ChatOverlay接收到后续问题:', followUpQuestion);
-      setInputValue(followUpQuestion);
-      
       setTimeout(() => {
-        if (!isLoading && !chatIsLoading) {
-          sendMessage(followUpQuestion);
-          setInputValue('');
-          if (onFollowUpProcessed) {
-            onFollowUpProcessed();
-          }
+        sendMessage(followUpQuestion);
+        if (onFollowUpProcessed) {
+          onFollowUpProcessed();
         }
       }, 200);
     }
-  }, [followUpQuestion, isLoading, chatIsLoading, onFollowUpProcessed]);
+  }, [followUpQuestion, onFollowUpProcessed]);
 
-  // iOS键盘监听
-  useEffect(() => {
-    if (!isIOS() || !isOpen) return;
+  // 拖拽处理逻辑
+  const handleTouchStart = (e: React.TouchEvent) => {
+    if (!isOpen) return;
+    // 只有点击头部拖拽区域才允许拖拽
+    const target = (e.target as HTMLElement).closest('.drag-handle');
+    if (!target) return;
+    
+    setIsDragging(true);
+    setStartY(e.touches[0].clientY);
+  };
 
-    const handleViewportChange = () => {
-      const viewport = window.visualViewport;
-      if (viewport) {
-        const keyboardHeight = window.innerHeight - viewport.height;
-        const isVisible = keyboardHeight > 0;
-        
-        setKeyboardHeight(keyboardHeight);
-        setIsKeyboardVisible(isVisible);
-      }
-    };
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (!isDragging || !isOpen) return;
+    
+    const currentY = e.touches[0].clientY;
+    const deltaY = currentY - startY;
+    
+    // 只允许向下拖拽
+    if (deltaY > 0) {
+      setDragY(Math.min(deltaY, window.innerHeight * 0.8));
+    }
+  };
 
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange);
-      return () => {
-        window.visualViewport?.removeEventListener('resize', handleViewportChange);
-      };
+  const handleTouchEnd = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    
+    const screenHeight = window.innerHeight;
+    
+    // 如果拖拽超过屏幕高度的1/2，关闭浮窗
+    if (dragY > screenHeight * 0.4) {
+      onClose();
     } else {
-      let initialHeight = window.innerHeight;
-      const handleResize = () => {
-        const currentHeight = window.innerHeight;
-        const keyboardHeight = Math.max(0, initialHeight - currentHeight);
-        const isVisible = keyboardHeight > 100;
-        
-        setKeyboardHeight(keyboardHeight);
-        setIsKeyboardVisible(isVisible);
-      };
+      // 否则回弹到原位置
+      setDragY(0);
+    }
+  };
+
+  // 鼠标事件处理（用于桌面端调试）
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!isOpen) return;
+    const target = (e.target as HTMLElement).closest('.drag-handle');
+    if (!target) return;
+    
+    setIsDragging(true);
+    setStartY(e.clientY);
+  };
+
+  const handleMouseMove = (e: MouseEvent) => {
+    if (!isDragging || !isOpen) return;
+    
+    const currentY = e.clientY;
+    const deltaY = currentY - startY;
+    
+    if (deltaY > 0) {
+      setDragY(Math.min(deltaY, window.innerHeight * 0.8));
+    }
+  };
+
+  const handleMouseUp = () => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    
+    const screenHeight = window.innerHeight;
+    
+    if (dragY > screenHeight * 0.4) {
+      onClose();
+    } else {
+      setDragY(0);
+    }
+  };
+
+  // 添加全局鼠标事件监听
+  useEffect(() => {
+    if (isDragging) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
       
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
+      return () => {
+        document.removeEventListener('mousemove', handleMouseMove);
+        document.removeEventListener('mouseup', handleMouseUp);
+      };
     }
-  }, [isOpen]);
-
-  const handleMicClick = () => {
-    setIsRecording(!isRecording);
-    console.log('Microphone clicked, recording:', !isRecording);
-    if (Capacitor.isNativePlatform()) {
-      triggerHapticFeedback('light');
-    }
-    playSound('starClick');
-  };
-
-  const handleStarClick = () => {
-    setStarAnimated(true);
-    console.log('Star ray button clicked');
-    if (inputValue.trim()) {
-      handleSend();
-    }
-    setTimeout(() => {
-      setStarAnimated(false);
-    }, 1000);
-  };
-
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setInputValue(e.target.value);
-  };
+  }, [isDragging, startY, dragY]);
 
   // 发送消息的核心逻辑
   const sendMessage = async (messageText: string) => {
-    if (!messageText.trim() || isLoading || chatIsLoading) return;
+    if (!messageText.trim() || chatIsLoading) return;
     
     const trimmedQuestion = messageText.trim();
     
@@ -208,185 +260,119 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
     }
   };
 
-  const handleSend = useCallback(async () => {
-    if (!inputValue.trim()) return;
-    
-    const currentInput = inputValue;
-    setInputValue('');
-    
-    await sendMessage(currentInput);
-  }, [inputValue]);
-
-  const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      handleSend();
-    }
-  };
-
-  const handleInputClick = () => {
-    if (isIOS() && inputRef.current) {
-      inputRef.current.focus();
-      setTimeout(() => {
-        if (inputRef.current) {
-          const length = inputRef.current.value.length;
-          inputRef.current.setSelectionRange(length, length);
-        }
-      }, 100);
-    }
-  };
-
-  const getContainerStyle = () => {
-    const baseStyle = {
-      paddingBottom: `max(1rem, env(safe-area-inset-bottom))`
-    };
-
-    if (isIOS() && isKeyboardVisible && keyboardHeight > 0) {
-      return {
-        ...baseStyle,
-        transform: `translateY(-${keyboardHeight}px)`,
-        transition: 'transform 0.25s ease-out'
-      };
-    }
-
-    return {
-      ...baseStyle,
-      transform: 'translateY(0)',
-      transition: 'transform 0.25s ease-out'
-    };
-  };
-
   const handleFollowUpQuestion = (question: string) => {
     console.log('📱 ChatOverlay层接收到后续提问:', question);
-    setInputValue(question);
-    setTimeout(() => {
-      if (!isLoading && !chatIsLoading) {
-        sendMessage(question);
-        setInputValue('');
-      }
-    }, 200);
+    sendMessage(question);
   };
 
   return (
-    <AnimatePresence>
-      {isOpen && (
-        <motion.div
-          className="fixed inset-0 z-50 flex flex-col"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          style={{ background: 'rgba(9, 10, 15, 0.95)' }}
-        >
-          {/* 头部标题栏 */}
-          <motion.div
-            className="flex items-center justify-between p-4 border-b border-gray-800"
-            initial={{ y: -50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-          >
-            <h1 className="stellar-title text-white">星谕对话</h1>
-            <button
-              onClick={onClose}
-              className="p-2 rounded-full bg-gray-800 hover:bg-gray-700 transition-colors"
-            >
-              <X className="w-5 h-5 text-white" />
-            </button>
-          </motion.div>
+    <>
+      {/* 遮罩层 - 只在完全展开时显示 */}
+      <div 
+        className={`fixed inset-0 bg-black transition-opacity duration-300 ${
+          isOpen ? 'bg-opacity-40 pointer-events-auto z-49' : 'bg-opacity-0 pointer-events-none z-10'
+        }`}
+        onClick={isOpen ? onClose : undefined}
+      />
 
-          {/* 对话内容区域 */}
-          <motion.div
-            className="flex-1 overflow-hidden"
-            initial={{ y: 50, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.2 }}
-          >
-            <ChatMessages onAskFollowUp={handleFollowUpQuestion} />
-          </motion.div>
+      {/* 浮窗内容 - 关闭时吸附在底部，展开时全屏 */}
+      <div 
+        ref={floatingRef}
+        className={`fixed rounded-t-2xl shadow-2xl transition-all duration-300 ease-out ${
+          isDragging ? '' : 'transition-transform'
+        } ${isOpen ? 'z-50 bg-gray-900' : 'z-50 bg-gray-900'} ${!isOpen ? 'cursor-pointer' : ''}`} // 浮窗始终保持z-50和正常背景色
+        style={{
+          top: isOpen ? `${Math.max(80, 80 + dragY)}px` : 'auto',
+          left: '0px',
+          right: '0px',
+          bottom: isOpen ? '0px' : `${getAttachedBottomPosition()}px`, // 动态计算吸附位置
+          height: isOpen ? 'auto' : '65px', // 关闭时固定高度65px，只显示顶部操作条  
+          transform: `translateY(${dragY * 0.15}px)`,
+          opacity: Math.max(0.9, 1 - dragY / 500), // 即使关闭也保持可见
+          pointerEvents: 'auto' // 始终可交互
+        }}
+        onTouchStart={!isOpen ? undefined : handleTouchStart} // 关闭时不处理拖拽
+        onTouchMove={!isOpen ? undefined : handleTouchMove}
+        onTouchEnd={!isOpen ? undefined : handleTouchEnd}
+        onMouseDown={!isOpen ? undefined : handleMouseDown}
+        onClick={!isOpen ? (e) => {
+          // 阻止事件冒泡，防止被拖拽事件干扰
+          e.stopPropagation();
+          // 点击收缩状态的浮窗时重新展开
+          console.log('🔄 点击收缩的浮窗，重新展开', { isOpen, onReopen });
+          alert('容器被点击了！');
+          if (onReopen) {
+            onReopen();
+          }
+        } : undefined}
+      >
+        {/* 浮窗内容：关闭时显示简洁的吸附状态，展开时显示完整内容 */}
+        {!isOpen && (
+          <div className="flex items-center justify-between px-4 py-3 h-full">
+            {/* 左侧：对话标题 */}
+            <div className="flex-1 text-left">
+              <span className="text-gray-300 text-sm font-medium">
+                {getLastMessagePreview()}
+              </span>
+            </div>
+            
+            {/* 中间：iOS风格的横条指示器 */}
+            <div className="flex-1 flex justify-center">
+              <div className="w-8 h-1 bg-gray-500 rounded-full"></div>
+            </div>
+            
+            {/* 右侧：关闭按钮 */}
+            <div className="flex-1 flex justify-end">
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onClose();
+                }}
+                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-200 transition-colors"
+              >
+                <X className="w-4 h-4" strokeWidth={2} />
+              </button>
+            </div>
+          </div>
+        )}
 
-          {/* 输入区域 */}
-          <motion.div
-            ref={containerRef}
-            className="p-4 keyboard-aware-container"
-            style={getContainerStyle()}
-            initial={{ y: 100, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            transition={{ delay: 0.3 }}
-          >
-            <div className="w-full max-w-md mx-auto">
-              <div className="relative">
-                <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
-                  {/* 左侧：觉察动画 */}
-                  <div className="ml-3 flex-shrink-0">
-                    <FloatingAwarenessPlanet
-                      level={conversationAwareness.overallLevel}
-                      isAnalyzing={conversationAwareness.isAnalyzing}
-                      conversationDepth={conversationAwareness.conversationDepth}
-                      onTogglePanel={() => {
-                        console.log('觉察动画被点击');
-                      }}
-                    />
-                  </div>
-                  
-                  {/* Input field */}
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={inputValue}
-                    onChange={handleInputChange}
-                    onKeyPress={handleKeyPress}
-                    onClick={handleInputClick}
-                    placeholder="继续询问..."
-                    className="flex-1 bg-transparent text-white placeholder-gray-400 pl-2 pr-4 py-2 focus:outline-none stellar-body"
-                    disabled={isLoading}
-                    inputMode="text"
-                    autoComplete="off"
-                    autoCapitalize="sentences"
-                    spellCheck="false"
-                  />
-
-                  <div className="flex items-center space-x-2 mr-3">
-                    {/* 麦克风按钮 */}
-                    <button
-                      type="button"
-                      onClick={handleMicClick}
-                      className={`p-2 rounded-full dialog-transparent-button transition-colors duration-200 ${
-                        isRecording ? 'recording' : ''
-                      }`}
-                      disabled={isLoading}
-                    >
-                      <Mic className="w-4 h-4" strokeWidth={2} />
-                    </button>
-
-                    {/* 星星按钮 */}
-                    <button
-                      type="button"
-                      onClick={handleStarClick}
-                      className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
-                      disabled={isLoading}
-                    >
-                      <StarRayIcon 
-                        size={16} 
-                        animated={starAnimated || !!inputValue.trim()} 
-                        iconColor="currentColor"
-                      />
-                    </button>
-                  </div>
+        {/* 展开状态的正常内容 */}
+        {isOpen && (
+          <>
+            {/* 拖拽指示器和头部 */}
+            <div className="drag-handle cursor-grab active:cursor-grabbing">
+              <div className="flex justify-center py-4">
+                <div className="w-12 h-1.5 bg-gray-600 rounded-full"></div>
+              </div>
+              
+              <div className="px-4 pb-4">
+                <div className="flex items-center justify-between">
+                  <h1 className="stellar-title text-white">星谕对话</h1>
+                  <button
+                    onClick={onClose}
+                    className="text-gray-400 hover:text-white text-2xl leading-none w-8 h-8 flex items-center justify-center"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
-
-                {/* Recording indicator */}
-                {isRecording && (
-                  <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
-                    <div className="flex items-center space-x-2 text-red-400 text-xs">
-                      <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
-                      <span>Recording...</span>
-                    </div>
-                  </div>
-                )}
+                <p className="text-gray-400 text-sm mt-1">在这里继续您的对话</p>
               </div>
             </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+
+            {/* 浮窗对话区域 - 只在展开时显示 */}
+            <div className="flex-1 flex flex-col" style={{ height: 'calc(100% - 140px)' }}>
+              {/* 消息列表 */}
+              <div className="flex-1 overflow-hidden">
+                <ChatMessages onAskFollowUp={handleFollowUpQuestion} />
+              </div>
+
+              {/* 底部留空，让主界面的输入框显示在这里 */}
+              <div className="h-20"></div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
   );
 };
 
