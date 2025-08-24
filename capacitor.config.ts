@@ -6,6 +6,13 @@ const config: CapacitorConfig = {
   webDir: 'dist',
   server: {
     androidScheme: 'https'
+  },
+  plugins: {
+    Keyboard: {
+      resize: 'ionic',  // 使用ionic模式的键盘调整
+      style: 'dark',    // 键盘样式
+      resizeOnFullScreen: true
+    }
   }
 };
 

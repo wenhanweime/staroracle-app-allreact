@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom'; // ✨ 1. 导入 ReactDOM 用于 Portal
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
@@ -270,7 +271,8 @@ function App() {
   };
   
   return (
-    <>
+    // ✨ 2. 添加根容器 div，创建稳定的布局基础
+    <div className="w-screen h-screen overflow-hidden bg-black text-gray-100">
       <div 
         className="min-h-screen cosmic-bg overflow-hidden relative transition-all duration-500 ease-out"
         style={{
@@ -336,26 +338,32 @@ function App() {
         <OracleInput />
       </div>
       
-      {/* Conversation Drawer - 移到外层，不受3D变换影响 */}
-      <ConversationDrawer 
-        isOpen={true} 
-        onToggle={() => {}} 
-        onSendMessage={handleSendMessage} // ✨ 使用新的回调
-        showChatHistory={false}
-        isFloatingAttached={!isChatOverlayOpen} // 浮窗关闭时为吸附状态
-      />
-      
-      {/* Chat Overlay - 移到最外层，不受cosmic-bg的3D变换影响 */}
-      <ChatOverlay
-        isOpen={isChatOverlayOpen}
-        onClose={handleCloseChatOverlay}
-        onReopen={() => setIsChatOverlayOpen(true)}
-        followUpQuestion={pendingFollowUpQuestion}
-        onFollowUpProcessed={handleFollowUpProcessed}
-        initialInput={initialChatInput}
-        inputBottomSpace={isChatOverlayOpen ? 34 : 70} // 根据浮窗状态传递不同的底部空间
-      />
-    </>
+      {/* ✨ 3. 使用 Portal 将 UI 组件渲染到 body 顶层，完全避免 transform 影响 */}
+      {ReactDOM.createPortal(
+        <>
+          {/* Conversation Drawer - 通过 Portal 直接渲染到 body */}
+          <ConversationDrawer 
+            isOpen={true} 
+            onToggle={() => {}} 
+            onSendMessage={handleSendMessage} // ✨ 使用新的回调
+            showChatHistory={false}
+            isFloatingAttached={!isChatOverlayOpen} // 浮窗关闭时为吸附状态
+          />
+          
+          {/* Chat Overlay - 通过 Portal 直接渲染到 body */}
+          <ChatOverlay
+            isOpen={isChatOverlayOpen}
+            onClose={handleCloseChatOverlay}
+            onReopen={() => setIsChatOverlayOpen(true)}
+            followUpQuestion={pendingFollowUpQuestion}
+            onFollowUpProcessed={handleFollowUpProcessed}
+            initialInput={initialChatInput}
+            inputBottomSpace={isChatOverlayOpen ? 34 : 70} // 根据浮窗状态传递不同的底部空间
+          />
+        </>,
+        document.body // ✨ 4. 指定渲染目标为 document.body
+      )}
+    </div>
   );
 }
 

@@ -87,6 +87,7 @@ export const hideOtherElements = () => {
 
 /**
  * 修复iOS层级问题的通用方案
+ * 注：移除了破坏 position: fixed 原生行为的 transform hack
  */
 export const fixIOSZIndex = () => {
   if (!isIOS()) return;
@@ -94,7 +95,8 @@ export const fixIOSZIndex = () => {
   // 创建顶级容器
   createTopLevelContainer();
   
-  // 为body添加特殊的层级修复
-  document.body.style.webkitTransform = 'translateZ(0)';
-  document.body.style.transform = 'translateZ(0)';
+  // 🚨 已移除有问题的 transform 设置
+  // 原代码：document.body.style.webkitTransform = 'translateZ(0)';
+  // 原代码：document.body.style.transform = 'translateZ(0)';
+  // 这些代码破坏了 position: fixed 的原生键盘跟随行为
 };
