@@ -124,8 +124,8 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
       onInputFocus(inputValue.trim());
     }
     
-    // 清空当前输入框
-    setInputValue('');
+    // 保持输入框内容，不清空历史输入
+    // setInputValue(''); // 移除这行，保持输入内容
     
     console.log('🔍 ConversationDrawer: 准备在ChatOverlay中发送消息');
   }, [inputValue, onInputFocus]);
@@ -180,10 +180,10 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
   return (
     <div 
       ref={containerRef}
-      className="fixed bottom-0 left-0 right-0 z-40 p-4 keyboard-aware-container" // 恢复正常层级 
+      className="fixed bottom-0 left-0 right-0 z-50 p-4 keyboard-aware-container pointer-events-none" // 容器本身不接收点击事件
       style={getContainerStyle()}
     >
-      <div className="w-full max-w-md mx-auto">
+      <div className="w-full max-w-md mx-auto pointer-events-auto"> {/* 只有内容区域可点击 */}
         <div className="relative">
           <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
             {/* 左侧：觉察动画 */}

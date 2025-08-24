@@ -270,37 +270,43 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
       {/* 遮罩层 - 只在完全展开时显示 */}
       <div 
         className={`fixed inset-0 bg-black transition-opacity duration-300 ${
-          isOpen ? 'bg-opacity-40 pointer-events-auto z-49' : 'bg-opacity-0 pointer-events-none z-10'
+          isOpen ? 'bg-opacity-40 pointer-events-auto z-45' : 'bg-opacity-0 pointer-events-none z-10'
         }`}
         onClick={isOpen ? onClose : undefined}
       />
 
       {/* 浮窗内容 - 关闭时吸附在底部，展开时全屏 */}
-      <div 
+      <motion.div 
         ref={floatingRef}
-        className={`fixed rounded-t-2xl shadow-2xl transition-all duration-300 ease-out ${
-          isDragging ? '' : 'transition-transform'
-        } ${isOpen ? 'z-50 bg-gray-900' : 'z-50 bg-gray-900'} ${!isOpen ? 'cursor-pointer' : ''}`} // 浮窗始终保持z-50和正常背景色
-        style={{
-          top: isOpen ? `${Math.max(80, 80 + dragY)}px` : 'auto',
-          left: '0px',
-          right: '0px',
-          bottom: isOpen ? '0px' : `${getAttachedBottomPosition()}px`, // 动态计算吸附位置
-          height: isOpen ? 'auto' : '65px', // 关闭时固定高度65px，只显示顶部操作条  
-          transform: `translateY(${dragY * 0.15}px)`,
-          opacity: Math.max(0.9, 1 - dragY / 500), // 即使关闭也保持可见
-          pointerEvents: 'auto' // 始终可交互
+        className={`fixed rounded-t-2xl shadow-2xl z-45 bg-gray-900 ${!isOpen ? 'cursor-pointer' : ''}`}
+        initial={false}
+        animate={{
+          top: isOpen ? Math.max(80, 80 + dragY) : 'auto',
+          left: isOpen ? 0 : '50%',
+          right: isOpen ? 0 : 'auto',
+          bottom: isOpen ? 0 : getAttachedBottomPosition(),
+          width: isOpen ? '100vw' : 448, // 展开时全屏，收起时固定宽度
+          height: isOpen ? 'auto' : 65,
+          x: isOpen ? 0 : '-50%', // 收起时居中偏移
+          y: dragY * 0.15,
+          opacity: Math.max(0.9, 1 - dragY / 500)
         }}
-        onTouchStart={!isOpen ? undefined : handleTouchStart} // 关闭时不处理拖拽
+        transition={{
+          type: 'spring',
+          damping: 25,
+          stiffness: 300,
+          duration: 0.3
+        }}
+        style={{
+          pointerEvents: 'auto'
+        }}
+        onTouchStart={!isOpen ? undefined : handleTouchStart}
         onTouchMove={!isOpen ? undefined : handleTouchMove}
         onTouchEnd={!isOpen ? undefined : handleTouchEnd}
         onMouseDown={!isOpen ? undefined : handleMouseDown}
         onClick={!isOpen ? (e) => {
-          // 阻止事件冒泡，防止被拖拽事件干扰
           e.stopPropagation();
-          // 点击收缩状态的浮窗时重新展开
-          console.log('🔄 点击收缩的浮窗，重新展开', { isOpen, onReopen });
-          alert('容器被点击了！');
+          console.log('🔄 点击收缩的浮窗，重新展开');
           if (onReopen) {
             onReopen();
           }
@@ -308,7 +314,7 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
       >
         {/* 浮窗内容：关闭时显示简洁的吸附状态，展开时显示完整内容 */}
         {!isOpen && (
-          <div className="flex items-center justify-between px-4 py-3 h-full">
+          <div className="flex items-start justify-between px-4 pt-2 pb-1 h-full">
             {/* 左侧：对话标题 */}
             <div className="flex-1 text-left">
               <span className="text-gray-300 text-sm font-medium">
@@ -318,7 +324,7 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
             
             {/* 中间：iOS风格的横条指示器 */}
             <div className="flex-1 flex justify-center">
-              <div className="w-8 h-1 bg-gray-500 rounded-full"></div>
+              <div className="w-8 h-1 bg-gray-500 rounded-full mt-2"></div>
             </div>
             
             {/* 右侧：关闭按钮 */}
@@ -328,7 +334,7 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
                   e.stopPropagation();
                   onClose();
                 }}
-                className="w-6 h-6 flex items-center justify-center text-gray-400 hover:text-gray-200 transition-colors"
+                className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
               >
                 <X className="w-4 h-4" strokeWidth={2} />
               </button>
@@ -371,7 +377,7 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
             </div>
           </>
         )}
-      </div>
+      </motion.div>
     </>
   );
 };
