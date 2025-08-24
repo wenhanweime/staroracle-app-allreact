@@ -60,16 +60,46 @@ function App() {
 
   // 处理输入框聚焦，打开对话浮层
   const handleInputFocus = (inputText?: string) => {
-    console.log('🔍 输入框被聚焦，打开对话浮层', inputText);
+    console.log('🔍 输入框被聚焦，打开对话浮层', inputText, 'isChatOverlayOpen:', isChatOverlayOpen);
+    
     if (inputText) {
-      setInitialChatInput(inputText);
+      if (isChatOverlayOpen) {
+        // 如果浮窗已经打开，直接作为后续问题发送
+        console.log('🔄 浮窗已打开，直接发送后续问题:', inputText);
+        setPendingFollowUpQuestion(inputText);
+      } else {
+        // 如果浮窗未打开，设置为初始输入并打开浮窗
+        console.log('🔄 浮窗未打开，设置初始输入并打开:', inputText);
+        setInitialChatInput(inputText);
+        setIsChatOverlayOpen(true);
+      }
+    } else {
+      // 没有输入文本，只是打开浮窗
+      setIsChatOverlayOpen(true);
     }
-    setIsChatOverlayOpen(true);
     
     // 立即清空初始输入，确保不重复处理
     setTimeout(() => {
       setInitialChatInput('');
     }, 500);
+  };
+
+  // ✨ 新增 handleSendMessage 函数
+  // 当用户在输入框中按下发送时，此函数被调用
+  const handleSendMessage = (inputText: string) => {
+    console.log('🔍 App.tsx: 接收到发送请求，准备打开浮窗', inputText);
+
+    // 只有在发送消息时才设置初始输入并打开浮窗
+    if (isChatOverlayOpen) {
+      // 如果浮窗已打开，直接作为后续问题发送
+      console.log('🔄 浮窗已打开，直接发送后续问题:', inputText);
+      setPendingFollowUpQuestion(inputText);
+    } else {
+      // 如果浮窗未打开，设置为初始输入并打开浮窗
+      console.log('🔄 浮窗未打开，设置初始输入并打开:', inputText);
+      setInitialChatInput(inputText);
+      setIsChatOverlayOpen(true);
+    }
   };
 
   // 关闭对话浮层
@@ -310,7 +340,7 @@ function App() {
       <ConversationDrawer 
         isOpen={true} 
         onToggle={() => {}} 
-        onInputFocus={handleInputFocus}
+        onSendMessage={handleSendMessage} // ✨ 使用新的回调
         showChatHistory={false}
         isFloatingAttached={!isChatOverlayOpen} // 浮窗关闭时为吸附状态
       />

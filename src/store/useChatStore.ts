@@ -20,6 +20,11 @@ interface ChatStore extends ChatState {
   setLoading: (loading: boolean) => void;
   clearMessages: () => void;
   
+  // 对话命名功能
+  conversationTitle: string;
+  setConversationTitle: (title: string) => void;
+  generateConversationTitle: () => Promise<void>;
+  
   // 单条消息觉察分析
   startAwarenessAnalysis: (messageId: string) => void;
   completeAwarenessAnalysis: (messageId: string, insight: AwarenessInsight) => void;
@@ -33,6 +38,7 @@ interface ChatStore extends ChatState {
 export const useChatStore = create<ChatStore>((set, get) => ({
   messages: [],
   isLoading: false,
+  conversationTitle: '', // 初始化对话标题
   
   // 初始化对话觉察状态
   conversationAwareness: {
@@ -204,5 +210,62 @@ export const useChatStore = create<ChatStore>((set, get) => ({
         isAnalyzing
       }
     }));
+  },
+
+  // 对话命名功能
+  setConversationTitle: (title: string) => {
+    set({ conversationTitle: title });
+  },
+
+  generateConversationTitle: async () => {
+    const { messages } = get();
+    
+    // 只有在有至少一轮对话且还没有标题时才生成
+    if (messages.length < 2 || get().conversationTitle) return;
+    
+    try {
+      // 导入AI工具函数
+      const { generateAIResponse } = await import('../utils/aiTaggingUtils');
+      
+      // 取前2-3轮对话作为上下文
+      const contextMessages = messages.slice(0, Math.min(6, messages.length));
+      const conversation = contextMessages
+        .map(msg => `${msg.isUser ? '用户' : 'AI'}：${msg.text}`)
+        .join('\n');
+      
+      const prompt = `请为以下对话生成一个简洁的标题（不超过10个字）：
+
+${conversation}
+
+要求：
+- 标题要准确反映对话的核心主题
+- 使用中文
+- 不超过10个字
+- 不要包含标点符号
+- 直接返回标题，不要其他内容`;
+
+      const title = await generateAIResponse(prompt);
+      
+      // 清理标题：去除引号、标点等
+      const cleanTitle = title
+        .replace(/["'""'']/g, '') // 去除引号
+        .replace(/[。！？，、；：]/g, '') // 去除中文标点
+        .replace(/[.!?,;:]/g, '') // 去除英文标点
+        .trim()
+        .substring(0, 10); // 确保不超过10字
+      
+      if (cleanTitle) {
+        set({ conversationTitle: cleanTitle });
+        console.log('📝 已生成对话标题:', cleanTitle);
+      }
+    } catch (error) {
+      console.error('❌ 生成对话标题失败:', error);
+      // 如果生成失败，使用默认标题
+      const firstUserMessage = messages.find(msg => msg.isUser)?.text || '';
+      const fallbackTitle = firstUserMessage.length > 10 
+        ? firstUserMessage.substring(0, 8) + '...'
+        : firstUserMessage || '新对话';
+      set({ conversationTitle: fallbackTitle });
+    }
   }
 }));

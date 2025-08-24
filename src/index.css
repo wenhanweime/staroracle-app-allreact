@@ -77,12 +77,15 @@ input, textarea, [contenteditable="true"] {
   user-select: text !important;
 }
 
-/* 专门允许聊天消息内容可以选择复制 */
+/* 禁用聊天消息的直接文字选择 - 改为通过长按菜单复制 */
 .chat-message-content {
-  -webkit-user-select: text !important;
-  -moz-user-select: text !important;
-  -ms-user-select: text !important;
-  user-select: text !important;
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+  /* 禁用iOS长按选择 */
+  -webkit-touch-callout: none !important;
+  -webkit-tap-highlight-color: transparent !important;
 }
 
 /* 禁用双击缩放 */
@@ -907,4 +910,23 @@ button {
   background: transparent !important;
   background-color: transparent !important;
   color: rgb(220 38 38) !important; /* red-600 */
+}
+
+/* 隐藏滚动条样式 - 保持滚动功能但隐藏视觉滚动条 */
+.scrollbar-hidden {
+  /* Firefox */
+  scrollbar-width: none;
+  /* IE and Edge */
+  -ms-overflow-style: none;
+}
+
+.scrollbar-hidden::-webkit-scrollbar {
+  /* Chrome, Safari and Opera */
+  display: none;
+}
+
+/* 确保滚动在移动设备上仍然流畅 */
+.scrollbar-hidden {
+  -webkit-overflow-scrolling: touch;
+  overflow: -moz-scrollbars-none;
 }

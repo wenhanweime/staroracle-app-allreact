@@ -17,15 +17,27 @@ interface ChatMessagesProps {
 const ChatMessages: React.FC<ChatMessagesProps> = ({ onAskFollowUp }) => {
   const { messages, isLoading } = useChatStore();
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      // 使用更精确的滚动方式
+      const scrollContainer = messagesEndRef.current.closest('.overflow-y-auto');
+      if (scrollContainer) {
+        scrollContainer.scrollTop = scrollContainer.scrollHeight;
+      } else {
+        messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+      }
     }
   };
 
   useEffect(() => {
-    scrollToBottom();
+    // 延迟滚动，确保DOM更新完成
+    const timer = setTimeout(() => {
+      scrollToBottom();
+    }, 100);
+
+    return () => clearTimeout(timer);
   }, [messages, isLoading]);
 
   // 根据设备类型计算不同的顶部间距
@@ -52,7 +64,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onAskFollowUp }) => {
 
   return (
     <div 
-      className="flex-1 overflow-y-auto p-4 space-y-0"
+      className="p-4 space-y-0"
       style={{
         paddingTop: getTopPadding(),
         paddingBottom: '100px' // 避免被底部输入框遮挡

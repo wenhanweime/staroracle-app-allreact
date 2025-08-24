@@ -16,7 +16,7 @@ const isIOS = () => {
 interface ConversationDrawerProps {
   isOpen: boolean;
   onToggle: () => void;
-  onInputFocus?: (inputText?: string) => void; // 修改为可接收输入文本
+  onSendMessage?: (inputText: string) => void; // ✨ 新增：发送消息的回调
   showChatHistory?: boolean; // 新增是否显示聊天历史的开关
   followUpQuestion?: string; // 外部传入的后续问题
   onFollowUpProcessed?: () => void; // 后续问题处理完成的回调
@@ -26,7 +26,7 @@ interface ConversationDrawerProps {
 const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ 
   isOpen, 
   onToggle, 
-  onInputFocus,
+  onSendMessage, // ✨ 使用新 prop
   showChatHistory = true,
   followUpQuestion, 
   onFollowUpProcessed,
@@ -35,61 +35,12 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
   const [inputValue, setInputValue] = useState('');
   const [isRecording, setIsRecording] = useState(false);
   const [starAnimated, setStarAnimated] = useState(false);
-  const [keyboardHeight, setKeyboardHeight] = useState(0);
-  const [isKeyboardVisible, setIsKeyboardVisible] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   
   const { conversationAwareness } = useChatStore();
 
-  // 移除外部传入后续问题的处理，因为这现在在ChatOverlay中处理
-  // useEffect for followUpQuestion removed
-
-  // iOS键盘监听和视口调整
-  useEffect(() => {
-    if (!isIOS()) return;
-
-    const handleViewportChange = () => {
-      const viewport = window.visualViewport;
-      if (viewport) {
-        const keyboardHeight = window.innerHeight - viewport.height;
-        const isVisible = keyboardHeight > 0;
-        
-        setKeyboardHeight(keyboardHeight);
-        setIsKeyboardVisible(isVisible);
-        
-        // 调试信息
-        console.log('Viewport change:', {
-          windowHeight: window.innerHeight,
-          viewportHeight: viewport.height,
-          keyboardHeight,
-          isVisible
-        });
-      }
-    };
-
-    // 监听视口变化
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', handleViewportChange);
-      return () => {
-        window.visualViewport?.removeEventListener('resize', handleViewportChange);
-      };
-    } else {
-      // 备用方案：监听窗口resize
-      let initialHeight = window.innerHeight;
-      const handleResize = () => {
-        const currentHeight = window.innerHeight;
-        const keyboardHeight = Math.max(0, initialHeight - currentHeight);
-        const isVisible = keyboardHeight > 100; // 阈值100px
-        
-        setKeyboardHeight(keyboardHeight);
-        setIsKeyboardVisible(isVisible);
-      };
-      
-      window.addEventListener('resize', handleResize);
-      return () => window.removeEventListener('resize', handleResize);
-    }
-  }, []);
+  // 移除所有键盘监听逻辑，让系统原生处理键盘行为
 
   const handleMicClick = () => {
     setIsRecording(!isRecording);
@@ -115,20 +66,21 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
     setInputValue(e.target.value);
   };
 
-  // 发送处理 - 打开对话浮层
+  // 发送处理 - 调用新的 onSendMessage
   const handleSend = useCallback(async () => {
-    if (!inputValue.trim()) return;
+    const trimmedInput = inputValue.trim();
+    if (!trimmedInput) return;
     
-    // 如果有输入聚焦回调，调用它来打开对话浮层，并传递输入文本
-    if (onInputFocus) {
-      onInputFocus(inputValue.trim());
+    // ✨ 调用新的 onSendMessage 回调
+    if (onSendMessage) {
+      onSendMessage(trimmedInput);
     }
     
-    // 保持输入框内容，不清空历史输入
-    // setInputValue(''); // 移除这行，保持输入内容
+    // 发送后立即清空输入框
+    setInputValue('');
     
-    console.log('🔍 ConversationDrawer: 准备在ChatOverlay中发送消息');
-  }, [inputValue, onInputFocus]);
+    console.log('🔍 ConversationDrawer: 消息已发送，请求打开ChatOverlay');
+  }, [inputValue, onSendMessage]); // ✨ 更新依赖
 
   const handleKeyPress = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter') {
@@ -136,51 +88,20 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
     }
   };
 
-  // iOS专用的输入框点击处理
-  const handleInputClick = () => {
-    // 移除立即打开浮层的逻辑，只处理iOS键盘聚焦
-    if (isIOS() && inputRef.current) {
-      // 确保iOS键盘弹起
-      inputRef.current.focus();
-      // 设置光标到末尾
-      setTimeout(() => {
-        if (inputRef.current) {
-          const length = inputRef.current.value.length;
-          inputRef.current.setSelectionRange(length, length);
-        }
-      }, 100);
-    }
-  };
+  // 移除所有输入框点击控制，让系统原生处理
 
-  // 计算容器的动态样式
+  // 完全移除样式计算，让系统原生处理所有定位
   const getContainerStyle = () => {
-    // 根据浮窗吸附状态调整底部空间
-    const bottomSpace = isFloatingAttached ? '70px' : `max(1rem, env(safe-area-inset-bottom))`;
-    
-    const baseStyle = {
-      paddingBottom: bottomSpace
-    };
-
-    if (isIOS() && isKeyboardVisible && keyboardHeight > 0) {
-      // 键盘弹起时，将输入框移动到键盘上方
-      return {
-        ...baseStyle,
-        transform: `translateY(-${keyboardHeight}px)`,
-        transition: 'transform 0.25s ease-out'
-      };
-    }
-
-    return {
-      ...baseStyle,
-      transform: 'translateY(0)',
-      transition: 'transform 0.25s ease-out, padding-bottom 0.25s ease-out' // 添加padding过渡动画
-    };
+    // 只保留最基本的底部空间，移除所有动态计算
+    return isFloatingAttached 
+      ? { paddingBottom: '70px' } 
+      : { paddingBottom: '1rem' }; // 使用固定值而不是env()
   };
 
   return (
     <div 
       ref={containerRef}
-      className="fixed bottom-0 left-0 right-0 z-50 p-4 keyboard-aware-container pointer-events-none" // 容器本身不接收点击事件
+      className="fixed bottom-0 left-0 right-0 z-50 p-4 pointer-events-none" // 移除keyboard-aware-container，让系统原生处理
       style={getContainerStyle()}
     >
       <div className="w-full max-w-md mx-auto pointer-events-auto"> {/* 只有内容区域可点击 */}
@@ -206,7 +127,7 @@ const ConversationDrawer: React.FC<ConversationDrawerProps> = ({
               value={inputValue}
               onChange={handleInputChange}
               onKeyPress={handleKeyPress}
-              onClick={handleInputClick}
+              // 🚨 关键：移除所有 onClick 和 onFocus 事件处理器，让其行为原生化
               placeholder="询问任何问题"
               className="flex-1 bg-transparent text-white placeholder-gray-400 pl-2 pr-4 py-2 focus:outline-none stellar-body"
               // iOS专用属性确保键盘弹起
