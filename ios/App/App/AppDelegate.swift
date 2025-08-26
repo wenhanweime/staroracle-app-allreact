@@ -7,16 +7,18 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     var window: UIWindow?
 
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
-        // Override point for customization after application launch.
-        NSLog("🚀 AppDelegate启动完成")
         
-        // 🔧 设置自定义ViewController来注册插件
-        window = UIWindow(frame: UIScreen.main.bounds)
-        let customViewController = ViewController()
-        window?.rootViewController = customViewController
-        window?.makeKeyAndVisible()
+        // 设置自定义视图控制器来注册插件
+        setupCustomViewController()
         
         return true
+    }
+    
+    private func setupCustomViewController() {
+        window = UIWindow(frame: UIScreen.main.bounds)
+        let customViewController = MainViewController()
+        window?.rootViewController = customViewController
+        window?.makeKeyAndVisible()
     }
 
     func applicationWillResignActive(_ application: UIApplication) {

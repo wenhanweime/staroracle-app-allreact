@@ -1,0 +1,1 @@
+import{W as a}from"./index-DCI2pJkU.js";class o extends a{async show(e){console.log("🌐 ChatOverlay show called with:",e)}async hide(){console.log("🌐 ChatOverlay hide called")}async sendMessage(e){console.log("🌐 ChatOverlay sendMessage called with:",e)}}export{o as ChatOverlayWeb};
