@@ -1,0 +1,20 @@
+import { registerPlugin } from '@capacitor/core';
+
+export interface ChatOverlayPlugin {
+  show(options: { isOpen: boolean }): Promise<void>;
+  hide(): Promise<void>;
+  sendMessage(options: { message: string }): Promise<void>;
+  receiveAIResponse(options: { response: string; timestamp: number }): Promise<void>;
+  updateMessages(options: { messages: any[] }): Promise<void>;
+  setLoading(options: { loading: boolean }): Promise<void>;
+  // 新增方法 - 对应Web版本的完整功能
+  setConversationTitle(options: { title: string }): Promise<void>;
+  setKeyboardHeight(options: { height: number }): Promise<void>;
+  setViewportHeight(options: { height: number }): Promise<void>;
+  setInitialInput(options: { input: string }): Promise<void>;
+  setFollowUpQuestion(options: { question: string }): Promise<void>;
+}
+
+export const ChatOverlay = registerPlugin<ChatOverlayPlugin>('ChatOverlay', {
+  web: () => import('./ChatOverlayWeb').then(m => new m.ChatOverlayWeb()),
+});

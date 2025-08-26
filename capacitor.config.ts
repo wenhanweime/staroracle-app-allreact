@@ -12,6 +12,13 @@ const config: CapacitorConfig = {
       resize: 'ionic',  // 使用ionic模式的键盘调整
       style: 'dark',    // 键盘样式
       resizeOnFullScreen: true
+    },
+    // 🔧 添加自定义插件配置
+    ChatOverlay: {
+      // 原生ChatOverlay插件配置
+    },
+    SimpleTestPlugin: {
+      // 测试插件配置
     }
   }
 };

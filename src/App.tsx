@@ -15,7 +15,7 @@ import AIConfigPanel from './components/AIConfigPanel';
 import DrawerMenu from './components/DrawerMenu';
 import Header from './components/Header';
 import ConversationDrawer from './components/ConversationDrawer';
-import ChatOverlay from './components/ChatOverlay'; // 新增对话浮层
+import ChatOverlay from './components/ChatOverlay'; // React版本（Web端回退）
 import OracleInput from './components/OracleInput';
 import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
 import { triggerHapticFeedback } from './utils/hapticUtils';
@@ -23,8 +23,10 @@ import { Menu } from 'lucide-react';
 import { useStarStore } from './store/useStarStore';
 import { useChatStore } from './store/useChatStore';
 import { ConstellationTemplate } from './types';
-import { checkApiConfiguration } from './utils/aiTaggingUtils';
+import { checkApiConfiguration, generateAIResponse } from './utils/aiTaggingUtils';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
+import { SimpleTest } from './plugins/SimpleTestPlugin';
 
 function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
@@ -32,9 +34,26 @@ function App() {
   const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
   const [isDrawerMenuOpen, setIsDrawerMenuOpen] = useState(false);
   const [appReady, setAppReady] = useState(false);
-  const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>(''); // 待处理的后续问题
-  const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false); // 新增对话浮层状态
-  const [initialChatInput, setInitialChatInput] = useState<string>(''); // 初始输入内容
+  
+  // ✨ 原生ChatOverlay Hook
+  const nativeChatOverlay = useNativeChatOverlay();
+  
+  // 兼容性：Web端仍使用React状态
+  const [webChatOverlayOpen, setWebChatOverlayOpen] = useState(false);
+  const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>('');
+  const [initialChatInput, setInitialChatInput] = useState<string>('');
+  
+  // 🔧 现在开启原生模式测试，已修复Capacitor 7.x插件注册问题
+  const forceWebMode = false; // 设为false开启原生模式调试
+  const isNative = forceWebMode ? false : Capacitor.isNativePlatform();
+  const isChatOverlayOpen = isNative ? nativeChatOverlay.isOpen : webChatOverlayOpen;
+  
+  // 🔧 添加调试日志
+  console.log('🔍 环境检测:', {
+    isNative,
+    platform: Capacitor.getPlatform(),
+    nativeOverlayOpen: nativeChatOverlay.isOpen
+  });
   
   const { 
     applyTemplate, 
@@ -42,7 +61,7 @@ function App() {
     dismissInspirationCard 
   } = useStarStore();
   
-  const { messages } = useChatStore(); // 获取聊天消息以判断是否有对话历史
+  const { messages, addUserMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, generateConversationTitle } = useChatStore(); // 获取聊天消息以判断是否有对话历史
   // 处理后续提问的回调
   const handleFollowUpQuestion = (question: string) => {
     console.log('📱 App层接收到后续提问:', question);
@@ -72,11 +91,19 @@ function App() {
         // 如果浮窗未打开，设置为初始输入并打开浮窗
         console.log('🔄 浮窗未打开，设置初始输入并打开:', inputText);
         setInitialChatInput(inputText);
-        setIsChatOverlayOpen(true);
+        if (isNative) {
+          nativeChatOverlay.showOverlay(true);
+        } else {
+          setWebChatOverlayOpen(true);
+        }
       }
     } else {
       // 没有输入文本，只是打开浮窗
-      setIsChatOverlayOpen(true);
+      if (isNative) {
+        nativeChatOverlay.showOverlay(true);
+      } else {
+        setWebChatOverlayOpen(true);
+      }
     }
     
     // 立即清空初始输入，确保不重复处理
@@ -85,29 +112,86 @@ function App() {
     }, 500);
   };
 
-  // ✨ 新增 handleSendMessage 函数
-  // 当用户在输入框中按下发送时，此函数被调用
-  const handleSendMessage = (inputText: string) => {
-    console.log('🔍 App.tsx: 接收到发送请求，准备打开浮窗', inputText);
+  // ✨ 重构 handleSendMessage 支持原生和Web模式
+  const handleSendMessage = async (inputText: string) => {
+    console.log('🔍 App.tsx: 接收到发送请求', inputText, '原生模式:', isNative);
 
-    // 只有在发送消息时才设置初始输入并打开浮窗
-    if (isChatOverlayOpen) {
-      // 如果浮窗已打开，直接作为后续问题发送
-      console.log('🔄 浮窗已打开，直接发送后续问题:', inputText);
-      setPendingFollowUpQuestion(inputText);
+    if (isNative) {
+      // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
+      console.log('📱 原生模式，使用ChatStore处理消息');
+      
+      // 先确保浮窗打开
+      if (!nativeChatOverlay.isOpen) {
+        console.log('📱 原生浮窗未打开，先打开浮窗');
+        await nativeChatOverlay.showOverlay(true);
+        await new Promise(resolve => setTimeout(resolve, 300)); // 等待浮窗完全打开
+      }
+      
+      // 添加用户消息到store
+      addUserMessage(inputText);
+      setLoading(true);
+      
+      try {
+        // 调用AI API
+        const messageId = addStreamingAIMessage('');
+        let streamingText = '';
+        
+        const onStream = (chunk: string) => {
+          streamingText += chunk;
+          updateStreamingMessage(messageId, streamingText);
+        };
+
+        // 获取对话历史（需要获取最新的messages）
+        const conversationHistory = messages.map(msg => ({
+          role: msg.isUser ? 'user' as const : 'assistant' as const,
+          content: msg.text
+        }));
+
+        const aiResponse = await generateAIResponse(
+          inputText, 
+          undefined, 
+          onStream,
+          conversationHistory
+        );
+        
+        if (streamingText !== aiResponse) {
+          updateStreamingMessage(messageId, aiResponse);
+        }
+        
+        finalizeStreamingMessage(messageId);
+        
+        // 在第一次AI回复后，尝试生成对话标题
+        setTimeout(() => {
+          generateConversationTitle();
+        }, 1000);
+        
+      } catch (error) {
+        console.error('❌ AI回复失败:', error);
+      } finally {
+        setLoading(false);
+        await nativeChatOverlay.setLoading(false);
+      }
     } else {
-      // 如果浮窗未打开，设置为初始输入并打开浮窗
-      console.log('🔄 浮窗未打开，设置初始输入并打开:', inputText);
-      setInitialChatInput(inputText);
-      setIsChatOverlayOpen(true);
+      // Web模式：使用React ChatOverlay
+      console.log('🌐 Web模式，使用React ChatOverlay');
+      if (webChatOverlayOpen) {
+        setPendingFollowUpQuestion(inputText);
+      } else {
+        setInitialChatInput(inputText);
+        setWebChatOverlayOpen(true);
+      }
     }
   };
 
-  // 关闭对话浮层
+  // Web模式的浮窗关闭处理
   const handleCloseChatOverlay = () => {
-    console.log('❌ 关闭对话浮层');
-    setIsChatOverlayOpen(false);
-    setInitialChatInput(''); // 清空初始输入
+    if (isNative) {
+      nativeChatOverlay.hideOverlay();
+    } else {
+      console.log('❌ 关闭Web对话浮层');
+      setWebChatOverlayOpen(false);
+      setInitialChatInput('');
+    }
   };
 
   // 添加原生平台效果（只在原生环境下执行）
@@ -152,6 +236,19 @@ function App() {
     
     return () => clearTimeout(timer);
   }, []);
+
+  // 原生模式：同步消息列表到原生浮窗
+  useEffect(() => {
+    if (isNative && nativeChatOverlay.isOpen && messages.length > 0) {
+      console.log('📱 同步消息列表到原生浮窗，消息数量:', messages.length);
+      nativeChatOverlay.updateMessages(messages.map(msg => ({
+        id: msg.id,
+        text: msg.text,
+        isUser: msg.isUser,
+        timestamp: Date.now()
+      })));
+    }
+  }, [isNative, nativeChatOverlay.isOpen, messages, nativeChatOverlay]);
 
   // 监控灵感卡片状态变化（保持Web版本逻辑）
   useEffect(() => {
@@ -336,6 +433,73 @@ function App() {
 
         {/* Oracle Input for star creation */}
         <OracleInput />
+        
+        {/* 🔧 临时测试按钮 - 强制显示用于调试 */}
+        <div className="fixed top-20 right-4 z-50">
+          <div className="space-y-2">
+            <button
+              onClick={async () => {
+                console.log('🧪 ChatOverlay测试按钮被点击');
+                console.log('🧪 forceWebMode:', forceWebMode);
+                console.log('🧪 isNative:', isNative);
+                console.log('🧪 platform:', Capacitor.getPlatform());
+                if (isNative) {
+                  try {
+                    await nativeChatOverlay.showOverlay(true);
+                    console.log('🧪 原生调用成功');
+                  } catch (error) {
+                    console.error('🧪 原生调用失败:', error);
+                  }
+                } else {
+                  console.log('🧪 使用Web版本');
+                  setWebChatOverlayOpen(true);
+                }
+              }}
+              className="bg-red-500 text-white px-3 py-2 rounded text-xs font-bold block w-full"
+            >
+              测试ChatOverlay
+            </button>
+            
+            {/* 新增：测试ObjC插件 */}
+            <button
+              onClick={async () => {
+                console.log('🧪 ObjC插件测试开始');
+                try {
+                  const result = await SimpleTest.test();
+                  console.log('🧪 ObjC插件测试成功:', result);
+                } catch (error) {
+                  console.error('🧪 ObjC插件测试失败:', error);
+                }
+              }}
+              className="bg-yellow-500 text-white px-3 py-2 rounded text-xs font-bold block w-full"
+            >
+              测试ObjC插件
+            </button>
+            
+            {/* 修复：测试SimpleTestPlugin插件 */}
+            <button
+              onClick={async () => {
+                console.log('🧪 SimpleTestPlugin测试开始');
+                try {
+                  const result = await SimpleTest.test();
+                  console.log('🧪 SimpleTestPlugin测试成功:', result);
+                } catch (error) {
+                  console.error('🧪 SimpleTestPlugin测试失败:', error);
+                }
+              }}
+              className="bg-green-500 text-white px-3 py-2 rounded text-xs font-bold block w-full"
+            >
+              测试SimpleTestPlugin
+            </button>
+            
+            <div className="text-white text-xs bg-black bg-opacity-50 px-2 py-1 rounded">
+              模式: {forceWebMode ? 'Web强制' : (isNative ? '原生' : 'Web')}
+            </div>
+            <div className="text-white text-xs bg-black bg-opacity-50 px-2 py-1 rounded">
+              平台: {Capacitor.getPlatform()}
+            </div>
+          </div>
+        </div>
       </div>
       
       {/* ✨ 3. 使用 Portal 将 UI 组件渲染到 body 顶层，完全避免 transform 影响 */}
@@ -350,16 +514,18 @@ function App() {
             isFloatingAttached={!isChatOverlayOpen} // 浮窗关闭时为吸附状态
           />
           
-          {/* Chat Overlay - 通过 Portal 直接渲染到 body */}
-          <ChatOverlay
-            isOpen={isChatOverlayOpen}
-            onClose={handleCloseChatOverlay}
-            onReopen={() => setIsChatOverlayOpen(true)}
-            followUpQuestion={pendingFollowUpQuestion}
-            onFollowUpProcessed={handleFollowUpProcessed}
-            initialInput={initialChatInput}
-            inputBottomSpace={isChatOverlayOpen ? 34 : 70} // 根据浮窗状态传递不同的底部空间
-          />
+          {/* Chat Overlay - 根据环境条件渲染 */}
+          {!isNative && (
+            <ChatOverlay
+              isOpen={webChatOverlayOpen}
+              onClose={handleCloseChatOverlay}
+              onReopen={() => setWebChatOverlayOpen(true)}
+              followUpQuestion={pendingFollowUpQuestion}
+              onFollowUpProcessed={handleFollowUpProcessed}
+              initialInput={initialChatInput}
+              inputBottomSpace={webChatOverlayOpen ? 34 : 70}
+            />
+          )}
         </>,
         document.body // ✨ 4. 指定渲染目标为 document.body
       )}

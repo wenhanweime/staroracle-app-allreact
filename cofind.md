@@ -2,6 +2,46 @@
 
 ## 最新查询记录
 
+### 2025-08-26 - 所有的与原生的chatoverly相关的ui 交互代码
+
+**查询**: `所有的与原生的chatoverly相关的ui 交互代码`
+
+**技术名称**: 原生ChatOverlay UI交互系统
+
+**涉及文件**:
+- `src/App.tsx` ⭐⭐⭐⭐⭐ (主应用组件，原生/Web模式切换逻辑)
+- `src/hooks/useNativeChatOverlay.ts` ⭐⭐⭐⭐⭐ (原生ChatOverlay React Hook)
+- `src/components/ChatOverlay.tsx` ⭐⭐⭐⭐⭐ (React版ChatOverlay组件，Web端回退)
+- `src/plugins/ChatOverlay.ts` ⭐⭐⭐⭐ (Capacitor插件接口定义)
+- `src/plugins/ChatOverlayWeb.ts` ⭐⭐⭐ (Web端实现)
+- `ios/App/App/ChatOverlay/NativeChatOverlay.swift` ⭐⭐⭐⭐⭐ (SwiftUI原生实现)
+- `ios/App/App/ChatOverlayPlugin.m` ⭐⭐⭐⭐ (Objective-C插件实现)
+- `ios/App/App/Plugins.m` ⭐⭐⭐⭐ (Capacitor插件注册文件)
+
+**关键功能点**:
+- 🎯 原生/Web模式动态切换 (`forceWebMode = false`)
+- 🎯 React到SwiftUI的桥接接口和事件监听
+- 🎯 复杂拖拽交互逻辑（微小下拉5px即可关闭）
+- 🎯 iOS键盘适配和视口高度处理
+- 🎯 消息同步和AI响应流处理
+- 🎯 Portal渲染避免transform影响
+- 🎯 Capacitor插件注册和方法调用
+
+**当前问题**:
+- ❌ 所有插件调用都返回`{"code":"UNIMPLEMENTED"}`错误
+- ❌ Capacitor插件发现机制或运行时注册问题
+- ✅ 代码架构设计合理，SwiftUI实现完整
+
+**技术策略**:
+- **插件架构**: JavaScript层通过useNativeChatOverlay hook调用原生插件
+- **双模式支持**: 原生环境使用SwiftUI，Web环境回退到React组件
+- **状态同步**: 通过Capacitor事件监听器同步浮窗状态和消息列表
+- **交互对应**: SwiftUI拖拽手势完全对应React版本的touchstart/move/end逻辑
+
+**详细报告**: 查看 `codefind_原生ChatOverlay.md` 获取完整代码内容
+
+---
+
 ### 2025-08-24 - 点击输入框之后 输入框跟随键盘弹起的过程
 
 **查询**: `点击输入框之后 输入框跟随键盘弹起的过程`
