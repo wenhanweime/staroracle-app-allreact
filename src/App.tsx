@@ -26,7 +26,6 @@ import { ConstellationTemplate } from './types';
 import { checkApiConfiguration, generateAIResponse } from './utils/aiTaggingUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
-import { SimpleTest } from './plugins/SimpleTestPlugin';
 
 function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
@@ -43,17 +42,10 @@ function App() {
   const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>('');
   const [initialChatInput, setInitialChatInput] = useState<string>('');
   
-  // 🔧 现在开启原生模式测试，已修复Capacitor 7.x插件注册问题
-  const forceWebMode = false; // 设为false开启原生模式调试
+  // 🔧 现在开启原生模式，ChatOverlay插件已修复
+  const forceWebMode = false; // 设为false开启原生模式
   const isNative = forceWebMode ? false : Capacitor.isNativePlatform();
   const isChatOverlayOpen = isNative ? nativeChatOverlay.isOpen : webChatOverlayOpen;
-  
-  // 🔧 添加调试日志
-  console.log('🔍 环境检测:', {
-    isNative,
-    platform: Capacitor.getPlatform(),
-    nativeOverlayOpen: nativeChatOverlay.isOpen
-  });
   
   const { 
     applyTemplate, 
@@ -433,73 +425,6 @@ function App() {
 
         {/* Oracle Input for star creation */}
         <OracleInput />
-        
-        {/* 🔧 临时测试按钮 - 强制显示用于调试 */}
-        <div className="fixed top-20 right-4 z-50">
-          <div className="space-y-2">
-            <button
-              onClick={async () => {
-                console.log('🧪 ChatOverlay测试按钮被点击');
-                console.log('🧪 forceWebMode:', forceWebMode);
-                console.log('🧪 isNative:', isNative);
-                console.log('🧪 platform:', Capacitor.getPlatform());
-                if (isNative) {
-                  try {
-                    await nativeChatOverlay.showOverlay(true);
-                    console.log('🧪 原生调用成功');
-                  } catch (error) {
-                    console.error('🧪 原生调用失败:', error);
-                  }
-                } else {
-                  console.log('🧪 使用Web版本');
-                  setWebChatOverlayOpen(true);
-                }
-              }}
-              className="bg-red-500 text-white px-3 py-2 rounded text-xs font-bold block w-full"
-            >
-              测试ChatOverlay
-            </button>
-            
-            {/* 新增：测试ObjC插件 */}
-            <button
-              onClick={async () => {
-                console.log('🧪 ObjC插件测试开始');
-                try {
-                  const result = await SimpleTest.test();
-                  console.log('🧪 ObjC插件测试成功:', result);
-                } catch (error) {
-                  console.error('🧪 ObjC插件测试失败:', error);
-                }
-              }}
-              className="bg-yellow-500 text-white px-3 py-2 rounded text-xs font-bold block w-full"
-            >
-              测试ObjC插件
-            </button>
-            
-            {/* 修复：测试SimpleTestPlugin插件 */}
-            <button
-              onClick={async () => {
-                console.log('🧪 SimpleTestPlugin测试开始');
-                try {
-                  const result = await SimpleTest.test();
-                  console.log('🧪 SimpleTestPlugin测试成功:', result);
-                } catch (error) {
-                  console.error('🧪 SimpleTestPlugin测试失败:', error);
-                }
-              }}
-              className="bg-green-500 text-white px-3 py-2 rounded text-xs font-bold block w-full"
-            >
-              测试SimpleTestPlugin
-            </button>
-            
-            <div className="text-white text-xs bg-black bg-opacity-50 px-2 py-1 rounded">
-              模式: {forceWebMode ? 'Web强制' : (isNative ? '原生' : 'Web')}
-            </div>
-            <div className="text-white text-xs bg-black bg-opacity-50 px-2 py-1 rounded">
-              平台: {Capacitor.getPlatform()}
-            </div>
-          </div>
-        </div>
       </div>
       
       {/* ✨ 3. 使用 Portal 将 UI 组件渲染到 body 顶层，完全避免 transform 影响 */}
