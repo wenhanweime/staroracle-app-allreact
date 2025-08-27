@@ -2,3 +2,6 @@
 - 当用户有所指代的时候，请先弄清楚用户指代的是哪个模块，可以参考当前目录下的 @功能索引.md ，找到我们需要修改的文件，模块等，然后再开始修改，确保我们跟用户的交互和指代是非常明确的。
 - 测试自动git add功能
 - 总是用中文回复
+- 当需要编译xcode项目 并且运行的时候,请使用 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
+- 当需要编译xcode项目 并且运行的时候,请使用 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
+- 当需要编译xcode项目 并且运行的时候,请使用 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
