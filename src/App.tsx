@@ -231,16 +231,20 @@ function App() {
 
   // 原生模式：同步消息列表到原生浮窗
   useEffect(() => {
-    if (isNative && nativeChatOverlay.isOpen && messages.length > 0) {
+    if (isNative && messages.length > 0) {
       console.log('📱 同步消息列表到原生浮窗，消息数量:', messages.length);
-      nativeChatOverlay.updateMessages(messages.map(msg => ({
+      // 格式化消息，确保timestamp为number类型
+      const formattedMessages = messages.map(msg => ({
         id: msg.id,
         text: msg.text,
         isUser: msg.isUser,
-        timestamp: Date.now()
-      })));
+        timestamp: msg.timestamp instanceof Date ? msg.timestamp.getTime() : msg.timestamp
+      }));
+      
+      console.log('📱 格式化后的消息:', formattedMessages);
+      nativeChatOverlay.updateMessages(formattedMessages);
     }
-  }, [isNative, nativeChatOverlay.isOpen, messages, nativeChatOverlay]);
+  }, [isNative, messages, nativeChatOverlay]);
 
   // 监控灵感卡片状态变化（保持Web版本逻辑）
   useEffect(() => {

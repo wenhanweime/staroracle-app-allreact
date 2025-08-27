@@ -37,6 +37,9 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func show(_ call: CAPPluginCall) {
         NSLog("🎯 ChatOverlay show方法被调用!")
         let animated = call.getBool("animated") ?? true
+        let isOpen = call.getBool("isOpen") ?? false  // 获取展开状态参数
+        
+        NSLog("🎯 显示浮窗参数 - animated: \(animated), expanded: \(isOpen)")
         
         DispatchQueue.main.async {
             // 自动设置背景视图（如果尚未设置）
@@ -46,7 +49,7 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
                 self.overlayManager.setBackgroundView(containerView)
             }
             
-            self.overlayManager.show(animated: animated) { success in
+            self.overlayManager.show(animated: animated, expanded: isOpen) { success in
                 if success {
                     call.resolve(["success": true, "visible": true])
                 } else {

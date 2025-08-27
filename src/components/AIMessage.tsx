@@ -5,7 +5,7 @@ import StarLoadingAnimation from './StarLoadingAnimation';
 import AwarenessIcon from './AwarenessIcon';
 import AwarenessDetailModal from './AwarenessDetailModal';
 import MessageContextMenu from './MessageContextMenu';
-import { analyzeAwarenessValue } from '../utils/aiTaggingUtils';
+import { analyzeStarContent } from '../utils/aiTaggingUtils';
 import { useChatStore } from '../store/useChatStore';
 
 interface AIMessageProps {

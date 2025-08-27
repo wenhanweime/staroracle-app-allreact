@@ -1,6 +1,5 @@
 // AI Tagging and Analysis Utilities
 import { Star, Connection, TagAnalysis } from '../types';
-import { AwarenessInsight } from '../types/chat'; // 新增导入
 import type { ApiProvider } from '../vite-env';
 
 export interface AITaggingConfig {
@@ -463,14 +462,13 @@ export const generateAIResponse = async (
   question: string,
   config?: AITaggingConfig,
   onStream?: (chunk: string) => void,
-  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<string> => {
   console.log('===== Starting AI answer generation =====');
   console.log('Question:', question);
   console.log('Passed config:', config ? 'Has config' : 'No config');
   console.log('Streaming enabled:', !!onStream);
-  console.log('Conversation history length:', conversationHistory ? conversationHistory.length : 0);
-  console.log('onStream type:', typeof onStream);
+  console.log('Conversation history length:', conversationHistory?.length || 0);
   
   try {
     if (config?.apiKey && config?.endpoint) {
@@ -481,7 +479,6 @@ export const generateAIResponse = async (
         model: config.model,
         hasApiKey: !!config.apiKey
       });
-      console.log('🔍 About to call callAIForResponse with onStream:', !!onStream);
       const aiResponse = await callAIForResponse(question, config, onStream, conversationHistory);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
@@ -501,7 +498,6 @@ export const generateAIResponse = async (
       console.log(`Using default ${defaultConfig.provider || 'openai'} config to generate answer`);
       // Print config info (hide API key)
       console.log(`Config info: provider=${defaultConfig.provider}, endpoint=${defaultConfig.endpoint}, model=${defaultConfig.model}`);
-      console.log('🔍 About to call callAIForResponse with default config and onStream:', !!onStream);
       const aiResponse = await callAIForResponse(question, defaultConfig, onStream, conversationHistory);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
@@ -631,14 +627,15 @@ const callAIForResponse = async (
   question: string,
   config: AITaggingConfig,
   onStream?: (chunk: string) => void,
-  conversationHistory?: Array<{role: 'user' | 'assistant', content: string}>
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
 ): Promise<string> => {
   if (!config.provider) {
     config.provider = 'openai'; // 默认使用OpenAI格式
   }
 
-  const prompt = 
-  `
+  // 统一使用星瑜模式，构建消息历史
+  const messages = [
+    { role: 'system', content: `
   # 角色
   * 你是星瑜，是来自宇宙，请用中文回复用户的问题。
   * 除非用户问，否则不要说明身份。
@@ -677,38 +674,23 @@ const callAIForResponse = async (
       -"最近？"（超级简洁）
    # 对话策略
     - 当找到用户想要对话的主题的时候，需要辅以知识和信息，来帮助用户解决问题，解答疑惑。
-  
-   `;
-
-  // 构建消息历史
-  let messages: Array<{role: 'system' | 'user' | 'assistant', content: string}> = [];
-  
-  // 添加系统提示
-  messages.push({ role: 'system', content: prompt });
-  
-  // 添加对话历史（如果有的话）
-  if (conversationHistory && conversationHistory.length > 0) {
-    console.log(`📚 Adding ${conversationHistory.length} historical messages to context`);
-    // 限制历史记录长度，避免token过多（保留最近10轮对话）
-    const recentHistory = conversationHistory.slice(-20); // 最多20条消息（10轮对话）
-    messages = messages.concat(recentHistory);
-  }
-  
-  // 添加当前问题
-  messages.push({ role: 'user', content: question });
-
+  ` },
+    // 如果有对话历史，添加到消息中
+    ...(conversationHistory || []),
+    // 添加当前用户问题
+    { role: 'user', content: question }
+  ];
 
   // 根据API文档，这是标准的OpenAI格式，但调整参数以适配特定模型
   const requestBody = {
     model: config.model || 'gpt-3.5-turbo',
-    messages: messages, // 使用包含历史的完整消息数组
+    messages: messages,
     temperature: 0.8,
     max_tokens: 5000,  // 增加到5000 tokens以确保有足够空间生成内容
     stream: !!onStream,  // 启用流式输出
   };
 
   try {
-    const startTime = Date.now();
     console.log('🚀 Sending AI request with config:', {
       endpoint: config.endpoint,
       model: config.model,
@@ -729,8 +711,8 @@ const callAIForResponse = async (
       body: JSON.stringify(requestBody),
     });
 
-    const responseTime = Date.now() - startTime;
-    console.log(`📨 Response status: ${response.status} ${response.statusText} (${responseTime}ms)`);
+    console.log(`📨 Response status: ${response.status} ${response.statusText}`);
+    console.log(`📨 Response Content-Type: ${response.headers.get('content-type')}`);
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -738,22 +720,22 @@ const callAIForResponse = async (
       throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
+    // Check if this is a streaming response
+    const contentType = response.headers.get('content-type');
+    const isStreaming = onStream && contentType?.includes('text/event-stream');
+    
+    console.log(`🔍 Stream detection: onStream=${!!onStream}, contentType=${contentType}, isStreaming=${isStreaming}`);
+
     // Handle streaming response
-    if (onStream && response.body) {
+    if (isStreaming && response.body) {
       console.log('📡 Processing streaming response...');
-      const firstTokenTime = Date.now();
-      const result = await processStreamingResponse(response, onStream, firstTokenTime);
-      return result;
+      return await processStreamingResponse(response, onStream);
     }
     
     // Check if stream was requested but not properly handled
-    if (onStream) {
-      console.warn('⚠️ Streaming was requested but response.body is not available');
+    if (onStream && !isStreaming) {
+      console.warn('⚠️ Streaming was requested but API returned regular response');
       console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-      
-      // Fallback to test streaming if API doesn't support it
-      console.log('🔄 Falling back to test streaming...');
-      return await testStreamingResponse(onStream);
     }
 
     // Handle regular response
@@ -811,86 +793,52 @@ const callAIForResponse = async (
 // Process streaming response from API
 const processStreamingResponse = async (
   response: Response,
-  onStream: (chunk: string) => void,
-  firstTokenTime?: number
+  onStream: (chunk: string) => void
 ): Promise<string> => {
-  console.log('📡 === Starting processStreamingResponse ===');
-  
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
   let fullAnswer = '';
-  let buffer = ''; // Buffer for incomplete lines
   
   try {
-    console.log('📡 Starting to read stream...');
-    let chunkCount = 0;
-    
     while (true) {
-      console.log(`📡 Reading chunk ${++chunkCount}...`);
       const { done, value } = await reader.read();
       
-      if (done) {
-        console.log('📡 Stream reading completed');
-        break;
-      }
+      if (done) break;
       
-      // Decode and add to buffer
       const chunk = decoder.decode(value, { stream: true });
-      buffer += chunk;
-      console.log(`📡 Added to buffer, buffer length: ${buffer.length}`);
+      const lines = chunk.split('\n');
       
-      // Process complete lines from buffer
-      const lines = buffer.split('\n');
-      // Keep the last potentially incomplete line in buffer
-      buffer = lines.pop() || '';
-      
-      console.log(`📡 Processing ${lines.length} complete lines`);
-      
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
+      for (const line of lines) {
         const trimmedLine = line.trim();
         
-        if (!trimmedLine || trimmedLine.startsWith(':')) {
-          continue;
-        }
+        // Skip empty lines and comments
+        if (!trimmedLine || trimmedLine.startsWith(':')) continue;
         
+        // Process data lines
         if (trimmedLine.startsWith('data: ')) {
-          const jsonStr = trimmedLine.slice(6);
+          const jsonStr = trimmedLine.slice(6); // Remove 'data: '
           
+          // Check for end of stream
           if (jsonStr === '[DONE]') {
-            console.log('📡 Stream end marker found');
-            return fullAnswer.trim();
+            console.log('📡 Stream completed');
+            break;
           }
           
           try {
             const data = JSON.parse(jsonStr);
             
+            // Extract content from streaming chunk
             if (data.choices && data.choices[0] && data.choices[0].delta) {
               const content = data.choices[0].delta.content;
               
               if (content) {
-                // Log first token timing
-                if (firstTokenTime && fullAnswer === '') {
-                  const firstTokenDelay = Date.now() - firstTokenTime;
-                  console.log(`⏱️ First token received after ${firstTokenDelay}ms`);
-                }
-                
-                console.log(`📡 Stream chunk ${chunkCount}-${i}:`, JSON.stringify(content));
+                console.log('📡 Stream chunk:', JSON.stringify(content));
                 fullAnswer += content;
-                
-                // Simulate character-by-character streaming for better UX
-                if (content.length > 3) {
-                  console.log('📡 Breaking down chunk into characters...');
-                  await simulateStreamingText(content, onStream, 30); // 30ms per character
-                } else {
-                  onStream(content);
-                }
-                
-                console.log(`📡 Full answer so far: ${fullAnswer.length} chars`);
+                onStream(content);
               }
             }
           } catch (parseError) {
-            console.warn('⚠️ Failed to parse streaming chunk:', jsonStr, parseError);
+            console.warn('⚠️ Failed to parse streaming chunk:', jsonStr);
           }
         }
       }
@@ -903,26 +851,11 @@ const processStreamingResponse = async (
     console.error('❌ Streaming error:', error);
     throw error;
   } finally {
-    console.log('📡 Releasing reader lock');
     reader.releaseLock();
   }
 };
 
-// Test function to simulate streaming for debugging
-const testStreamingResponse = async (onStream: (chunk: string) => void): Promise<string> => {
-  const testText = "这是一个测试流式输出的回复，用来验证前端流式功能是否正常工作。";
-  const chars = Array.from(testText);
-  
-  let fullText = '';
-  for (let i = 0; i < chars.length; i++) {
-    await new Promise(resolve => setTimeout(resolve, 100)); // 100ms delay per character
-    fullText += chars[i];
-    onStream(chars[i]);
-    console.log(`🔥 Test stream chunk: "${chars[i]}", full so far: "${fullText}"`);
-  }
-  
-  return fullText;
-};
+// Simulate streaming text for mock responses
 const simulateStreamingText = async (
   text: string,
   onStream: (chunk: string) => void,
@@ -1744,220 +1677,3 @@ setTimeout(() => {
   console.log('🚀 初始化AI服务配置...');
   checkApiConfiguration();
 }, 1000);
-
-// 觉察价值分析 - 分析对话是否具有自我觉察的价值
-export const analyzeAwarenessValue = async (
-  userQuestion: string,
-  aiResponse: string,
-  config?: AITaggingConfig
-): Promise<AwarenessInsight> => {
-  console.log('🧠 开始分析对话的觉察价值...');
-  console.log('用户问题:', userQuestion);
-  console.log('AI回复:', aiResponse);
-  
-  try {
-    const activeConfig = config || getAIConfig();
-    
-    if (!activeConfig.apiKey || !activeConfig.endpoint) {
-      console.warn('⚠️ 没有AI配置，使用模拟觉察分析');
-      return mockAwarenessAnalysis(userQuestion, aiResponse);
-    }
-    
-    console.log('🤖 使用AI进行觉察价值分析');
-    return await callAIForAwarenessAnalysis(userQuestion, aiResponse, activeConfig);
-    
-  } catch (error) {
-    console.warn('❌ 觉察分析失败，使用备用方案:', error);
-    return mockAwarenessAnalysis(userQuestion, aiResponse);
-  }
-};
-
-// AI觉察分析服务调用
-const callAIForAwarenessAnalysis = async (
-  userQuestion: string,
-  aiResponse: string,
-  config: AITaggingConfig
-): Promise<AwarenessInsight> => {
-  const prompt = `
-你是一位专业的心理洞察分析师。请分析以下对话是否具有自我觉察的价值。
-
-用户问题: "${userQuestion}"
-AI回答: "${aiResponse}"
-
-请判断这段对话是否帮助用户产生了自我觉察、情绪洞察或个人成长的洞见。
-
-觉察价值的判断标准：
-1. HIGH（高价值）：触及深层自我认知、价值观反思、行为模式认识、情绪根源探索
-2. MEDIUM（中等价值）：涉及个人情感、人际关系思考、生活态度调整
-3. LOW（低价值）：一般性建议、事实性信息、浅层交流
-4. NONE（无价值）：纯粹的信息咨询、技术问题、日常闲聊
-
-重要要求：后续问题必须以用户第一人称视角表达，像用户自己在思考和提问，而不是AI询问用户。
-
-例如：
-- 错误："你觉得这种情绪是什么时候开始的？"
-- 正确："我这种情绪是什么时候开始的呢？"
-- 错误："你希望这种关系如何发展？"  
-- 正确："我希望这种关系如何发展呢？"
-
-请严格按照以下JSON格式返回分析结果，不要添加任何其他文字：
-
-{
-  "hasInsight": <boolean: 是否有觉察价值>,
-  "insightLevel": "<string: low/medium/high>",
-  "insightType": "<string: 觉察类型，如'自我认知'、'情绪洞察'、'关系反思'等>",
-  "keyInsights": ["<string: 关键洞察点1>", "<string: 关键洞察点2>"],
-  "emotionalPattern": "<string: 识别到的情绪或行为模式>",
-  "suggestedReflection": "<string: 建议的深入思考方向>",
-  "followUpQuestions": ["<string: 用户第一人称后续探索问题1>", "<string: 用户第一人称后续探索问题2>"]
-}
-`;
-
-  const requestBody = {
-    model: config.model || 'gpt-3.5-turbo',
-    messages: [{ role: 'user', content: prompt }],
-    temperature: 0.3, // 较低温度确保一致性
-    max_tokens: 2000,
-    response_format: { type: "json_object" }
-  };
-
-  try {
-    const cleanApiKey = config.apiKey?.replace(/[^\x20-\x7E]/g, '') || '';
-    
-    const response = await fetch(config.endpoint!, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${cleanApiKey}`,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`觉察分析API错误 (${response.status}): ${errorText}`);
-      throw new Error(`Awareness API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    console.log('觉察分析原始响应:', JSON.stringify(data, null, 2));
-    
-    if (!data.choices || !data.choices[0] || !data.choices[0].message) {
-      throw new Error('Invalid awareness analysis response structure');
-    }
-
-    const content = data.choices[0].message.content?.trim() || '';
-    console.log('觉察分析内容:', content);
-    
-    // 解析JSON响应
-    const cleanedContent = content
-      .replace(/^```json\n?/, '')
-      .replace(/\n?```$/, '')
-      .trim();
-    
-    const parsedResult = JSON.parse(cleanedContent);
-    
-    // 验证必要字段
-    if (typeof parsedResult.hasInsight !== 'boolean') {
-      throw new Error('Invalid hasInsight field');
-    }
-    
-    console.log('✅ 觉察分析完成:', parsedResult);
-    return parsedResult as AwarenessInsight;
-    
-  } catch (error) {
-    console.error('❌ AI觉察分析调用失败:', error);
-    throw error;
-  }
-};
-
-// 模拟觉察分析 - 备用方案
-const mockAwarenessAnalysis = (userQuestion: string, aiResponse: string): AwarenessInsight => {
-  const lowerQuestion = userQuestion.toLowerCase();
-  const lowerResponse = aiResponse.toLowerCase();
-  
-  // 高觉察价值关键词
-  const highInsightKeywords = [
-    '为什么', '原因', '内心', '感受', '恐惧', '焦虑', '担心', '困惑', 
-    '意义', '价值观', '目标', '梦想', '关系', '家庭', '自己', '成长',
-    '改变', '选择', '决定', '未来', '过去', '痛苦', '快乐', '孤独',
-    '自信', '自我', '认识', '理解', '接受', '原谅'
-  ];
-  
-  // 中等觉察价值关键词  
-  const mediumInsightKeywords = [
-    '感觉', '想法', '看法', '态度', '习惯', '行为', '情绪', '心情',
-    '压力', '疲惫', '兴奋', '满足', '失望', '希望', '期待', '担忧'
-  ];
-  
-  // 统计关键词出现次数
-  let highCount = 0;
-  let mediumCount = 0;
-  
-  const combinedText = `${lowerQuestion} ${lowerResponse}`;
-  
-  highInsightKeywords.forEach(keyword => {
-    if (combinedText.includes(keyword)) highCount++;
-  });
-  
-  mediumInsightKeywords.forEach(keyword => {
-    if (combinedText.includes(keyword)) mediumCount++;
-  });
-  
-  // 判断觉察价值等级
-  let insightLevel: 'low' | 'medium' | 'high' = 'low';
-  let hasInsight = false;
-  
-  if (highCount >= 2) {
-    insightLevel = 'high';
-    hasInsight = true;
-  } else if (highCount >= 1 || mediumCount >= 3) {
-    insightLevel = 'medium';
-    hasInsight = true;
-  } else if (mediumCount >= 1) {
-    insightLevel = 'low';
-    hasInsight = true;
-  }
-  
-  // 根据内容生成洞察类型和建议
-  let insightType = '自我探索';
-  let emotionalPattern = '思考模式';
-  let suggestedReflection = '继续深入思考这个话题';
-  let followUpQuestions = ['我对此还有什么其他想法？', '这让我想到了什么？'];
-  
-  if (combinedText.includes('感受') || combinedText.includes('情绪')) {
-    insightType = '情绪洞察';
-    emotionalPattern = '情绪觉察模式';
-    suggestedReflection = '观察和理解自己的情绪反应';
-    followUpQuestions = ['我这种情绪是什么时候开始的？', '在什么情况下我会有类似感受？'];
-  }
-  
-  if (combinedText.includes('关系') || combinedText.includes('家庭') || combinedText.includes('朋友')) {
-    insightType = '关系反思';
-    emotionalPattern = '人际互动模式';
-    suggestedReflection = '思考人际关系中的互动模式';
-    followUpQuestions = ['在其他关系中我是否也有类似情况？', '我希望这种关系如何发展？'];
-  }
-  
-  if (combinedText.includes('目标') || combinedText.includes('未来') || combinedText.includes('梦想')) {
-    insightType = '人生规划';
-    emotionalPattern = '目标导向思维';
-    suggestedReflection = '明确自己真正想要的人生方向';
-    followUpQuestions = ['什么阻碍了我实现这个目标？', '如果没有任何限制，我会如何规划？'];
-  }
-  
-  const keyInsights = hasInsight ? [
-    `识别到${insightType}的重要性`,
-    '开始深入思考个人内在体验'
-  ] : [];
-  
-  return {
-    hasInsight,
-    insightLevel,
-    insightType,
-    keyInsights,
-    emotionalPattern,
-    suggestedReflection,
-    followUpQuestions
-  };
-};

@@ -21,7 +21,7 @@ public class ChatOverlayManager {
     private var overlayWindow: UIWindow?
     private var isVisible = false
     internal var currentState: OverlayState = .collapsed
-    private var messages: [ChatMessage] = []
+    internal var messages: [ChatMessage] = []
     private var isLoading = false
     private var conversationTitle = ""
     private var keyboardHeight: CGFloat = 0
@@ -39,19 +39,34 @@ public class ChatOverlayManager {
     
     // MARK: - Public API
     
-    func show(animated: Bool = true, completion: @escaping (Bool) -> Void) {
-        NSLog("🎯 ChatOverlayManager: 显示浮窗")
+    func show(animated: Bool = true, expanded: Bool = false, completion: @escaping (Bool) -> Void) {
+        NSLog("🎯 ChatOverlayManager: 显示浮窗, expanded: \(expanded)")
         
         DispatchQueue.main.async {
             if self.overlayWindow != nil {
-                NSLog("🎯 浮窗已存在，直接显示")
+                NSLog("🎯 浮窗已存在，直接显示并设置状态")
                 self.overlayWindow?.isHidden = false
                 self.isVisible = true
+                
+                // 根据参数设置初始状态
+                if expanded {
+                    self.currentState = .expanded
+                    self.applyBackgroundTransform(for: .expanded, animated: animated)
+                } else {
+                    self.currentState = .collapsed
+                    self.applyBackgroundTransform(for: .collapsed, animated: animated)
+                }
+                self.updateUI(animated: animated)
+                
                 completion(true)
                 return
             }
             
             self.createOverlayWindow()
+            
+            // 根据参数设置初始状态
+            self.currentState = expanded ? .expanded : .collapsed
+            NSLog("🎯 设置初始状态为: \(self.currentState)")
             
             if animated {
                 self.overlayWindow?.alpha = 0
@@ -59,10 +74,14 @@ public class ChatOverlayManager {
                     self.overlayWindow?.alpha = 1
                 } completion: { _ in
                     self.isVisible = true
+                    self.updateUI(animated: false) // 立即更新UI状态
+                    self.applyBackgroundTransform(for: self.currentState, animated: true)
                     completion(true)
                 }
             } else {
                 self.isVisible = true
+                self.updateUI(animated: false)
+                self.applyBackgroundTransform(for: self.currentState, animated: false)
                 completion(true)
             }
         }
@@ -98,8 +117,16 @@ public class ChatOverlayManager {
     
     func updateMessages(_ messages: [ChatMessage]) {
         NSLog("🎯 ChatOverlayManager: 更新消息列表，数量: \(messages.count)")
+        for (index, message) in messages.enumerated() {
+            NSLog("🎯 消息[\(index)]: \(message.isUser ? "用户" : "AI") - \(message.text)")
+        }
         self.messages = messages
-        // 这里可以更新UI，暂时先简化
+        
+        // 通知OverlayViewController更新消息显示
+        DispatchQueue.main.async {
+            NSLog("🎯 通知OverlayViewController更新消息显示")
+            self.overlayViewController?.updateMessages(messages)
+        }
     }
     
     func setLoading(_ loading: Bool) {
@@ -235,11 +262,8 @@ public class ChatOverlayManager {
         overlayWindow?.rootViewController = overlayViewController
         overlayWindow?.makeKeyAndVisible()
         
-        // 初始状态为收缩状态
-        currentState = .collapsed
-        updateUI(animated: false)
-        
-        NSLog("🎯 ChatOverlayManager: 双状态浮窗创建完成")
+        // 注意：不在这里设置初始状态，由show方法控制
+        NSLog("🎯 ChatOverlayManager: 双状态浮窗创建完成，状态将由show方法设置")
     }
     
     private func updateUI(animated: Bool) {
@@ -275,6 +299,8 @@ class OverlayViewController: UIViewController {
     // 约束
     private var containerTopConstraint: NSLayoutConstraint!
     private var containerHeightConstraint: NSLayoutConstraint!
+    private var containerLeadingConstraint: NSLayoutConstraint!
+    private var containerTrailingConstraint: NSLayoutConstraint!
     
     init(manager: ChatOverlayManager) {
         self.manager = manager
@@ -314,18 +340,18 @@ class OverlayViewController: UIViewController {
             backgroundMaskView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
             backgroundMaskView.topAnchor.constraint(equalTo: view.topAnchor),
             backgroundMaskView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
-            
-            // 容器约束
-            containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
         ])
         
-        // 创建可变约束
+        // 创建可变约束 - 包括宽度约束
         containerTopConstraint = containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80)
         containerHeightConstraint = containerView.heightAnchor.constraint(equalToConstant: 65)
+        containerLeadingConstraint = containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
+        containerTrailingConstraint = containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
         
         containerTopConstraint.isActive = true
         containerHeightConstraint.isActive = true
+        containerLeadingConstraint.isActive = true
+        containerTrailingConstraint.isActive = true
         
         setupCollapsedView()
         setupExpandedView()
@@ -438,6 +464,11 @@ class OverlayViewController: UIViewController {
         messagesList.backgroundColor = .clear
         messagesList.separatorStyle = .none
         messagesList.translatesAutoresizingMaskIntoConstraints = false
+        messagesList.dataSource = self
+        messagesList.delegate = self
+        messagesList.register(MessageTableViewCell.self, forCellReuseIdentifier: "MessageCell")
+        messagesList.estimatedRowHeight = 60
+        messagesList.rowHeight = UITableView.automaticDimension
         expandedView.addSubview(messagesList)
         
         // 底部留空区域
@@ -506,21 +537,33 @@ class OverlayViewController: UIViewController {
             // 设置约束值
             containerTopConstraint.constant = floatingTop - floatingHeight
             containerHeightConstraint.constant = floatingHeight
+            
+            // 收起状态：与输入框一样宽度（屏幕宽度减去左右各16px边距）
+            containerLeadingConstraint.constant = 16
+            containerTrailingConstraint.constant = -16
+            
             collapsedView.alpha = 1
             expandedView.alpha = 0
             backgroundMaskView.alpha = 0
             containerView.layer.cornerRadius = 32.5  // 圆形外观
             
-            NSLog("🎯 收缩状态计算 - gap: \(gap), floatingTop: \(floatingTop), containerTop: \(containerTopConstraint.constant)")
+            NSLog("🎯 收缩状态计算 - gap: \(gap), floatingTop: \(floatingTop), containerTop: \(containerTopConstraint.constant), 宽度边距: 16px")
             
         case .expanded:
-            // 展开状态：顶部留空80px，几乎全屏
+            // 展开状态：顶部留空80px，覆盖整个屏幕
             containerTopConstraint.constant = max(safeAreaTop, 80)  // 顶部留空
             containerHeightConstraint.constant = screenHeight - max(safeAreaTop, 80) - safeAreaBottom - 20  // 几乎全屏，底部留20px
+            
+            // 展开状态：覆盖整个屏幕宽度（无边距）
+            containerLeadingConstraint.constant = 0
+            containerTrailingConstraint.constant = 0
+            
             collapsedView.alpha = 0
             expandedView.alpha = 1
             backgroundMaskView.alpha = 1
             containerView.layer.cornerRadius = 12  // 方形外观
+            
+            NSLog("🎯 展开状态计算 - 全屏宽度（无边距）")
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
@@ -609,5 +652,161 @@ class OverlayViewController: UIViewController {
     
     @objc private func closeButtonTapped() {
         manager?.hide()
+    }
+    
+    // MARK: - 更新消息列表
+    
+    func updateMessages(_ messages: [ChatMessage]) {
+        NSLog("🎯 OverlayViewController: updateMessages被调用，消息数量: \(messages.count)")
+        guard let manager = manager else { 
+            NSLog("⚠️ OverlayViewController: manager为nil")
+            return 
+        }
+        NSLog("🎯 OverlayViewController: manager存在，准备更新UI")
+        DispatchQueue.main.async {
+            NSLog("🎯 OverlayViewController: 执行reloadData")
+            self.messagesList.reloadData()
+            // 滚动到底部显示最新消息
+            if manager.messages.count > 0 {
+                NSLog("🎯 OverlayViewController: 滚动到最新消息，索引: \(manager.messages.count - 1)")
+                let indexPath = IndexPath(row: manager.messages.count - 1, section: 0)
+                self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: true)
+            } else {
+                NSLog("⚠️ OverlayViewController: manager.messages为空")
+            }
+        }
+    }
+}
+
+// MARK: - UITableViewDataSource & UITableViewDelegate
+
+extension OverlayViewController: UITableViewDataSource, UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        let count = manager?.messages.count ?? 0
+        NSLog("🎯 TableView numberOfRows: \(count)")
+        return count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        NSLog("🎯 TableView cellForRowAt: \(indexPath.row)")
+        let cell = tableView.dequeueReusableCell(withIdentifier: "MessageCell", for: indexPath) as! MessageTableViewCell
+        
+        if let messages = manager?.messages, indexPath.row < messages.count {
+            let message = messages[indexPath.row]
+            NSLog("🎯 配置cell: \(message.isUser ? "用户" : "AI") - \(message.text)")
+            cell.configure(with: message)
+        } else {
+            NSLog("⚠️ 无法获取消息数据，索引: \(indexPath.row)")
+        }
+        
+        return cell
+    }
+}
+
+// MARK: - MessageTableViewCell - 消息显示Cell
+
+class MessageTableViewCell: UITableViewCell {
+    
+    private let messageContainerView = UIView()
+    private let messageLabel = UILabel()
+    private let timeLabel = UILabel()
+    
+    private var leadingConstraint: NSLayoutConstraint?
+    private var trailingConstraint: NSLayoutConstraint?
+    private var timeLabelConstraint: NSLayoutConstraint?
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        // 重置约束
+        leadingConstraint?.isActive = false
+        trailingConstraint?.isActive = false
+        timeLabelConstraint?.isActive = false
+    }
+    
+    private func setupUI() {
+        backgroundColor = .clear
+        selectionStyle = .none
+        
+        // 消息容器
+        messageContainerView.layer.cornerRadius = 16
+        messageContainerView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(messageContainerView)
+        
+        // 消息文本
+        messageLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        messageLabel.numberOfLines = 0
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+        messageContainerView.addSubview(messageLabel)
+        
+        // 时间标签
+        timeLabel.font = UIFont.systemFont(ofSize: 12, weight: .regular)
+        timeLabel.textColor = .systemGray
+        timeLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(timeLabel)
+        
+        // 设置固定的约束
+        NSLayoutConstraint.activate([
+            messageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            messageContainerView.bottomAnchor.constraint(equalTo: timeLabel.topAnchor, constant: -4),
+            
+            messageLabel.topAnchor.constraint(equalTo: messageContainerView.topAnchor, constant: 12),
+            messageLabel.leadingAnchor.constraint(equalTo: messageContainerView.leadingAnchor, constant: 16),
+            messageLabel.trailingAnchor.constraint(equalTo: messageContainerView.trailingAnchor, constant: -16),
+            messageLabel.bottomAnchor.constraint(equalTo: messageContainerView.bottomAnchor, constant: -12),
+            
+            timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+        ])
+    }
+    
+    func configure(with message: ChatMessage) {
+        messageLabel.text = message.text
+        
+        // 重置之前的约束
+        leadingConstraint?.isActive = false
+        trailingConstraint?.isActive = false
+        timeLabelConstraint?.isActive = false
+        
+        // 根据是否是用户消息设置不同的样式
+        if message.isUser {
+            // 用户消息 - 右侧蓝色气泡
+            messageContainerView.backgroundColor = UIColor.systemBlue
+            messageLabel.textColor = .white
+            
+            // 设置约束 - 右对齐
+            leadingConstraint = messageContainerView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 80)
+            trailingConstraint = messageContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+            timeLabelConstraint = timeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+            
+        } else {
+            // AI消息 - 左侧灰色气泡
+            messageContainerView.backgroundColor = UIColor.systemGray5
+            messageLabel.textColor = .label
+            
+            // 设置约束 - 左对齐
+            leadingConstraint = messageContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+            trailingConstraint = messageContainerView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -80)
+            timeLabelConstraint = timeLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+        }
+        
+        // 激活新约束
+        leadingConstraint?.isActive = true
+        trailingConstraint?.isActive = true
+        timeLabelConstraint?.isActive = true
+        
+        // 格式化时间显示
+        let date = Date(timeIntervalSince1970: message.timestamp / 1000)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        timeLabel.text = formatter.string(from: date)
     }
 }
