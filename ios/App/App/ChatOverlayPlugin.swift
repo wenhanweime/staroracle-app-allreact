@@ -17,6 +17,8 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setViewportHeight", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setInitialInput", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFollowUpQuestion", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setInputBottomSpace", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setupBackgroundTransform", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isVisible", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sendMessage", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "receiveAIResponse", returnType: CAPPluginReturnPromise)
@@ -37,6 +39,13 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         let animated = call.getBool("animated") ?? true
         
         DispatchQueue.main.async {
+            // 自动设置背景视图（如果尚未设置）
+            if let webView = self.bridge?.webView,
+               let containerView = webView.superview {
+                NSLog("🎯 自动设置WebView容器为背景视图")
+                self.overlayManager.setBackgroundView(containerView)
+            }
+            
             self.overlayManager.show(animated: animated) { success in
                 if success {
                     call.resolve(["success": true, "visible": true])
@@ -125,6 +134,31 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         
         overlayManager.setFollowUpQuestion(question)
         call.resolve(["success": true])
+    }
+    
+    @objc func setInputBottomSpace(_ call: CAPPluginCall) {
+        let space = call.getFloat("space") ?? 70
+        NSLog("🎯 ChatOverlay setInputBottomSpace: \(space)")
+        
+        overlayManager.setInputBottomSpace(CGFloat(space))
+        call.resolve(["success": true])
+    }
+    
+    @objc func setupBackgroundTransform(_ call: CAPPluginCall) {
+        NSLog("🎯 ChatOverlay setupBackgroundTransform方法被调用!")
+        
+        DispatchQueue.main.async {
+            // 获取当前的WebView容器作为背景视图
+            if let webView = self.bridge?.webView,
+               let containerView = webView.superview {
+                NSLog("🎯 找到WebView容器，设置为背景视图")
+                self.overlayManager.setBackgroundView(containerView)
+                call.resolve(["success": true, "message": "背景视图已设置"])
+            } else {
+                NSLog("⚠️ 未找到合适的背景视图")
+                call.resolve(["success": false, "message": "未找到背景视图"])
+            }
+        }
     }
     
     @objc func isVisible(_ call: CAPPluginCall) {
