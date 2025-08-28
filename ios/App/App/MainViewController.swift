@@ -21,6 +21,10 @@ class MainViewController: CAPBridgeViewController {
         // 注册ChatOverlay插件
         bridge?.registerPluginInstance(ChatOverlayPlugin())
         
+        // 注册InputDrawer插件
+        bridge?.registerPluginInstance(InputDrawerPlugin())
+        
         NSLog("🎯 ChatOverlayPlugin (CAPBridgedPlugin) 注册完成")
+        NSLog("🎯 InputDrawerPlugin (CAPBridgedPlugin) 注册完成")
     }
 }

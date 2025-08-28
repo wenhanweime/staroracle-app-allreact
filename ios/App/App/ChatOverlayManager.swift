@@ -2,6 +2,34 @@ import SwiftUI
 import UIKit
 import Capacitor
 
+// MARK: - PassthroughWindow - 自定义窗口类，支持触摸事件穿透
+class PassthroughWindow: UIWindow {
+    
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // 先让窗口正常处理触摸测试
+        guard let hitView = super.hitTest(point, with: event) else {
+            NSLog("🎯 PassthroughWindow: 没有找到hitView，透传事件")
+            return nil
+        }
+        
+        // 如果点击的是窗口的根视图控制器的根视图（背景视图），则透传
+        if hitView == self.rootViewController?.view {
+            NSLog("🎯 PassthroughWindow: 点击在背景视图上，透传事件")
+            return nil
+        }
+        
+        // 如果点击的是PassthroughView类型的视图，让它自己决定
+        if hitView is ChatPassthroughView {
+            NSLog("🎯 PassthroughWindow: 点击在PassthroughView上，让其自行处理")
+            return hitView
+        }
+        
+        // 其他情况，正常返回hitView（比如点击在实际的UI控件上）
+        NSLog("🎯 PassthroughWindow: 点击在UI控件上，正常处理")
+        return hitView
+    }
+}
+
 // MARK: - ChatOverlay数据模型
 public struct ChatMessage: Codable {
     let id: String
@@ -168,8 +196,8 @@ public class ChatOverlayManager {
     func setInputBottomSpace(_ space: CGFloat) {
         NSLog("🎯 ChatOverlayManager: 设置输入框底部空间: \(space)")
         self.inputBottomSpace = space
-        // 如果浮窗处于收缩状态，更新位置
-        if currentState == .collapsed && overlayViewController != nil {
+        // 实时更新浮窗位置以避开输入框
+        if overlayViewController != nil {
             updateUI(animated: true)
         }
     }
@@ -252,18 +280,28 @@ public class ChatOverlayManager {
     private func createOverlayWindow() {
         NSLog("🎯 ChatOverlayManager: 创建双状态浮窗视图")
         
-        // 创建浮窗窗口
-        overlayWindow = UIWindow(frame: UIScreen.main.bounds)
-        overlayWindow?.windowLevel = UIWindow.Level.statusBar + 1
+        // 创建浮窗窗口 - 使用自定义的PassthroughWindow支持触摸穿透
+        overlayWindow = PassthroughWindow(frame: UIScreen.main.bounds)
+        // 设置层级：确保在星座之上但低于InputDrawer (statusBar-0.5)
+        overlayWindow?.windowLevel = UIWindow.Level.statusBar - 1  // 比InputDrawer低0.5级
         overlayWindow?.backgroundColor = UIColor.clear
+        
+        // 关键：让窗口不阻挡其他交互，只处理容器内的触摸
+        overlayWindow?.isHidden = false
         
         // 创建自定义视图控制器
         overlayViewController = OverlayViewController(manager: self)
         overlayWindow?.rootViewController = overlayViewController
-        overlayWindow?.makeKeyAndVisible()
+        
+        // 不使用makeKeyAndVisible()，避免抢夺焦点，确保InputDrawer始终在最前
+        overlayWindow?.isHidden = false
         
         // 注意：不在这里设置初始状态，由show方法控制
-        NSLog("🎯 ChatOverlayManager: 双状态浮窗创建完成，状态将由show方法设置")
+        NSLog("🎯 ChatOverlayManager: 双状态浮窗创建完成")
+        NSLog("🎯 ChatOverlayManager: 窗口层级: \(overlayWindow?.windowLevel.rawValue ?? 0)")
+        NSLog("🎯 StatusBar层级: \(UIWindow.Level.statusBar.rawValue)")
+        NSLog("🎯 Alert层级: \(UIWindow.Level.alert.rawValue)")
+        NSLog("🎯 Normal层级: \(UIWindow.Level.normal.rawValue)")
     }
     
     private func updateUI(animated: Bool) {
@@ -314,6 +352,33 @@ class OverlayViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        // 在视图出现后设置触摸事件透传
+        setupPassthroughView()
+    }
+    
+    private func setupPassthroughView() {
+        // 使用更简单的方式：PassthroughView作为背景层，不移动现有的视图
+        let passthroughView = ChatPassthroughView()
+        passthroughView.manager = manager
+        passthroughView.containerView = containerView
+        passthroughView.backgroundColor = UIColor.clear
+        
+        // 将PassthroughView插入到view的最底层，不影响现有布局
+        view.insertSubview(passthroughView, at: 0)
+        passthroughView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            passthroughView.topAnchor.constraint(equalTo: view.topAnchor),
+            passthroughView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            passthroughView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            passthroughView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        
+        NSLog("🎯 ChatOverlay: PassthroughView设置完成，保持原有布局")
     }
     
     private func setupUI() {
@@ -527,15 +592,14 @@ class OverlayViewController: UIViewController {
         
         switch state {
         case .collapsed:
-            // 按照原版逻辑计算吸附位置：浮窗顶部 = 输入框底部 - 5px
+            // 收缩状态：在输入框上方留出间隙
             let gap: CGFloat = 5 // 浮窗顶部与输入框底部的间隙
-            let floatingHeight: CGFloat = 65 // 浮窗关闭时高度65px
+            let floatingHeight: CGFloat = 65 // 浮窗收缩时高度65px
             
-            // 浮窗顶部绝对位置 = 屏幕高度 - (inputBottomSpace - gap)
-            let floatingTop = screenHeight - (inputBottomSpace - gap)
-            
-            // 设置约束值
-            containerTopConstraint.constant = floatingTop - floatingHeight
+            // 计算位置：避开输入框区域
+            let inputTop = screenHeight - inputBottomSpace  // 输入框顶部位置
+            let floatingBottom = inputTop - gap  // 浮窗底部位置
+            containerTopConstraint.constant = floatingBottom - floatingHeight
             containerHeightConstraint.constant = floatingHeight
             
             // 收起状态：与输入框一样宽度（屏幕宽度减去左右各16px边距）
@@ -547,12 +611,14 @@ class OverlayViewController: UIViewController {
             backgroundMaskView.alpha = 0
             containerView.layer.cornerRadius = 32.5  // 圆形外观
             
-            NSLog("🎯 收缩状态计算 - gap: \(gap), floatingTop: \(floatingTop), containerTop: \(containerTopConstraint.constant), 宽度边距: 16px")
+            NSLog("🎯 收缩状态计算 - 输入框高度: \(inputBottomSpace)px, 间隙: \(gap)px, containerTop: \(containerTopConstraint.constant)")
             
         case .expanded:
-            // 展开状态：顶部留空80px，覆盖整个屏幕
+            // 展开状态：覆盖大部分屏幕，但为输入框留出空间
+            let expandedBottomMargin = max(inputBottomSpace + 10, 80) // 至少留出输入框空间+10px边距
+            
             containerTopConstraint.constant = max(safeAreaTop, 80)  // 顶部留空
-            containerHeightConstraint.constant = screenHeight - max(safeAreaTop, 80) - safeAreaBottom - 20  // 几乎全屏，底部留20px
+            containerHeightConstraint.constant = screenHeight - max(safeAreaTop, 80) - expandedBottomMargin
             
             // 展开状态：覆盖整个屏幕宽度（无边距）
             containerLeadingConstraint.constant = 0
@@ -563,7 +629,7 @@ class OverlayViewController: UIViewController {
             backgroundMaskView.alpha = 1
             containerView.layer.cornerRadius = 12  // 方形外观
             
-            NSLog("🎯 展开状态计算 - 全屏宽度（无边距）")
+            NSLog("🎯 展开状态计算 - 底部边距: \(expandedBottomMargin)px, 为输入框预留空间")
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
@@ -808,5 +874,45 @@ class MessageTableViewCell: UITableViewCell {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         timeLabel.text = formatter.string(from: date)
+    }
+}
+
+// MARK: - ChatPassthroughView - 处理ChatOverlay触摸事件透传的自定义View
+class ChatPassthroughView: UIView {
+    weak var manager: ChatOverlayManager?
+    weak var containerView: UIView?
+    
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        NSLog("🎯 ChatPassthroughView hitTest: \(point), state: \(manager?.currentState ?? .collapsed)")
+        
+        guard let containerView = containerView else {
+            NSLog("🎯 无containerView，透传触摸事件")
+            return nil // 透传所有触摸
+        }
+        
+        // 将点转换到containerView的坐标系
+        let convertedPoint = convert(point, to: containerView)
+        let containerBounds = containerView.bounds
+        
+        // 如果触摸点在containerView的边界内
+        if containerBounds.contains(convertedPoint) {
+            NSLog("🎯 触摸在ChatOverlay容器内，处理事件")
+            return super.hitTest(point, with: event)
+        } else {
+            NSLog("🎯 触摸在ChatOverlay容器外，透传给下层")
+            // 触摸点在containerView外部，透传给下层
+            return nil
+        }
+    }
+    
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard let containerView = containerView else {
+            return false
+        }
+        
+        let convertedPoint = convert(point, to: containerView)
+        let isInside = containerView.bounds.contains(convertedPoint)
+        NSLog("🎯 ChatPassthroughView point inside: \(point) -> \(isInside)")
+        return isInside
     }
 }

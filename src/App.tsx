@@ -14,7 +14,7 @@ import ConstellationSelector from './components/ConstellationSelector';
 import AIConfigPanel from './components/AIConfigPanel';
 import DrawerMenu from './components/DrawerMenu';
 import Header from './components/Header';
-import ConversationDrawer from './components/ConversationDrawer';
+// import ConversationDrawer from './components/ConversationDrawer'; // 🚫 临时屏蔽 - 专注调试原生InputDrawer
 import ChatOverlay from './components/ChatOverlay'; // React版本（Web端回退）
 import OracleInput from './components/OracleInput';
 import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
@@ -26,6 +26,8 @@ import { ConstellationTemplate } from './types';
 import { checkApiConfiguration, generateAIResponse } from './utils/aiTaggingUtils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
+import { useNativeInputDrawer } from './hooks/useNativeInputDrawer';
+import { InputDrawer } from './plugins/InputDrawer';
 
 function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
@@ -36,6 +38,9 @@ function App() {
   
   // ✨ 原生ChatOverlay Hook
   const nativeChatOverlay = useNativeChatOverlay();
+  
+  // ✨ 原生InputDrawer Hook (测试)
+  const nativeInputDrawer = useNativeInputDrawer();
   
   // 兼容性：Web端仍使用React状态
   const [webChatOverlayOpen, setWebChatOverlayOpen] = useState(false);
@@ -202,11 +207,29 @@ function App() {
             fadeOutDuration: 300
           });
         }, 500);
+
+        // 🎯 设置原生InputDrawer事件监听
+        const messageSubmittedListener = await InputDrawer.addListener('messageSubmitted', (data: any) => {
+          console.log('🎯 收到原生InputDrawer消息提交事件:', data.text);
+          handleSendMessage(data.text);
+        });
+
+        const textChangedListener = await InputDrawer.addListener('textChanged', (data: any) => {
+          console.log('🎯 原生InputDrawer文本变化:', data.text);
+          // 可以在这里处理文本变化逻辑，比如实时预览等
+        });
+
+        // 清理函数
+        return () => {
+          messageSubmittedListener.remove();
+          textChangedListener.remove();
+        };
       } else {
         // Web环境立即设置为准备就绪
         setAppReady(true);
       }
     };
+    
     setupNative();
   }, []);
 
@@ -386,6 +409,39 @@ function App() {
           onLogoClick={handleLogoClick}
         />
 
+        {/* InputDrawer测试按钮 - 仅原生环境显示 */}
+        {isNative && (
+          <div className="fixed top-20 right-4 z-50 space-y-2">
+            <button 
+              onClick={() => nativeInputDrawer.show()} 
+              className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
+            >
+              显示输入框
+            </button>
+            <button 
+              onClick={() => nativeInputDrawer.hide()} 
+              className="bg-red-600 text-white px-3 py-1 rounded text-sm"
+            >
+              隐藏输入框
+            </button>
+            <button 
+              onClick={() => {
+                nativeChatOverlay.show();
+                setTimeout(() => nativeInputDrawer.show(), 1000);
+              }} 
+              className="bg-yellow-600 text-white px-3 py-1 rounded text-sm"
+            >
+              层级测试
+            </button>
+            <div className="text-xs text-white">
+              状态: {nativeInputDrawer.isVisible ? '显示' : '隐藏'}
+            </div>
+            <div className="text-xs text-white">
+              浮窗: {nativeChatOverlay.isOpen ? '展开' : '关闭'}
+            </div>
+          </div>
+        )}
+
         {/* User's constellation - 延迟渲染 */}
         {appReady && <Constellation />}
         
@@ -434,14 +490,14 @@ function App() {
       {/* ✨ 3. 使用 Portal 将 UI 组件渲染到 body 顶层，完全避免 transform 影响 */}
       {ReactDOM.createPortal(
         <>
-          {/* Conversation Drawer - 通过 Portal 直接渲染到 body */}
+          {/* 🚫 临时屏蔽Web版ConversationDrawer - 专注调试原生InputDrawer
           <ConversationDrawer 
             isOpen={true} 
             onToggle={() => {}} 
-            onSendMessage={handleSendMessage} // ✨ 使用新的回调
-            showChatHistory={false}
-            isFloatingAttached={!isChatOverlayOpen} // 浮窗关闭时为吸附状态
+            onSendMessage={handleSendMessage}
+            isFloatingAttached={isNative ? nativeChatOverlay.isOpen : webChatOverlayOpen}
           />
+          */}
           
           {/* Chat Overlay - 根据环境条件渲染 */}
           {!isNative && (
