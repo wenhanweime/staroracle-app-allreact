@@ -4,6 +4,7 @@ import Capacitor
 
 // MARK: - PassthroughWindow - 自定义窗口类，支持触摸事件穿透
 class PassthroughWindow: UIWindow {
+    weak var overlayViewController: OverlayViewController?
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // 先让窗口正常处理触摸测试
@@ -12,21 +13,29 @@ class PassthroughWindow: UIWindow {
             return nil
         }
         
-        // 如果点击的是窗口的根视图控制器的根视图（背景视图），则透传
-        if hitView == self.rootViewController?.view {
-            NSLog("🎯 PassthroughWindow: 点击在背景视图上，透传事件")
-            return nil
-        }
-        
-        // 如果点击的是PassthroughView类型的视图，让它自己决定
-        if hitView is ChatPassthroughView {
-            NSLog("🎯 PassthroughWindow: 点击在PassthroughView上，让其自行处理")
+        // 获取containerView
+        guard let containerView = overlayViewController?.containerView else {
+            // 如果没有containerView，检查是否点击在根视图上
+            if hitView == self.rootViewController?.view {
+                NSLog("🎯 PassthroughWindow: 点击在背景上，透传事件")
+                return nil
+            }
             return hitView
         }
         
-        // 其他情况，正常返回hitView（比如点击在实际的UI控件上）
-        NSLog("🎯 PassthroughWindow: 点击在UI控件上，正常处理")
-        return hitView
+        // 将点转换到containerView的坐标系
+        let convertedPoint = convert(point, to: containerView)
+        
+        // 如果点击在containerView区域内，正常处理
+        if containerView.bounds.contains(convertedPoint) {
+            NSLog("🎯 PassthroughWindow: 点击在ChatOverlay内，正常处理")
+            return hitView
+        }
+        
+        // 如果点击在containerView外，透传事件
+        NSLog("🎯 PassthroughWindow: 点击在ChatOverlay外，透传事件")
+        self.endEditing(true) // 收起键盘
+        return nil // 透传事件
     }
 }
 
@@ -42,6 +51,14 @@ public struct ChatMessage: Codable {
 enum OverlayState {
     case collapsed   // 收缩状态：65px高度
     case expanded    // 展开状态：全屏显示
+    case hidden      // 隐藏状态
+}
+
+// MARK: - ChatOverlay状态变化通知
+extension Notification.Name {
+    static let chatOverlayStateChanged = Notification.Name("chatOverlayStateChanged")
+    static let chatOverlayVisibilityChanged = Notification.Name("chatOverlayVisibilityChanged")
+    static let inputDrawerPositionChanged = Notification.Name("inputDrawerPositionChanged")  // 新增：输入框位置变化通知
 }
 
 // MARK: - ChatOverlayManager业务逻辑类
@@ -57,7 +74,6 @@ public class ChatOverlayManager {
     private var initialInput = ""
     private var followUpQuestion = ""
     private var overlayViewController: OverlayViewController?
-    internal var inputBottomSpace: CGFloat = 70  // 输入框底部空间，默认70px
     
     // 状态变化回调
     private var onStateChange: ((OverlayState) -> Void)?
@@ -80,11 +96,39 @@ public class ChatOverlayManager {
                 if expanded {
                     self.currentState = .expanded
                     self.applyBackgroundTransform(for: .expanded, animated: animated)
+                    // 发送状态通知
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100]
+                    )
                 } else {
                     self.currentState = .collapsed
                     self.applyBackgroundTransform(for: .collapsed, animated: animated)
+                    // 发送状态通知，让InputDrawer先调整位置
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: ["state": "collapsed", "height": 65]
+                    )
                 }
-                self.updateUI(animated: animated)
+                
+                // 稍微延迟更新UI，确保InputDrawer已经调整位置
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.updateUI(animated: animated)
+                }
+                
+                // 发送可见性和状态通知
+                NotificationCenter.default.post(
+                    name: .chatOverlayVisibilityChanged,
+                    object: nil,
+                    userInfo: ["visible": true]
+                )
+                NotificationCenter.default.post(
+                    name: .chatOverlayStateChanged,
+                    object: nil,
+                    userInfo: ["state": expanded ? "expanded" : "collapsed", "height": expanded ? UIScreen.main.bounds.height - 100 : 65]
+                )
                 
                 completion(true)
                 return
@@ -102,14 +146,36 @@ public class ChatOverlayManager {
                     self.overlayWindow?.alpha = 1
                 } completion: { _ in
                     self.isVisible = true
-                    self.updateUI(animated: false) // 立即更新UI状态
+                    
+                    // 初始显示时立即更新UI
+                    self.updateUI(animated: false)
                     self.applyBackgroundTransform(for: self.currentState, animated: true)
+                    
+                    // 发送通知让InputDrawer调整位置
+                    if self.currentState == .collapsed {
+                        NotificationCenter.default.post(
+                            name: .chatOverlayStateChanged,
+                            object: nil,
+                            userInfo: ["state": "collapsed", "height": 65]
+                        )
+                    }
+                    
                     completion(true)
                 }
             } else {
                 self.isVisible = true
                 self.updateUI(animated: false)
                 self.applyBackgroundTransform(for: self.currentState, animated: false)
+                
+                // 发送通知让InputDrawer调整位置
+                if self.currentState == .collapsed {
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: ["state": "collapsed", "height": 65]
+                    )
+                }
+                
                 completion(true)
             }
         }
@@ -127,17 +193,26 @@ public class ChatOverlayManager {
             // 恢复背景状态
             self.applyBackgroundTransform(for: .collapsed, animated: animated)
             
+            // 发送隐藏通知
+            NotificationCenter.default.post(
+                name: .chatOverlayVisibilityChanged,
+                object: nil,
+                userInfo: ["visible": false]
+            )
+            
             if animated {
                 UIView.animate(withDuration: 0.3) {
                     window.alpha = 0
                 } completion: { _ in
                     window.isHidden = true
                     self.isVisible = false
+                    self.currentState = .hidden
                     completion()
                 }
             } else {
                 window.isHidden = true
                 self.isVisible = false
+                self.currentState = .hidden
                 completion()
             }
         }
@@ -194,12 +269,8 @@ public class ChatOverlayManager {
     }
     
     func setInputBottomSpace(_ space: CGFloat) {
-        NSLog("🎯 ChatOverlayManager: 设置输入框底部空间: \(space)")
-        self.inputBottomSpace = space
-        // 实时更新浮窗位置以避开输入框
-        if overlayViewController != nil {
-            updateUI(animated: true)
-        }
+        NSLog("🎯 ChatOverlayManager: InputDrawer位置设置为: \(space)px")
+        // 注意：浮窗位置固定，无需根据输入框位置调整
     }
     
     func getVisibility() -> Bool {
@@ -211,9 +282,20 @@ public class ChatOverlayManager {
     func switchToCollapsed() {
         NSLog("🎯 ChatOverlayManager: 切换到收缩状态")
         currentState = .collapsed
+        
+        // 先发送状态变化通知，让InputDrawer调整位置
+        NotificationCenter.default.post(
+            name: .chatOverlayStateChanged,
+            object: nil,
+            userInfo: ["state": "collapsed", "height": 65]
+        )
+        
+        // 立即更新UI（但此时输入框可能还没移动完）
         updateUI(animated: true)
         applyBackgroundTransform(for: .collapsed, animated: true)
         onStateChange?(.collapsed)
+        
+        // 注意：浮窗位置会在收到inputDrawerPositionChanged通知后自动更新
     }
     
     func switchToExpanded() {
@@ -222,6 +304,13 @@ public class ChatOverlayManager {
         updateUI(animated: true)
         applyBackgroundTransform(for: .expanded, animated: true)
         onStateChange?(.expanded)
+        
+        // 发送状态变化通知
+        NotificationCenter.default.post(
+            name: .chatOverlayStateChanged,
+            object: nil,
+            userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100]
+        )
     }
     
     func toggleState() {
@@ -267,8 +356,8 @@ public class ChatOverlayManager {
                 backgroundView.layer.transform = transform
                 backgroundView.alpha = 0.6  // 降低亮度到60%
                 
-            case .collapsed:
-                // 收缩状态：还原到原始状态
+            case .collapsed, .hidden:
+                // 收缩状态或隐藏状态：还原到原始状态
                 backgroundView.layer.transform = CATransform3DIdentity
                 backgroundView.alpha = 1.0  // 恢复原始亮度
             }
@@ -281,24 +370,30 @@ public class ChatOverlayManager {
         NSLog("🎯 ChatOverlayManager: 创建双状态浮窗视图")
         
         // 创建浮窗窗口 - 使用自定义的PassthroughWindow支持触摸穿透
-        overlayWindow = PassthroughWindow(frame: UIScreen.main.bounds)
+        let window = PassthroughWindow(frame: UIScreen.main.bounds)
         // 设置层级：确保在星座之上但低于InputDrawer (statusBar-0.5)
-        overlayWindow?.windowLevel = UIWindow.Level.statusBar - 1  // 比InputDrawer低0.5级
-        overlayWindow?.backgroundColor = UIColor.clear
+        window.windowLevel = UIWindow.Level.statusBar - 1  // 比InputDrawer低0.5级
+        window.backgroundColor = UIColor.clear
         
         // 关键：让窗口不阻挡其他交互，只处理容器内的触摸
-        overlayWindow?.isHidden = false
+        window.isHidden = false
         
         // 创建自定义视图控制器
         overlayViewController = OverlayViewController(manager: self)
-        overlayWindow?.rootViewController = overlayViewController
+        window.rootViewController = overlayViewController
+        
+        // 设置窗口对视图控制器的引用
+        window.overlayViewController = overlayViewController
+        
+        // 保存窗口引用
+        overlayWindow = window
         
         // 不使用makeKeyAndVisible()，避免抢夺焦点，确保InputDrawer始终在最前
-        overlayWindow?.isHidden = false
+        window.isHidden = false
         
         // 注意：不在这里设置初始状态，由show方法控制
         NSLog("🎯 ChatOverlayManager: 双状态浮窗创建完成")
-        NSLog("🎯 ChatOverlayManager: 窗口层级: \(overlayWindow?.windowLevel.rawValue ?? 0)")
+        NSLog("🎯 ChatOverlayManager: 窗口层级: \(window.windowLevel.rawValue)")
         NSLog("🎯 StatusBar层级: \(UIWindow.Level.statusBar.rawValue)")
         NSLog("🎯 Alert层级: \(UIWindow.Level.alert.rawValue)")
         NSLog("🎯 Normal层级: \(UIWindow.Level.normal.rawValue)")
@@ -323,7 +418,7 @@ public class ChatOverlayManager {
 // MARK: - OverlayViewController - 处理双状态UI显示
 class OverlayViewController: UIViewController {
     private weak var manager: ChatOverlayManager?
-    private var containerView: UIView!
+    internal var containerView: UIView!  // 改为internal让PassthroughWindow可以访问
     private var collapsedView: UIView!
     private var expandedView: UIView!
     private var backgroundMaskView: UIView!
@@ -352,6 +447,7 @@ class OverlayViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
+        setupInputDrawerObservers()  // 新增：监听输入框位置变化
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -359,6 +455,17 @@ class OverlayViewController: UIViewController {
         
         // 在视图出现后设置触摸事件透传
         setupPassthroughView()
+    }
+    
+    private func setupInputDrawerObservers() {
+        // 注意：浮窗位置固定，不需要监听输入框位置变化
+        // 只有InputDrawer会根据浮窗状态调整自己的位置
+        NSLog("🎯 ChatOverlay: 浮窗使用固定位置，无需监听InputDrawer位置变化")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        NSLog("🎯 ChatOverlay: 移除所有通知观察者")
     }
     
     private func setupPassthroughView() {
@@ -585,21 +692,29 @@ class OverlayViewController: UIViewController {
         let safeAreaTop = view.safeAreaLayoutGuide.layoutFrame.minY
         let safeAreaBottom = screenHeight - view.safeAreaLayoutGuide.layoutFrame.maxY
         
-        // 从manager获取inputBottomSpace
-        let inputBottomSpace = manager?.inputBottomSpace ?? 70
-        
-        NSLog("🎯 更新UI状态: \(state), 屏幕高度: \(screenHeight), 安全区顶部: \(safeAreaTop), 安全区底部: \(safeAreaBottom), 输入框底部空间: \(inputBottomSpace)")
+        NSLog("🎯 更新UI状态: \(state), 屏幕高度: \(screenHeight), 安全区顶部: \(safeAreaTop), 安全区底部: \(safeAreaBottom)")
         
         switch state {
         case .collapsed:
-            // 收缩状态：在输入框上方留出间隙
-            let gap: CGFloat = 5 // 浮窗顶部与输入框底部的间隙
-            let floatingHeight: CGFloat = 65 // 浮窗收缩时高度65px
+            // 收缩状态：浮窗顶部与收缩状态下输入框底部-10px对齐
+            let floatingHeight: CGFloat = 65
+            let gap: CGFloat = 10  // 浮窗顶部与输入框底部的间隙
             
-            // 计算位置：避开输入框区域
-            let inputTop = screenHeight - inputBottomSpace  // 输入框顶部位置
-            let floatingBottom = inputTop - gap  // 浮窗底部位置
-            containerTopConstraint.constant = floatingBottom - floatingHeight
+            // InputDrawer在collapsed状态下的bottomSpace是40px（降低整体高度50px）
+            let inputBottomSpaceCollapsed: CGFloat = 40
+            
+            // 计算输入框在collapsed状态下的底部位置
+            // 输入框底部 = 屏幕高度 - 安全区底部 - bottomSpace
+            let inputDrawerBottomCollapsed = screenHeight - safeAreaBottom - inputBottomSpaceCollapsed
+            
+            // 浮窗顶部 = 输入框底部 + 间隙
+            // 浮窗在输入框下方10px
+            let floatingTop = inputDrawerBottomCollapsed + gap
+            
+            // 转换为相对于安全区顶部的坐标
+            let relativeTopFromSafeArea = floatingTop - safeAreaTop
+            
+            containerTopConstraint.constant = relativeTopFromSafeArea
             containerHeightConstraint.constant = floatingHeight
             
             // 收起状态：与输入框一样宽度（屏幕宽度减去左右各16px边距）
@@ -611,11 +726,12 @@ class OverlayViewController: UIViewController {
             backgroundMaskView.alpha = 0
             containerView.layer.cornerRadius = 32.5  // 圆形外观
             
-            NSLog("🎯 收缩状态计算 - 输入框高度: \(inputBottomSpace)px, 间隙: \(gap)px, containerTop: \(containerTopConstraint.constant)")
+            NSLog("🎯 收缩状态 - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
             
         case .expanded:
-            // 展开状态：覆盖大部分屏幕，但为输入框留出空间
-            let expandedBottomMargin = max(inputBottomSpace + 10, 80) // 至少留出输入框空间+10px边距
+            // 展开状态：覆盖大部分屏幕，底部留出空间给输入框
+            // 这里可以假设输入框会自动调整位置
+            let expandedBottomMargin: CGFloat = 80 // 给输入框预留足够空间
             
             containerTopConstraint.constant = max(safeAreaTop, 80)  // 顶部留空
             containerHeightConstraint.constant = screenHeight - max(safeAreaTop, 80) - expandedBottomMargin
@@ -629,7 +745,12 @@ class OverlayViewController: UIViewController {
             backgroundMaskView.alpha = 1
             containerView.layer.cornerRadius = 12  // 方形外观
             
-            NSLog("🎯 展开状态计算 - 底部边距: \(expandedBottomMargin)px, 为输入框预留空间")
+            NSLog("🎯 展开状态 - 底部边距: \(expandedBottomMargin)px")
+            
+        case .hidden:
+            // 隐藏状态：不显示
+            containerView.alpha = 0
+            NSLog("🎯 隐藏状态")
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")

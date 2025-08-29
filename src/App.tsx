@@ -219,6 +219,10 @@ function App() {
           // 可以在这里处理文本变化逻辑，比如实时预览等
         });
 
+        // 🎯 自动显示输入框
+        console.log('🎯 自动显示原生InputDrawer');
+        await InputDrawer.show();
+
         // 清理函数
         return () => {
           messageSubmittedListener.remove();
@@ -408,39 +412,6 @@ function App() {
           onOpenDrawerMenu={handleOpenDrawerMenu}
           onLogoClick={handleLogoClick}
         />
-
-        {/* InputDrawer测试按钮 - 仅原生环境显示 */}
-        {isNative && (
-          <div className="fixed top-20 right-4 z-50 space-y-2">
-            <button 
-              onClick={() => nativeInputDrawer.show()} 
-              className="bg-blue-600 text-white px-3 py-1 rounded text-sm"
-            >
-              显示输入框
-            </button>
-            <button 
-              onClick={() => nativeInputDrawer.hide()} 
-              className="bg-red-600 text-white px-3 py-1 rounded text-sm"
-            >
-              隐藏输入框
-            </button>
-            <button 
-              onClick={() => {
-                nativeChatOverlay.show();
-                setTimeout(() => nativeInputDrawer.show(), 1000);
-              }} 
-              className="bg-yellow-600 text-white px-3 py-1 rounded text-sm"
-            >
-              层级测试
-            </button>
-            <div className="text-xs text-white">
-              状态: {nativeInputDrawer.isVisible ? '显示' : '隐藏'}
-            </div>
-            <div className="text-xs text-white">
-              浮窗: {nativeChatOverlay.isOpen ? '展开' : '关闭'}
-            </div>
-          </div>
-        )}
 
         {/* User's constellation - 延迟渲染 */}
         {appReady && <Constellation />}

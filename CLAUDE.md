@@ -6,3 +6,5 @@
 - 当需要编译xcode项目 并且运行的时候,请使用 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
 - 当需要编译xcode项目 并且运行的时候,请使用 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
 - 当需要编译xcode项目 并且运行的时候,请使用 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
+- 对于许多功能,可能与存在原生版本swift和react版本,默认情况下如果有原生版本我们的修改都是指的原生版本
+- 当用户说出问题让你修改的时候,请遵循分析问题,确认问题原因,制定计划,解决问题的四步策略.

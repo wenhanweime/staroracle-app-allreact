@@ -4,6 +4,7 @@ import Capacitor
 
 // MARK: - InputPassthroughWindow - 自定义窗口类，支持触摸事件穿透
 class InputPassthroughWindow: UIWindow {
+    weak var inputDrawerViewController: InputViewController?  // 改名避免与系统属性冲突
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
         // 先让窗口正常处理触摸测试
@@ -12,15 +13,30 @@ class InputPassthroughWindow: UIWindow {
             return nil
         }
         
-        // 如果点击的是窗口的根视图控制器的根视图（背景视图），则透传
+        // 如果点击的是窗口的根视图控制器的根视图（背景视图）
         if hitView == self.rootViewController?.view {
-            NSLog("🎯 InputPassthroughWindow: 点击在背景视图上，透传事件")
-            return nil
+            NSLog("🎯 InputPassthroughWindow: 点击在背景视图上，收起键盘并透传事件")
+            // 收起键盘
+            inputDrawerViewController?.textField.resignFirstResponder()
+            return nil // 透传事件
         }
         
-        // 如果点击的是PassthroughView类型的视图，让它自己决定
-        if hitView is PassthroughView {
-            NSLog("🎯 InputPassthroughWindow: 点击在PassthroughView上，让其自行处理")
+        // 如果点击的是PassthroughView类型的视图
+        if let passthroughView = hitView as? PassthroughView {
+            NSLog("🎯 InputPassthroughWindow: 点击在PassthroughView上")
+            
+            // 检查是否点击在容器外
+            if let containerView = passthroughView.containerView {
+                let convertedPoint = passthroughView.convert(point, to: containerView)
+                if !containerView.bounds.contains(convertedPoint) {
+                    NSLog("🎯 点击在输入框容器外，收起键盘")
+                    // 点击在容器外，收起键盘
+                    inputDrawerViewController?.textField.resignFirstResponder()
+                    return nil // 透传事件
+                }
+            }
+            
+            // 点击在容器内，正常处理
             return hitView
         }
         
@@ -44,7 +60,7 @@ public class InputDrawerManager {
     private var isVisible = false
     private var currentText = ""
     internal var placeholder = "输入文字..." // 改为internal让InputViewController访问
-    internal var bottomSpace: CGFloat = 100 // 改为internal让InputViewController访问
+    internal var bottomSpace: CGFloat = 20 // 默认20px，匹配React版本
     private var inputViewController: InputViewController?
     
     // 事件代理
@@ -149,22 +165,28 @@ public class InputDrawerManager {
         NSLog("🎯 InputDrawerManager: 创建输入框窗口")
         
         // 创建输入框窗口 - 使用自定义的InputPassthroughWindow支持触摸穿透
-        inputWindow = InputPassthroughWindow(frame: UIScreen.main.bounds)
-        inputWindow?.windowLevel = UIWindow.Level.statusBar - 0.5  // 略低于statusBar，但高于普通窗口
-        inputWindow?.backgroundColor = UIColor.clear
+        let window = InputPassthroughWindow(frame: UIScreen.main.bounds)
+        window.windowLevel = UIWindow.Level.statusBar - 0.5  // 略低于statusBar，但高于普通窗口
+        window.backgroundColor = UIColor.clear
         
         // 关键：让窗口不阻挡其他交互，只处理输入框区域的触摸
-        inputWindow?.isHidden = false
+        window.isHidden = false
         
         // 创建输入框视图控制器
         inputViewController = InputViewController(manager: self)
-        inputWindow?.rootViewController = inputViewController
+        window.rootViewController = inputViewController
+        
+        // 设置窗口对视图控制器的引用，用于收起键盘
+        window.inputDrawerViewController = inputViewController  // 使用新的属性名
+        
+        // 保存窗口引用
+        inputWindow = window
         
         // 不使用makeKeyAndVisible()，避免抢夺焦点，让触摸事件更容易透传
-        inputWindow?.isHidden = false
+        window.isHidden = false
         
         NSLog("🎯 InputDrawerManager: 输入框窗口创建完成")
-        NSLog("🎯 InputDrawer窗口层级: \(inputWindow?.windowLevel.rawValue ?? 0)")
+        NSLog("🎯 InputDrawer窗口层级: \(window.windowLevel.rawValue)")
         NSLog("🎯 StatusBar层级: \(UIWindow.Level.statusBar.rawValue)")
         NSLog("🎯 Alert层级: \(UIWindow.Level.alert.rawValue)")
         NSLog("🎯 Normal层级: \(UIWindow.Level.normal.rawValue)")
@@ -198,13 +220,16 @@ public class InputDrawerManager {
 class InputViewController: UIViewController {
     private weak var manager: InputDrawerManager?
     private var containerView: UIView!
-    private var textField: UITextField!
+    internal var textField: UITextField!  // 改为internal让InputPassthroughWindow可以访问
     private var sendButton: UIButton!
     private var micButton: UIButton!
     private var awarenessView: FloatingAwarenessPlanetView!
     
     // 约束
     private var containerBottomConstraint: NSLayoutConstraint!
+    
+    // 添加属性来保存键盘出现前的位置
+    private var bottomSpaceBeforeKeyboard: CGFloat = 20
     
     init(manager: InputDrawerManager) {
         self.manager = manager
@@ -219,6 +244,7 @@ class InputViewController: UIViewController {
         super.viewDidLoad()
         setupUI()
         setupKeyboardObservers()
+        setupChatOverlayObservers()  // 新增：监听ChatOverlay状态
         
         // 关键：让view只处理输入框区域的触摸，其他区域透传
         view.backgroundColor = UIColor.clear
@@ -232,6 +258,11 @@ class InputViewController: UIViewController {
         
         // 在视图出现后设置触摸事件透传
         setupPassthroughView()
+        
+        // 发送初始位置通知，让ChatOverlay知道输入框的初始位置
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.notifyInputDrawerActualPosition()
+        }
     }
     
     private func setupPassthroughView() {
@@ -321,7 +352,7 @@ class InputViewController: UIViewController {
         containerView.addSubview(micButton)
         
         // 设置约束 - 完全匹配原版：左侧觉察动画 + 输入框 + 右侧按钮组
-        containerBottomConstraint = containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -(manager?.bottomSpace ?? 100))
+        containerBottomConstraint = containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -(manager?.bottomSpace ?? 20))
         
         NSLayoutConstraint.activate([
             // 容器约束 - 匹配原版h-12 = 48px高度
@@ -355,6 +386,71 @@ class InputViewController: UIViewController {
         ])
     }
     
+    private func setupChatOverlayObservers() {
+        // 监听ChatOverlay状态变化
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(chatOverlayStateChanged(_:)),
+            name: Notification.Name("chatOverlayStateChanged"),
+            object: nil
+        )
+        
+        // 监听ChatOverlay可见性变化
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(chatOverlayVisibilityChanged(_:)),
+            name: Notification.Name("chatOverlayVisibilityChanged"),
+            object: nil
+        )
+        
+        NSLog("🎯 InputDrawer: 开始监听ChatOverlay状态变化")
+    }
+    
+    @objc private func chatOverlayStateChanged(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let state = userInfo["state"] as? String else { return }
+        
+        NSLog("🎯 InputDrawer: 收到ChatOverlay状态变化通知 - \(state)")
+        
+        // 根据ChatOverlay状态调整输入框位置
+        switch state {
+        case "collapsed":
+            // ChatOverlay收缩状态：浮窗在输入框下方，输入框需要往上移动为浮窗留出空间
+            // 降低整体高度50px：浮窗高度65px + 浮窗顶部与输入框底部间距10px + 浮窗底部安全间距15px - 50px = 40px
+            let newBottomSpace: CGFloat = 40
+            updateBottomSpace(newBottomSpace)
+            NSLog("🎯 InputDrawer: 移动到collapsed位置，bottomSpace: \(newBottomSpace)")
+            
+        case "expanded":
+            // ChatOverlay展开状态：输入框回到原始位置
+            let originalBottomSpace: CGFloat = 20
+            updateBottomSpace(originalBottomSpace)
+            NSLog("🎯 InputDrawer: 回到expanded位置，bottomSpace: \(originalBottomSpace)")
+            
+        case "hidden":
+            // ChatOverlay隐藏：输入框回到原始位置
+            let originalBottomSpace: CGFloat = 20
+            updateBottomSpace(originalBottomSpace)
+            NSLog("🎯 InputDrawer: 回到hidden位置，bottomSpace: \(originalBottomSpace)")
+            
+        default:
+            break
+        }
+    }
+    
+    @objc private func chatOverlayVisibilityChanged(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let visible = userInfo["visible"] as? Bool else { return }
+        
+        NSLog("🎯 InputDrawer: ChatOverlay可见性变化 - \(visible)")
+        
+        if !visible {
+            // ChatOverlay隐藏：输入框回到原始位置
+            let originalBottomSpace: CGFloat = 20
+            updateBottomSpace(originalBottomSpace)
+        }
+    }
+    
     private func setupKeyboardObservers() {
         NotificationCenter.default.addObserver(
             self,
@@ -373,6 +469,7 @@ class InputViewController: UIViewController {
     
     deinit {
         NotificationCenter.default.removeObserver(self)
+        NSLog("🎯 InputDrawer: 移除所有通知观察者")
     }
     
     // MARK: - Public Methods
@@ -387,10 +484,29 @@ class InputViewController: UIViewController {
     }
     
     func updateBottomSpace(_ space: CGFloat) {
+        // 检查是否真的需要更新
+        let oldSpace = manager?.bottomSpace ?? 20
+        if abs(oldSpace - space) < 1 {
+            NSLog("🎯 InputDrawer: 位置未发生显著变化，跳过更新")
+            return
+        }
+        
+        // 更新管理器中的bottomSpace值
+        manager?.bottomSpace = space
+        
+        // 更新UI约束
         containerBottomConstraint.constant = -space
         UIView.animate(withDuration: 0.3) {
             self.view.layoutIfNeeded()
         }
+        
+        // 发送逻辑位置变化通知
+        NotificationCenter.default.post(
+            name: Notification.Name("inputDrawerPositionChanged"),
+            object: nil,
+            userInfo: ["bottomSpace": space]
+        )
+        NSLog("🎯 InputDrawer: 发送逻辑位置变化通知，bottomSpace: \(space)")
     }
     
     func focusInput() {
@@ -435,20 +551,60 @@ class InputViewController: UIViewController {
     @objc private func keyboardWillShow(_ notification: Notification) {
         guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
         
+        // 保存键盘出现前的位置
+        bottomSpaceBeforeKeyboard = manager?.bottomSpace ?? 20
+        NSLog("🎯 键盘即将显示，保存当前bottomSpace: \(bottomSpaceBeforeKeyboard)")
+        
         let keyboardHeight = keyboardFrame.height
-        containerBottomConstraint.constant = -keyboardHeight - 16
+        // 获取安全区底部高度
+        let safeAreaBottom = view.safeAreaInsets.bottom
+        
+        // 计算输入框应该在键盘上方的位置
+        // 键盘高度包含了安全区，所以要减去安全区高度避免重复计算
+        let actualKeyboardHeight = keyboardHeight - safeAreaBottom
+        containerBottomConstraint.constant = -actualKeyboardHeight - 16
+        
+        NSLog("🎯 键盘高度: \(keyboardHeight), 安全区: \(safeAreaBottom), 实际键盘高度: \(actualKeyboardHeight)")
         
         UIView.animate(withDuration: 0.3) {
             self.view.layoutIfNeeded()
+        } completion: { _ in
+            // 动画完成后，通知ChatOverlay输入框的新位置
+            self.notifyInputDrawerActualPosition()
         }
     }
     
     @objc private func keyboardWillHide(_ notification: Notification) {
-        containerBottomConstraint.constant = -(manager?.bottomSpace ?? 100)
+        // 恢复到键盘出现前的位置
+        containerBottomConstraint.constant = -bottomSpaceBeforeKeyboard
+        NSLog("🎯 键盘即将隐藏，恢复到位置: \(bottomSpaceBeforeKeyboard)")
         
         UIView.animate(withDuration: 0.3) {
             self.view.layoutIfNeeded()
+        } completion: { _ in
+            // 动画完成后，通知ChatOverlay输入框的新位置
+            self.notifyInputDrawerActualPosition()
         }
+    }
+    
+    // MARK: - 通知ChatOverlay输入框的实际屏幕位置
+    private func notifyInputDrawerActualPosition() {
+        // 计算输入框底部在屏幕中的实际Y坐标
+        let containerFrame = containerView.frame
+        let containerBottom = containerFrame.maxY
+        let screenHeight = UIScreen.main.bounds.height
+        
+        // 计算输入框底部距离屏幕底部的实际距离
+        let actualBottomSpaceFromScreen = screenHeight - containerBottom
+        
+        NSLog("🎯 InputDrawer实际位置 - 容器底部Y: \(containerBottom), 屏幕高度: \(screenHeight), 实际底部距离: \(actualBottomSpaceFromScreen)")
+        
+        // 通知ChatOverlay输入框的实际屏幕位置
+        NotificationCenter.default.post(
+            name: Notification.Name("inputDrawerActualPositionChanged"),
+            object: nil,
+            userInfo: ["actualBottomSpace": actualBottomSpaceFromScreen]
+        )
     }
 }
 
