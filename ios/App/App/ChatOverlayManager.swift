@@ -290,12 +290,15 @@ public class ChatOverlayManager {
             userInfo: ["state": "collapsed", "height": 65]
         )
         
-        // 立即更新UI（但此时输入框可能还没移动完）
-        updateUI(animated: true)
+        // 延迟更新UI，等待InputDrawer完成位置调整（从0.0改为0.2秒）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.updateUI(animated: true)
+        }
+        
         applyBackgroundTransform(for: .collapsed, animated: true)
         onStateChange?(.collapsed)
         
-        // 注意：浮窗位置会在收到inputDrawerPositionChanged通知后自动更新
+        // 注意：浮窗位置会在延迟后更新，确保基于正确的InputDrawer位置
     }
     
     func switchToExpanded() {
@@ -502,6 +505,8 @@ class OverlayViewController: UIViewController {
         containerView = UIView()
         containerView.backgroundColor = UIColor.systemGray6
         containerView.layer.cornerRadius = 12
+        // 设置只有顶部两个角为圆角，营造从屏幕底部延伸上来的效果
+        containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         containerView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(containerView)
         
@@ -724,7 +729,9 @@ class OverlayViewController: UIViewController {
             collapsedView.alpha = 1
             expandedView.alpha = 0
             backgroundMaskView.alpha = 0
-            containerView.layer.cornerRadius = 32.5  // 圆形外观
+            // 收缩状态圆角：恢复原始12px圆角
+            containerView.layer.cornerRadius = 12
+            containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             
             NSLog("🎯 收缩状态 - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
             
@@ -743,7 +750,9 @@ class OverlayViewController: UIViewController {
             collapsedView.alpha = 0
             expandedView.alpha = 1
             backgroundMaskView.alpha = 1
-            containerView.layer.cornerRadius = 12  // 方形外观
+            // 展开状态圆角：恢复原始12px圆角
+            containerView.layer.cornerRadius = 12
+            containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             
             NSLog("🎯 展开状态 - 底部边距: \(expandedBottomMargin)px")
             

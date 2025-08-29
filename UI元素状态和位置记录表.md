@@ -121,7 +121,8 @@
 | 属性 | 数值 | 说明 |
 |------|------|------|
 | 高度 | 65px | 固定高度，永不改变 |
-| 圆角半径 | 32.5px | collapsed状态圆形外观 |
+| 圆角半径 | 32.5px | collapsed状态顶部圆角 |
+| 圆角样式 | 顶部圆角 | maskedCorners: 只有上边两个角圆角，营造从屏幕外延伸进来的效果 |
 | 左边距 | leading: 16px | 距离屏幕左边缘，与输入框对齐 |
 | 右边距 | trailing: 16px | 距离屏幕右边缘，与输入框对齐 |
 | 实际宽度 | screenWidth - 32px | 与输入框相同宽度 |
@@ -178,6 +179,10 @@ containerTrailingConstraint = containerView.trailingAnchor.constraint(
     equalTo: view.trailingAnchor, 
     constant: -16
 )
+
+// 5. 设置圆角样式：只有顶部圆角，营造延伸效果
+containerView.layer.cornerRadius = 32.5
+containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 ```
 
 **验证坐标**: (16, screenHeight-safeAreaBottom-30) → (screenWidth-16, screenHeight-safeAreaBottom+35)
@@ -213,6 +218,10 @@ containerTopConstraint.constant = topMargin - safeAreaTop  // 转换为相对安
 containerHeightConstraint.constant = expandedHeight
 containerLeadingConstraint.constant = 0   // 覆盖整个屏幕宽度
 containerTrailingConstraint.constant = 0
+
+// 4. 设置圆角样式：只有顶部圆角，营造延伸效果
+containerView.layer.cornerRadius = 12
+containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
 ```
 
 **验证坐标**: (0, max(safeAreaTop, 80)) → (screenWidth, screenHeight-safeAreaBottom-80)
@@ -221,7 +230,8 @@ containerTrailingConstraint.constant = 0
 | 属性 | 计算方式 | 说明 |
 |------|----------|------|
 | 实际高度 | screenHeight - max(safeAreaTop, 80) - safeAreaBottom - 80 | 动态计算显示区域 |
-| 圆角半径 | 12px | 方形外观 |
+| 圆角半径 | 12px | 展开状态顶部圆角 |
+| 圆角样式 | 顶部圆角 | maskedCorners: 只有上边两个角圆角 |
 | 背景遮罩 | 全屏覆盖 | 透明度alpha = 1 |
 
 #### 3. Hidden（隐藏状态）
@@ -381,3 +391,4 @@ NSLog("🎯 [组件名] 状态: [状态名] - 位置: (x: [X坐标], y: [Y坐标
 3. **输入框与浮窗的10px间距是设计规范，必须严格遵守**
 4. **键盘处理要确保位置恢复的准确性**
 5. **窗口层级确保输入框始终在浮窗前面，便于用户交互**
+6. **圆角样式使用maskedCorners只显示顶部圆角，营造从屏幕底部延伸上来的视觉效果**
