@@ -112,6 +112,7 @@ function App() {
   // ✨ 重构 handleSendMessage 支持原生和Web模式
   const handleSendMessage = async (inputText: string) => {
     console.log('🔍 App.tsx: 接收到发送请求', inputText, '原生模式:', isNative);
+    console.log('🔍 当前nativeChatOverlay.isOpen状态:', nativeChatOverlay.isOpen);
 
     if (isNative) {
       // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
@@ -122,6 +123,9 @@ function App() {
         console.log('📱 原生浮窗未打开，先打开浮窗');
         await nativeChatOverlay.showOverlay(true);
         await new Promise(resolve => setTimeout(resolve, 300)); // 等待浮窗完全打开
+        console.log('📱 浮窗打开完成，当前isOpen状态:', nativeChatOverlay.isOpen);
+      } else {
+        console.log('📱 原生浮窗已打开，跳过显示步骤');
       }
       
       // 添加用户消息到store

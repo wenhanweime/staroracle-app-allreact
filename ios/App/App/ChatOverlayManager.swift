@@ -90,6 +90,7 @@ public class ChatOverlayManager {
             if self.overlayWindow != nil {
                 NSLog("🎯 浮窗已存在，直接显示并设置状态")
                 self.overlayWindow?.isHidden = false
+                self.overlayWindow?.alpha = 1  // 🔧 修复：恢复alpha值
                 self.isVisible = true
                 
                 // 根据参数设置初始状态
@@ -184,6 +185,10 @@ public class ChatOverlayManager {
     func hide(animated: Bool = true, completion: @escaping () -> Void = {}) {
         NSLog("🎯 ChatOverlayManager: 隐藏浮窗")
         
+        // 立即更新状态，不等动画完成
+        self.isVisible = false
+        self.currentState = .hidden
+        
         DispatchQueue.main.async {
             guard let window = self.overlayWindow else {
                 completion()
@@ -205,14 +210,10 @@ public class ChatOverlayManager {
                     window.alpha = 0
                 } completion: { _ in
                     window.isHidden = true
-                    self.isVisible = false
-                    self.currentState = .hidden
                     completion()
                 }
             } else {
                 window.isHidden = true
-                self.isVisible = false
-                self.currentState = .hidden
                 completion()
             }
         }
@@ -301,6 +302,26 @@ public class ChatOverlayManager {
         // 注意：浮窗位置会在延迟后更新，确保基于正确的InputDrawer位置
     }
     
+    // 新增：专门用于拖拽切换的流畅方法，无延迟
+    func switchToCollapsedFromDrag() {
+        NSLog("🎯 ChatOverlayManager: 从拖拽切换到收缩状态（无延迟）")
+        currentState = .collapsed
+        
+        // 发送状态变化通知
+        NotificationCenter.default.post(
+            name: .chatOverlayStateChanged,
+            object: nil,
+            userInfo: ["state": "collapsed", "height": 65]
+        )
+        
+        // 立即更新UI和背景，创造流畅的拖拽体验
+        updateUI(animated: true)
+        applyBackgroundTransform(for: .collapsed, animated: true)
+        onStateChange?(.collapsed)
+        
+        NSLog("🎯 拖拽切换完成，UI和背景同步更新")
+    }
+    
     func switchToExpanded() {
         NSLog("🎯 ChatOverlayManager: 切换到展开状态")
         currentState = .expanded
@@ -343,28 +364,50 @@ public class ChatOverlayManager {
         
         NSLog("🎯 应用背景3D变换，状态: \(state)")
         
-        let duration = animated ? 0.5 : 0.0
-        let options: UIView.AnimationOptions = [.curveEaseInOut, .allowUserInteraction]
-        
-        UIView.animate(withDuration: duration, delay: 0, options: options, animations: {
+        if animated {
+            // 使用与浮窗相同的春天动效参数，实现协调的过渡效果
+            UIView.animate(withDuration: 0.6,
+                         delay: 0,
+                         usingSpringWithDamping: 0.8,
+                         initialSpringVelocity: 0.5,
+                         options: [.allowUserInteraction, .curveEaseInOut],
+                         animations: {
+                switch state {
+                case .expanded:
+                    // 展开状态：缩放0.92，向上移动15px，绕X轴旋转4度，降低亮度
+                    var transform = CATransform3DIdentity
+                    transform.m34 = -1.0 / 1000.0  // 设置透视效果
+                    transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
+                    transform = CATransform3DTranslate(transform, 0, -15, 0)
+                    transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)  // 绕X轴旋转4度
+                    
+                    backgroundView.layer.transform = transform
+                    backgroundView.alpha = 0.6  // 降低亮度到60%
+                    
+                case .collapsed, .hidden:
+                    // 收缩状态或隐藏状态：还原到原始状态
+                    backgroundView.layer.transform = CATransform3DIdentity
+                    backgroundView.alpha = 1.0  // 恢复原始亮度
+                }
+            }, completion: nil)
+        } else {
+            // 无动画模式：立即设置状态
             switch state {
             case .expanded:
-                // 展开状态：缩放0.92，向上移动15px，绕X轴旋转4度，降低亮度
                 var transform = CATransform3DIdentity
-                transform.m34 = -1.0 / 1000.0  // 设置透视效果
+                transform.m34 = -1.0 / 1000.0
                 transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
                 transform = CATransform3DTranslate(transform, 0, -15, 0)
-                transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)  // 绕X轴旋转4度
+                transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)
                 
                 backgroundView.layer.transform = transform
-                backgroundView.alpha = 0.6  // 降低亮度到60%
+                backgroundView.alpha = 0.6
                 
             case .collapsed, .hidden:
-                // 收缩状态或隐藏状态：还原到原始状态
                 backgroundView.layer.transform = CATransform3DIdentity
-                backgroundView.alpha = 1.0  // 恢复原始亮度
+                backgroundView.alpha = 1.0
             }
-        }, completion: nil)
+        }
     }
     
     // MARK: - Private Methods
@@ -405,11 +448,20 @@ public class ChatOverlayManager {
     private func updateUI(animated: Bool) {
         guard let overlayViewController = overlayViewController else { return }
         
-        let duration = animated ? 0.3 : 0.0
-        
-        UIView.animate(withDuration: duration, delay: 0, options: [.curveEaseInOut], animations: {
+        if animated {
+            // 使用春天动效，营造丝滑的过渡感觉
+            UIView.animate(withDuration: 0.6,
+                         delay: 0,
+                         usingSpringWithDamping: 0.8,
+                         initialSpringVelocity: 0.5,
+                         options: [.allowUserInteraction, .curveEaseInOut],
+                         animations: {
+                overlayViewController.updateForState(self.currentState)
+                overlayViewController.view.layoutIfNeeded()
+            }, completion: nil)
+        } else {
             overlayViewController.updateForState(self.currentState)
-        }, completion: nil)
+        }
     }
     
     @objc private func closeButtonTapped() {
@@ -431,6 +483,10 @@ class OverlayViewController: UIViewController {
     // 拖拽相关状态 - 移到OverlayViewController中
     private var isDragging = false
     private var dragStartY: CGFloat = 0
+    private var originalTopConstraint: CGFloat = 0  // 记录拖拽开始时的原始位置
+    
+    // 滚动收起相关状态
+    private var hasTriggeredScrollCollapse = false  // 防止重复触发滚动收起
     
     // 约束
     private var containerTopConstraint: NSLayoutConstraint!
@@ -533,10 +589,7 @@ class OverlayViewController: UIViewController {
         setupCollapsedView()
         setupExpandedView()
         
-        // 添加手势
-        let tapGesture = UITapGestureRecognizer(target: self, action: #selector(handleTap))
-        containerView.addGestureRecognizer(tapGesture)
-        
+        // 只添加拖拽手势到整个容器，移除点击手势避免误触
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         containerView.addGestureRecognizer(panGesture)
     }
@@ -577,6 +630,10 @@ class OverlayViewController: UIViewController {
         closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .touchUpInside)
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         controlBar.addSubview(closeButton)
+        
+        // 为收缩状态添加点击放大手势
+        let collapsedTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleCollapsedTap))
+        collapsedView.addGestureRecognizer(collapsedTapGesture)
         
         NSLayoutConstraint.activate([
             // 收缩视图填满容器
@@ -636,6 +693,14 @@ class OverlayViewController: UIViewController {
         closeButton.translatesAutoresizingMaskIntoConstraints = false
         headerView.addSubview(closeButton)
         
+        // 为头部区域添加点击收起手势（只在头部有效）
+        let headerTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleHeaderTap))
+        headerView.addGestureRecognizer(headerTapGesture)
+        
+        // 为拖拽指示器也添加点击手势
+        let dragIndicatorTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleHeaderTap))
+        dragIndicator.addGestureRecognizer(dragIndicatorTapGesture)
+        
         // 消息列表
         messagesList = UITableView()
         messagesList.backgroundColor = .clear
@@ -688,7 +753,7 @@ class OverlayViewController: UIViewController {
             bottomSpaceView.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor),
             bottomSpaceView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor),
             bottomSpaceView.bottomAnchor.constraint(equalTo: expandedView.bottomAnchor),
-            bottomSpaceView.heightAnchor.constraint(equalToConstant: 80)
+            bottomSpaceView.heightAnchor.constraint(equalToConstant: 120)  // 增加到120px，为输入框预留足够空间
         ])
     }
     
@@ -733,15 +798,19 @@ class OverlayViewController: UIViewController {
             containerView.layer.cornerRadius = 12
             containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
             
+            // 重置滚动收起标记，允许下次触发
+            hasTriggeredScrollCollapse = false
+            
             NSLog("🎯 收缩状态 - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
             
         case .expanded:
-            // 展开状态：覆盖大部分屏幕，底部留出空间给输入框
-            // 这里可以假设输入框会自动调整位置
-            let expandedBottomMargin: CGFloat = 80 // 给输入框预留足够空间
+            // 展开状态：覆盖整个屏幕高度，营造从屏幕外延伸的效果
+            let expandedTopMargin = max(safeAreaTop, 80)  // 顶部留空
+            let expandedBottomExtension: CGFloat = 20  // 底部向外延伸20px，营造延伸效果
             
-            containerTopConstraint.constant = max(safeAreaTop, 80)  // 顶部留空
-            containerHeightConstraint.constant = screenHeight - max(safeAreaTop, 80) - expandedBottomMargin
+            containerTopConstraint.constant = expandedTopMargin - safeAreaTop  // 转换为相对安全区坐标
+            // 高度计算：从顶部到屏幕底部再延伸20px
+            containerHeightConstraint.constant = screenHeight - expandedTopMargin + expandedBottomExtension
             
             // 展开状态：覆盖整个屏幕宽度（无边距）
             containerLeadingConstraint.constant = 0
@@ -750,24 +819,41 @@ class OverlayViewController: UIViewController {
             collapsedView.alpha = 0
             expandedView.alpha = 1
             backgroundMaskView.alpha = 1
-            // 展开状态圆角：恢复原始12px圆角
+            // 展开状态圆角：只有顶部圆角，底部延伸到屏幕外
             containerView.layer.cornerRadius = 12
-            containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+            containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             
-            NSLog("🎯 展开状态 - 底部边距: \(expandedBottomMargin)px")
+            // 重置滚动收起标记，允许触发
+            hasTriggeredScrollCollapse = false
+            
+            NSLog("🎯 展开状态 - 顶部位置: \(expandedTopMargin)px, 高度: \(screenHeight - expandedTopMargin + expandedBottomExtension)px, 底部延伸: \(expandedBottomExtension)px")
             
         case .hidden:
             // 隐藏状态：不显示
             containerView.alpha = 0
+            hasTriggeredScrollCollapse = false
             NSLog("🎯 隐藏状态")
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
     }
     
-    @objc private func handleTap() {
+    @objc private func handleHeaderTap() {
+        NSLog("🎯 头部区域被点击，切换状态")
         guard let manager = manager else { return }
         manager.toggleState()
+    }
+    
+    @objc private func handleCollapsedTap() {
+        NSLog("🎯 收缩状态被点击，放大浮窗")
+        guard let manager = manager else { return }
+        manager.switchToExpanded()
+    }
+    
+    @objc private func handleTap() {
+        // 这个方法现在不会被调用，因为已经移除了通用点击手势
+        // 保留方法以防后续需要
+        NSLog("🎯 通用点击处理（已禁用）")
     }
     
     @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
@@ -778,12 +864,13 @@ class OverlayViewController: UIViewController {
         case .began:
             NSLog("🎯 开始拖拽手势")
             dragStartY = gesture.location(in: view).y
+            originalTopConstraint = containerTopConstraint.constant  // 记录拖拽开始的位置
             isDragging = true
             
             // 检查是否在拖拽区域
             let touchPoint = gesture.location(in: containerView)
             let isDragHandle = expandedView.alpha > 0 && touchPoint.y <= 80 // 头部80px为拖拽区域
-            NSLog("🎯 触摸点: \(touchPoint), 是否在拖拽区域: \(isDragHandle)")
+            NSLog("🎯 触摸点: \(touchPoint), 是否在拖拽区域: \(isDragHandle), 初始Top: \(originalTopConstraint)")
             
         case .changed:
             guard isDragging else { return }
@@ -801,10 +888,12 @@ class OverlayViewController: UIViewController {
                         
                         if isAtTop || deltaY <= 20 { // 微小拖拽优先级最高
                             NSLog("🎯 允许拖拽收起: deltaY=\(deltaY), isAtTop=\(isAtTop)")
-                            // 实时更新位置预览
-                            let progress = min(deltaY / 150, 1.0) // 150px完全切换
-                            let originalTop = containerTopConstraint.constant
-                            containerTopConstraint.constant = originalTop + deltaY * 0.3
+                            // 更流畅的实时预览 - 基于原始位置计算
+                            let dampedDelta = deltaY * 0.2 // 减少跟手程度
+                            let newTop = originalTopConstraint + dampedDelta
+                            
+                            // 直接设置约束，无动画，实现流畅跟手
+                            containerTopConstraint.constant = newTop
                             view.layoutIfNeeded()
                         }
                     }
@@ -825,11 +914,12 @@ class OverlayViewController: UIViewController {
             
             if manager?.currentState == .expanded && shouldSwitchToCollapsed {
                 NSLog("🎯 拖拽距离/速度足够，切换到收缩状态")
-                manager?.switchToCollapsed()
+                // 使用专门的拖拽切换方法，避免延迟造成的卡顿
+                manager?.switchToCollapsedFromDrag()
             } else {
                 NSLog("🎯 拖拽不足，回弹到原状态")
-                // 回弹动画
-                UIView.animate(withDuration: 0.3, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0, options: [], animations: {
+                // 回弹动画 - 使用与主动画相同的spring参数
+                UIView.animate(withDuration: 0.6, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: [.allowUserInteraction, .curveEaseInOut], animations: {
                     if let currentState = self.manager?.currentState {
                         self.updateForState(currentState)
                     }
@@ -897,6 +987,42 @@ extension OverlayViewController: UITableViewDataSource, UITableViewDelegate {
         }
         
         return cell
+    }
+    
+    // MARK: - 滚动监听：简化的下滑收起功能
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // 只在展开状态下处理滚动收起逻辑
+        guard manager?.currentState == .expanded else { return }
+        
+        // 如果已经触发过滚动收起，不再重复处理
+        guard !hasTriggeredScrollCollapse else { return }
+        
+        let currentOffset = scrollView.contentOffset.y
+        NSLog("🎯 TableView滚动监听: contentOffset.y = \(currentOffset)")
+        
+        // 简化逻辑：只要向下拉超过110px就收起浮窗
+        let minimumDownwardPull: CGFloat = -110.0
+        
+        if currentOffset <= minimumDownwardPull {
+            NSLog("🎯 向下拉超过110px (\(currentOffset)px)，触发收起浮窗")
+            
+            // 设置标记，防止重复触发
+            hasTriggeredScrollCollapse = true
+            
+            // 立即收起浮窗
+            manager?.switchToCollapsedFromDrag()
+        }
+    }
+    
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        let currentOffset = scrollView.contentOffset.y
+        NSLog("🎯 开始拖拽TableView，起始offset: \(currentOffset)")
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        let finalOffset = scrollView.contentOffset.y
+        NSLog("🎯 结束拖拽TableView，最终offset: \(finalOffset)，是否继续减速: \(decelerate)")
     }
 }
 

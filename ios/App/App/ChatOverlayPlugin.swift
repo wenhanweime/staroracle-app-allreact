@@ -30,6 +30,36 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
     public override init() {
         super.init()
         NSLog("🎯 ChatOverlayPlugin (CAPBridgedPlugin架构) 初始化成功!")
+        // 设置状态变化回调
+        setupStateChangeCallback()
+    }
+    
+    // MARK: - 状态同步
+    
+    private func setupStateChangeCallback() {
+        overlayManager.setOnStateChange { [weak self] state in
+            DispatchQueue.main.async {
+                self?.notifyOverlayStateChanged(state: state)
+            }
+        }
+    }
+    
+    private func notifyOverlayStateChanged(state: OverlayState) {
+        let isOpen = overlayManager.getVisibility()
+        let stateString = state == .expanded ? "expanded" : (state == .collapsed ? "collapsed" : "hidden")
+        
+        NSLog("🎯 [ChatOverlayPlugin] 通知前端浮窗状态变化:")
+        NSLog("🎯 - isOpen: \(isOpen)")
+        NSLog("🎯 - state: \(stateString)")
+        NSLog("🎯 - visible: \(isOpen)")
+        
+        self.notifyListeners("overlayStateChanged", data: [
+            "isOpen": isOpen,
+            "state": stateString,
+            "visible": isOpen
+        ])
+        
+        NSLog("🎯 [ChatOverlayPlugin] overlayStateChanged事件已发送")
     }
     
     // MARK: - Capacitor方法实现
@@ -51,6 +81,10 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
             
             self.overlayManager.show(animated: animated, expanded: isOpen) { success in
                 if success {
+                    // 手动通知状态变化（因为show操作可能不会触发onStateChange回调）
+                    DispatchQueue.main.async {
+                        self.notifyOverlayStateChanged(state: self.overlayManager.currentState)
+                    }
                     call.resolve(["success": true, "visible": true])
                 } else {
                     call.reject("显示浮窗失败")
@@ -65,6 +99,8 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         
         DispatchQueue.main.async {
             self.overlayManager.hide(animated: animated) {
+                // 立即通知隐藏状态变化（因为状态已经立即更新了）
+                self.notifyOverlayStateChanged(state: .hidden)
                 call.resolve(["success": true, "visible": false])
             }
         }

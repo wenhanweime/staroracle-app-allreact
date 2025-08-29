@@ -45,6 +45,7 @@ export const useNativeChatOverlay = () => {
     // 监听浮窗状态变化
     const overlayStateListener = ChatOverlay.addListener('overlayStateChanged', (data: any) => {
       console.log('📱 浮窗状态变化:', data);
+      console.log('📱 设置isOpen状态为:', data.isOpen);
       setIsOpen(data.isOpen);
     });
     
@@ -80,9 +81,11 @@ export const useNativeChatOverlay = () => {
   const showOverlay = async (expanded = true) => {
     if (Capacitor.isNativePlatform()) {
       console.log('📱 尝试显示原生ChatOverlay', expanded);
+      console.log('📱 当前isOpen状态（显示前）:', isOpen);
       try {
         await ChatOverlay.show({ isOpen: expanded });
         console.log('✅ 原生ChatOverlay显示成功');
+        console.log('📱 当前isOpen状态（显示后）:', isOpen);
       } catch (error) {
         console.error('❌ 原生ChatOverlay显示失败:', error);
       }
@@ -95,7 +98,10 @@ export const useNativeChatOverlay = () => {
   const hideOverlay = async () => {
     if (Capacitor.isNativePlatform()) {
       console.log('📱 隐藏原生ChatOverlay');
+      console.log('📱 当前isOpen状态（隐藏前）:', isOpen);
       await ChatOverlay.hide();
+      console.log('📱 ChatOverlay隐藏完成');
+      console.log('📱 当前isOpen状态（隐藏后）:', isOpen);
     } else {
       console.log('🌐 隐藏React ChatOverlay');
       setIsOpen(false);
