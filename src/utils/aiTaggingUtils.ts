@@ -1,6 +1,7 @@
 // AI Tagging and Analysis Utilities
 import { Star, Connection, TagAnalysis } from '../types';
 import type { ApiProvider } from '../vite-env';
+import { AwarenessInsight } from '../types/chat';
 
 export interface AITaggingConfig {
   provider?: ApiProvider; // 新增：API提供商
@@ -10,6 +11,79 @@ export interface AITaggingConfig {
   _version?: string; // 添加版本号用于未来可能的迁移
   _lastUpdated?: string; // 添加最后更新时间
 }
+
+// 简单的觉察分析函数
+export const analyzeAwarenessValue = async (
+  userQuestion: string, 
+  aiResponse: string
+): Promise<AwarenessInsight> => {
+  // 简单的启发式分析，可以后续替换为更复杂的AI分析
+  const content = `${userQuestion} ${aiResponse}`.toLowerCase();
+  
+  // 判断觉察价值
+  let hasInsight = false;
+  let insightLevel: 'low' | 'medium' | 'high' = 'low';
+  
+  // 高价值关键词
+  const highValueKeywords = ['为什么', '如何', '意义', '目的', '感受', '内心', '害怕', '担心', '渴望', '梦想'];
+  const mediumValueKeywords = ['想要', '希望', '觉得', '认为', '应该', '可能'];
+  
+  const highMatches = highValueKeywords.filter(keyword => content.includes(keyword)).length;
+  const mediumMatches = mediumValueKeywords.filter(keyword => content.includes(keyword)).length;
+  
+  if (highMatches > 0 || userQuestion.length > 20) {
+    hasInsight = true;
+    insightLevel = highMatches >= 2 ? 'high' : 'medium';
+  } else if (mediumMatches > 0) {
+    hasInsight = true;
+    insightLevel = 'medium';
+  }
+  
+  // 分析觉察类型
+  let insightType = '一般对话';
+  if (content.includes('感受') || content.includes('情绪')) {
+    insightType = '情绪洞察';
+  } else if (content.includes('自己') || content.includes('我')) {
+    insightType = '自我认知';
+  } else if (content.includes('关系') || content.includes('别人')) {
+    insightType = '人际关系';
+  }
+  
+  // 提取关键洞察点
+  const keyInsights = [];
+  if (content.includes('发现')) keyInsights.push('发现了新的认知');
+  if (content.includes('理解')) keyInsights.push('加深了理解');
+  if (content.includes('感到')) keyInsights.push('觉察到内心感受');
+  
+  // 生成建议的反思方向
+  let suggestedReflection = '继续探索这个话题可能会带来更深的洞察。';
+  if (insightLevel === 'high') {
+    suggestedReflection = '这个话题触及了你内心深处的想法，值得进一步思考和探索。';
+  } else if (insightLevel === 'medium') {
+    suggestedReflection = '这个想法可以作为自我探索的起点，试着深入思考其背后的原因。';
+  }
+  
+  // 生成后续问题
+  const followUpQuestions = [];
+  if (content.includes('害怕') || content.includes('担心')) {
+    followUpQuestions.push('是什么让你产生这种担心？');
+    followUpQuestions.push('如果这种担心变成现实，你会如何应对？');
+  }
+  if (content.includes('想要') || content.includes('渴望')) {
+    followUpQuestions.push('这个愿望对你来说意味着什么？');
+    followUpQuestions.push('是什么阻止你实现这个愿望？');
+  }
+  
+  return {
+    hasInsight,
+    insightLevel,
+    insightType,
+    keyInsights: keyInsights.length > 0 ? keyInsights : ['记录了一次有意义的对话'],
+    emotionalPattern: hasInsight ? '正在进行自我探索' : '日常交流模式',
+    suggestedReflection,
+    followUpQuestions: followUpQuestions.length > 0 ? followUpQuestions : ['你对这个话题还有什么想法？']
+  };
+};
 
 export interface APIValidationResult {
   isValid: boolean;

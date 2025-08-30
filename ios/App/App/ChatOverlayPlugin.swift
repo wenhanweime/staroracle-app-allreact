@@ -45,21 +45,22 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     
     private func notifyOverlayStateChanged(state: OverlayState) {
-        let isOpen = overlayManager.getVisibility()
+        let isVisible = overlayManager.getVisibility()
+        let isOpen = (state == .expanded) // 🔧 修复：isOpen应该基于展开状态，而不是可见性
         let stateString = state == .expanded ? "expanded" : (state == .collapsed ? "collapsed" : "hidden")
         
         NSLog("🎯 [ChatOverlayPlugin] 通知前端浮窗状态变化:")
-        NSLog("🎯 - isOpen: \(isOpen)")
+        NSLog("🎯 - isVisible: \(isVisible)")
+        NSLog("🎯 - isOpen (展开状态): \(isOpen)")
         NSLog("🎯 - state: \(stateString)")
-        NSLog("🎯 - visible: \(isOpen)")
         
         self.notifyListeners("overlayStateChanged", data: [
             "isOpen": isOpen,
             "state": stateString,
-            "visible": isOpen
+            "visible": isVisible
         ])
         
-        NSLog("🎯 [ChatOverlayPlugin] overlayStateChanged事件已发送")
+        NSLog("🎯 [ChatOverlayPlugin] overlayStateChanged事件已发送 - isOpen修复为基于展开状态")
     }
     
     // MARK: - Capacitor方法实现

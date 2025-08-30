@@ -496,7 +496,10 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
                   overscrollBehavior: 'contain', // 防止滚动传播
                 }}
               >
-                <ChatMessages onAskFollowUp={handleFollowUpQuestion} />
+                <ChatMessages 
+                  messages={messages}
+                  onAskFollowUp={handleFollowUpQuestion} 
+                />
               </div>
 
               {/* 底部留空，让主界面的输入框显示在这里 */}

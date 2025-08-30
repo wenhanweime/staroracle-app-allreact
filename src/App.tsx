@@ -118,14 +118,15 @@ function App() {
       // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
       console.log('📱 原生模式，使用ChatStore处理消息');
       
-      // 先确保浮窗打开
+      // 🔧 优化浮窗打开逻辑，减少动画冲突
       if (!nativeChatOverlay.isOpen) {
         console.log('📱 原生浮窗未打开，先打开浮窗');
         await nativeChatOverlay.showOverlay(true);
-        await new Promise(resolve => setTimeout(resolve, 300)); // 等待浮窗完全打开
+        // 🔧 减少等待时间，避免与InputDrawer动画冲突
+        await new Promise(resolve => setTimeout(resolve, 100)); // 减少到100ms
         console.log('📱 浮窗打开完成，当前isOpen状态:', nativeChatOverlay.isOpen);
       } else {
-        console.log('📱 原生浮窗已打开，跳过显示步骤');
+        console.log('📱 原生浮窗已打开，直接发送消息');
       }
       
       // 添加用户消息到store
@@ -170,7 +171,10 @@ function App() {
         console.error('❌ AI回复失败:', error);
       } finally {
         setLoading(false);
-        await nativeChatOverlay.setLoading(false);
+        // 🔧 移除可能导致动画冲突的原生setLoading调用
+        // 原生端会通过消息同步机制自动更新loading状态，无需额外调用
+        // await nativeChatOverlay.setLoading(false);
+        console.log('📱 已跳过原生setLoading调用，避免动画冲突');
       }
     } else {
       // Web模式：使用React ChatOverlay
@@ -260,22 +264,22 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
-  // 原生模式：同步消息列表到原生浮窗
-  useEffect(() => {
-    if (isNative && messages.length > 0) {
-      console.log('📱 同步消息列表到原生浮窗，消息数量:', messages.length);
-      // 格式化消息，确保timestamp为number类型
-      const formattedMessages = messages.map(msg => ({
-        id: msg.id,
-        text: msg.text,
-        isUser: msg.isUser,
-        timestamp: msg.timestamp instanceof Date ? msg.timestamp.getTime() : msg.timestamp
-      }));
-      
-      console.log('📱 格式化后的消息:', formattedMessages);
-      nativeChatOverlay.updateMessages(formattedMessages);
-    }
-  }, [isNative, messages, nativeChatOverlay]);
+  // 🔧 移除重复的消息同步 - 已在useNativeChatOverlay.ts中处理
+  // useEffect(() => {
+  //   if (isNative && messages.length > 0) {
+  //     console.log('📱 同步消息列表到原生浮窗，消息数量:', messages.length);
+  //     // 格式化消息，确保timestamp为number类型
+  //     const formattedMessages = messages.map(msg => ({
+  //       id: msg.id,
+  //       text: msg.text,
+  //       isUser: msg.isUser,
+  //       timestamp: msg.timestamp instanceof Date ? msg.timestamp.getTime() : msg.timestamp
+  //     }));
+  //     
+  //     console.log('📱 格式化后的消息:', formattedMessages);
+  //     nativeChatOverlay.updateMessages(formattedMessages);
+  //   }
+  // }, [isNative, messages, nativeChatOverlay]);
 
   // 监控灵感卡片状态变化（保持Web版本逻辑）
   useEffect(() => {

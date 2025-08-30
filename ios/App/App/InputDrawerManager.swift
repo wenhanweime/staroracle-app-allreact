@@ -387,7 +387,7 @@ class InputViewController: UIViewController {
     }
     
     private func setupChatOverlayObservers() {
-        // 监听ChatOverlay状态变化
+        // 🔧 只保留状态变化监听器，移除冗余的可见性监听器
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(chatOverlayStateChanged(_:)),
@@ -395,61 +395,54 @@ class InputViewController: UIViewController {
             object: nil
         )
         
-        // 监听ChatOverlay可见性变化
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(chatOverlayVisibilityChanged(_:)),
-            name: Notification.Name("chatOverlayVisibilityChanged"),
-            object: nil
-        )
-        
-        NSLog("🎯 InputDrawer: 开始监听ChatOverlay状态变化")
+        NSLog("🎯 InputDrawer: 开始监听ChatOverlay状态变化（已移除冗余的可见性监听器）")
     }
     
     @objc private func chatOverlayStateChanged(_ notification: Notification) {
         guard let userInfo = notification.userInfo,
               let state = userInfo["state"] as? String else { return }
         
-        NSLog("🎯 InputDrawer: 收到ChatOverlay状态变化通知 - \(state)")
+        // 🔧 新增：检查visible状态（如果有）
+        let visible = userInfo["visible"] as? Bool ?? true
+        
+        NSLog("🎯 InputDrawer: 收到ChatOverlay统一状态通知 - state: \(state), visible: \(visible)")
         
         // 根据ChatOverlay状态调整输入框位置
         switch state {
         case "collapsed":
-            // ChatOverlay收缩状态：浮窗在输入框下方，输入框需要往上移动为浮窗留出空间
-            // 降低整体高度50px：浮窗高度65px + 浮窗顶部与输入框底部间距10px + 浮窗底部安全间距15px - 50px = 40px
-            let newBottomSpace: CGFloat = 40
-            updateBottomSpace(newBottomSpace)
-            NSLog("🎯 InputDrawer: 移动到collapsed位置，bottomSpace: \(newBottomSpace)")
+            if visible {
+                // ChatOverlay收缩状态且可见：浮窗在输入框下方，输入框需要往上移动为浮窗留出空间
+                let newBottomSpace: CGFloat = 40
+                updateBottomSpace(newBottomSpace)
+                NSLog("🎯 InputDrawer: 移动到collapsed位置，bottomSpace: \(newBottomSpace)")
+            }
             
         case "expanded":
-            // ChatOverlay展开状态：输入框回到原始位置
-            let originalBottomSpace: CGFloat = 20
-            updateBottomSpace(originalBottomSpace)
-            NSLog("🎯 InputDrawer: 回到expanded位置，bottomSpace: \(originalBottomSpace)")
+            if visible {
+                // ChatOverlay展开状态：输入框回到原始位置
+                let originalBottomSpace: CGFloat = 20
+                updateBottomSpace(originalBottomSpace)
+                NSLog("🎯 InputDrawer: 回到expanded位置，bottomSpace: \(originalBottomSpace)")
+            }
             
         case "hidden":
-            // ChatOverlay隐藏：输入框回到原始位置
+            // ChatOverlay隐藏：输入框回到原始位置（无论 visible 值）
             let originalBottomSpace: CGFloat = 20
             updateBottomSpace(originalBottomSpace)
             NSLog("🎯 InputDrawer: 回到hidden位置，bottomSpace: \(originalBottomSpace)")
             
         default:
-            break
+            // 未知状态，检查visible状态
+            if !visible {
+                let originalBottomSpace: CGFloat = 20
+                updateBottomSpace(originalBottomSpace)
+                NSLog("🎯 InputDrawer: 未知状态但不可见，回到原始位置")
+            }
         }
     }
     
-    @objc private func chatOverlayVisibilityChanged(_ notification: Notification) {
-        guard let userInfo = notification.userInfo,
-              let visible = userInfo["visible"] as? Bool else { return }
-        
-        NSLog("🎯 InputDrawer: ChatOverlay可见性变化 - \(visible)")
-        
-        if !visible {
-            // ChatOverlay隐藏：输入框回到原始位置
-            let originalBottomSpace: CGFloat = 20
-            updateBottomSpace(originalBottomSpace)
-        }
-    }
+    // 🔧 已移除chatOverlayVisibilityChanged方法，避免重复动画
+    // 现在只使用chatOverlayStateChanged来统一管理所有状态变化
     
     private func setupKeyboardObservers() {
         NotificationCenter.default.addObserver(
@@ -500,13 +493,18 @@ class InputViewController: UIViewController {
             self.view.layoutIfNeeded()
         }
         
-        // 发送逻辑位置变化通知
+        // 🚨 【关键修复】注释掉反馈通知，打破 InputDrawer -> ChatOverlay 的恶性循环
+        // 这个通知会导致ChatOverlay再次更新状态，形成无限循环触发双重动画
+        /*
         NotificationCenter.default.post(
             name: Notification.Name("inputDrawerPositionChanged"),
             object: nil,
             userInfo: ["bottomSpace": space]
         )
         NSLog("🎯 InputDrawer: 发送逻辑位置变化通知，bottomSpace: \(space)")
+        */
+        
+        NSLog("🎯 InputDrawer: 位置更新完成，bottomSpace: \(space)，已阻止反馈循环")
     }
     
     func focusInput() {
@@ -599,12 +597,17 @@ class InputViewController: UIViewController {
         
         NSLog("🎯 InputDrawer实际位置 - 容器底部Y: \(containerBottom), 屏幕高度: \(screenHeight), 实际底部距离: \(actualBottomSpaceFromScreen)")
         
-        // 通知ChatOverlay输入框的实际屏幕位置
+        // 🚨 【关键修复】注释掉这个反馈通知，防止任何可能的循环触发
+        // 即使ChatOverlay当前没有监听，也要预防未来可能形成的反馈循环
+        /*
         NotificationCenter.default.post(
             name: Notification.Name("inputDrawerActualPositionChanged"),
             object: nil,
             userInfo: ["actualBottomSpace": actualBottomSpaceFromScreen]
         )
+        */
+        
+        NSLog("🎯 InputDrawer: 实际位置计算完成，已阻止反馈通知发送")
     }
 }
 

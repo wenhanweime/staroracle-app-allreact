@@ -1,5 +1,7 @@
 import React, { useRef, useEffect } from 'react';
-import { useChatStore } from '../store/useChatStore';
+import { motion, AnimatePresence } from 'framer-motion';
+import { Capacitor } from '@capacitor/core';
+import { ChatMessage } from '../store/useChatStore';
 import UserMessage from './UserMessage';
 import AIMessage from './AIMessage';
 import LoadingMessage from './LoadingMessage';
@@ -11,13 +13,16 @@ const isIOS = () => {
 };
 
 interface ChatMessagesProps {
+  messages: ChatMessage[];
   onAskFollowUp?: (question: string) => void; // 后续提问回调
 }
 
-const ChatMessages: React.FC<ChatMessagesProps> = ({ onAskFollowUp }) => {
-  const { messages, isLoading } = useChatStore();
+const ChatMessages: React.FC<ChatMessagesProps> = ({ messages, onAskFollowUp }) => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // 检查是否为原生平台
+  const isNativePlatform = Capacitor.isNativePlatform();
 
   const scrollToBottom = () => {
     if (messagesEndRef.current) {
@@ -38,7 +43,7 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onAskFollowUp }) => {
     }, 100);
 
     return () => clearTimeout(timer);
-  }, [messages, isLoading]);
+  }, [messages.length]); // 🔧 优化：只在消息数量变化时滚动，避免流式更新导致的频繁滚动
 
   // 根据设备类型计算不同的顶部间距
   const getTopPadding = () => {
@@ -70,19 +75,40 @@ const ChatMessages: React.FC<ChatMessagesProps> = ({ onAskFollowUp }) => {
         paddingBottom: '100px' // 避免被底部输入框遮挡
       }}
     >
-      {/* 渲染所有消息 */}
-      {messages.map((message, index) => (
-        message.isUser ? (
-          <UserMessage key={message.id} message={message} />
-        ) : (
-          <AIMessage 
-            key={message.id} 
-            message={message}
-            userQuestion={getUserQuestionForMessage(index)}
-            onAskFollowUp={onAskFollowUp}
-          />
-        )
-      ))}
+      {/* 渲染所有消息 - 根据平台选择动画策略 */}
+      {isNativePlatform ? (
+        // 原生平台：不使用 framer-motion 动画，让原生 Swift 代码处理动画
+        messages.map((message, index) => (
+          <div key={message.id}>
+            {message.isUser ? (
+              <UserMessage message={message} />
+            ) : (
+              <AIMessage 
+                message={message}
+                userQuestion={getUserQuestionForMessage(index)}
+                onAskFollowUp={onAskFollowUp}
+              />
+            )}
+          </div>
+        ))
+      ) : (
+        // Web平台：使用 framer-motion 动画，但将 motion.div 放在组件内部
+        <AnimatePresence>
+          {messages.map((message, index) => (
+            <div key={message.id}>
+              {message.isUser ? (
+                <UserMessage message={message} />
+              ) : (
+                <AIMessage 
+                  message={message}
+                  userQuestion={getUserQuestionForMessage(index)}
+                  onAskFollowUp={onAskFollowUp}
+                />
+              )}
+            </div>
+          ))}
+        </AnimatePresence>
+      )}
       
       {/* 加载状态现在由 AIMessage 组件内部处理 */}
       

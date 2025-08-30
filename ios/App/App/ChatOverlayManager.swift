@@ -57,7 +57,7 @@ enum OverlayState {
 // MARK: - ChatOverlay状态变化通知
 extension Notification.Name {
     static let chatOverlayStateChanged = Notification.Name("chatOverlayStateChanged")
-    static let chatOverlayVisibilityChanged = Notification.Name("chatOverlayVisibilityChanged")
+    // 🔧 已移除chatOverlayVisibilityChanged，统一使用chatOverlayStateChanged
     static let inputDrawerPositionChanged = Notification.Name("inputDrawerPositionChanged")  // 新增：输入框位置变化通知
 }
 
@@ -80,6 +80,13 @@ public class ChatOverlayManager {
     
     // 背景视图变换 - 用于3D缩放效果
     private weak var backgroundView: UIView?
+    
+    // 动画触发跟踪 - 记录上次处理的用户消息ID
+    private var lastUserMessageId: String = ""
+    
+    // 🔧 新增：防止重复同步的时间戳记录
+    private var lastSyncTimestamp: TimeInterval = 0
+    private let syncThrottleInterval: TimeInterval = 0.1  // 100ms内的重复调用将被忽略
     
     // MARK: - Public API
     
@@ -119,16 +126,15 @@ public class ChatOverlayManager {
                     self.updateUI(animated: animated)
                 }
                 
-                // 发送可见性和状态通知
-                NotificationCenter.default.post(
-                    name: .chatOverlayVisibilityChanged,
-                    object: nil,
-                    userInfo: ["visible": true]
-                )
+                // 🔧 只发送状态通知，移除冗余的可见性通知
                 NotificationCenter.default.post(
                     name: .chatOverlayStateChanged,
                     object: nil,
-                    userInfo: ["state": expanded ? "expanded" : "collapsed", "height": expanded ? UIScreen.main.bounds.height - 100 : 65]
+                    userInfo: [
+                        "state": expanded ? "expanded" : "collapsed", 
+                        "height": expanded ? UIScreen.main.bounds.height - 100 : 65,
+                        "visible": true  // 🔧 在状态通知中包含可见性信息
+                    ]
                 )
                 
                 completion(true)
@@ -195,14 +201,20 @@ public class ChatOverlayManager {
                 return
             }
             
-            // 恢复背景状态
-            self.applyBackgroundTransform(for: .collapsed, animated: animated)
+            // 🔧 修复：恢复背景状态应该对应hidden状态（等同于collapsed的效果）
+            self.applyBackgroundTransform(for: .hidden, animated: animated)
             
-            // 发送隐藏通知
+            // 🔧 修复：触发状态变化回调，确保前端能收到正确的状态
+            self.onStateChange?(.hidden)
+            
+            // 🔧 只发送状态通知，移除冗余的可见性通知  
             NotificationCenter.default.post(
-                name: .chatOverlayVisibilityChanged,
+                name: .chatOverlayStateChanged,
                 object: nil,
-                userInfo: ["visible": false]
+                userInfo: [
+                    "state": "hidden",
+                    "visible": false  // 🔧 在状态通知中包含可见性信息
+                ]
             )
             
             if animated {
@@ -221,15 +233,51 @@ public class ChatOverlayManager {
     
     func updateMessages(_ messages: [ChatMessage]) {
         NSLog("🎯 ChatOverlayManager: 更新消息列表，数量: \(messages.count)")
+        
+        // 🔧 新增：防重复调用的时间戳检查
+        let currentTime = Date().timeIntervalSince1970
+        if currentTime - lastSyncTimestamp < syncThrottleInterval {
+            NSLog("🎯 [防重复] 距离上次同步不足\(Int(syncThrottleInterval * 1000))ms，忽略此次调用")
+            return
+        }
+        lastSyncTimestamp = currentTime
+        
         for (index, message) in messages.enumerated() {
             NSLog("🎯 消息[\(index)]: \(message.isUser ? "用户" : "AI") - \(message.text)")
         }
+        
+        // 🔧 关键修复：保存旧消息列表，在这里进行比较
+        let oldMessages = self.messages
+        NSLog("🎯 ChatOverlayManager保存旧消息列表，数量: \(oldMessages.count)")
+        
+        // 🔧 修正：检查最新用户消息ID是否改变（专门针对用户发送的消息）
+        var shouldAnimateNewUserMessage = false
+        if let lastUserMessage = messages.last(where: { $0.isUser }) {
+            if lastUserMessage.id != lastUserMessageId {
+                NSLog("🎯 发现新用户消息！用户发送了: '\(lastUserMessage.text)'")
+                NSLog("🎯 新用户消息ID: \(lastUserMessage.id), 旧ID: \(lastUserMessageId)")
+                
+                // 🔧 额外检查：确保这个用户消息在旧消息列表中不存在
+                let userMessageExistsInOldList = oldMessages.contains { $0.id == lastUserMessage.id }
+                if !userMessageExistsInOldList {
+                    NSLog("🎯 ✅ 确认为全新的用户消息，将触发动画")
+                    lastUserMessageId = lastUserMessage.id
+                    shouldAnimateNewUserMessage = true
+                } else {
+                    NSLog("🎯 ⚠️ 用户消息在旧列表中已存在，跳过动画")
+                }
+            } else {
+                NSLog("🎯 用户消息ID未变化，跳过动画")
+            }
+        }
+        
+        // 现在更新messages
         self.messages = messages
         
         // 通知OverlayViewController更新消息显示
         DispatchQueue.main.async {
-            NSLog("🎯 通知OverlayViewController更新消息显示")
-            self.overlayViewController?.updateMessages(messages)
+            NSLog("🎯 通知OverlayViewController更新消息显示，需要动画: \(shouldAnimateNewUserMessage)")
+            self.overlayViewController?.updateMessages(messages, oldMessages: oldMessages, shouldAnimateNewUserMessage: shouldAnimateNewUserMessage)
         }
     }
     
@@ -487,6 +535,9 @@ class OverlayViewController: UIViewController {
     
     // 滚动收起相关状态
     private var hasTriggeredScrollCollapse = false  // 防止重复触发滚动收起
+    
+    // 🔧 新增：动画相关状态
+    private var pendingAnimationIndex: Int?  // 需要播放动画的消息索引
     
     // 约束
     private var containerTopConstraint: NSLayoutConstraint!
@@ -942,24 +993,127 @@ class OverlayViewController: UIViewController {
     
     // MARK: - 更新消息列表
     
-    func updateMessages(_ messages: [ChatMessage]) {
+    func updateMessages(_ messages: [ChatMessage], oldMessages: [ChatMessage], shouldAnimateNewUserMessage: Bool) {
         NSLog("🎯 OverlayViewController: updateMessages被调用，消息数量: \(messages.count)")
         guard let manager = manager else { 
             NSLog("⚠️ OverlayViewController: manager为nil")
             return 
         }
         NSLog("🎯 OverlayViewController: manager存在，准备更新UI")
+        NSLog("🎯 是否需要播放用户消息动画: \(shouldAnimateNewUserMessage)")
+        
+        // 先更新manager的消息列表
+        manager.messages = messages
+        
+        // 🔧 核心修复：如果需要动画，先标记要隐藏的用户消息
+        if shouldAnimateNewUserMessage {
+            if let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) {
+                // 标记这个索引需要动画
+                self.pendingAnimationIndex = lastUserMessageIndex
+                NSLog("🎯 标记索引 \(lastUserMessageIndex) 需要动画")
+            }
+        } else {
+            self.pendingAnimationIndex = nil
+        }
+        
         DispatchQueue.main.async {
             NSLog("🎯 OverlayViewController: 执行reloadData")
             self.messagesList.reloadData()
+            
             // 滚动到底部显示最新消息
-            if manager.messages.count > 0 {
-                NSLog("🎯 OverlayViewController: 滚动到最新消息，索引: \(manager.messages.count - 1)")
-                let indexPath = IndexPath(row: manager.messages.count - 1, section: 0)
-                self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: true)
+            if messages.count > 0 {
+                NSLog("🎯 OverlayViewController: 滚动到最新消息，索引: \(messages.count - 1)")
+                let indexPath = IndexPath(row: messages.count - 1, section: 0)
+                self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                
+                // 🔧 如果需要动画新用户消息，在reloadData和滚动后立即播放
+                if shouldAnimateNewUserMessage {
+                    NSLog("🎯 准备播放用户消息动画")
+                    // 立即设置动画初始状态，防止出现直接显示
+                    DispatchQueue.main.async {
+                        NSLog("🎯 立即设置动画初始状态")
+                        self.setAnimationInitialState(messages: messages)
+                        // 然后播放动画
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                            NSLog("🎯 开始播放动画")
+                            self.playUserMessageAnimation(messages: messages)
+                        }
+                    }
+                } else {
+                    NSLog("🎯 跳过用户消息动画")
+                }
             } else {
-                NSLog("⚠️ OverlayViewController: manager.messages为空")
+                NSLog("⚠️ OverlayViewController: messages为空")
             }
+        }
+    }
+    
+    // 🔧 新增：设置动画初始状态
+    private func setAnimationInitialState(messages: [ChatMessage]) {
+        guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { return }
+        
+        NSLog("🎯 设置动画初始状态，索引: \(lastUserMessageIndex)")
+        NSLog("🎯 当前pendingAnimationIndex: \(pendingAnimationIndex ?? -1)")
+        
+        let indexPath = IndexPath(row: lastUserMessageIndex, section: 0)
+        
+        if let cell = self.messagesList.cellForRow(at: indexPath) {
+            NSLog("🎯 找到用户消息cell，设置初始动画状态")
+            
+            // 🔧 关键修复：设置动画起始位置
+            let inputToMessageDistance: CGFloat = 180
+            let initialTransform = CGAffineTransform(translationX: 0, y: inputToMessageDistance)
+            cell.transform = initialTransform
+            cell.alpha = 0.0
+            
+            NSLog("🎯 ✅ 成功设置动画初始状态：Y偏移 \(inputToMessageDistance)px, alpha=0")
+        } else {
+            NSLog("⚠️ 未找到用户消息cell，无法设置初始状态")
+        }
+    }
+    
+    // 🔧 新增：播放用户消息动画
+    private func playUserMessageAnimation(messages: [ChatMessage]) {
+        guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { return }
+        
+        NSLog("🎯 播放用户消息动画，索引: \(lastUserMessageIndex)")
+        NSLog("🎯 当前pendingAnimationIndex: \(pendingAnimationIndex ?? -1)")
+        
+        // 🔧 安全检查：确保这是我们要动画的消息
+        guard pendingAnimationIndex == lastUserMessageIndex else {
+            NSLog("⚠️ 索引不匹配，跳过动画。期望: \(pendingAnimationIndex ?? -1), 实际: \(lastUserMessageIndex)")
+            return
+        }
+        
+        let indexPath = IndexPath(row: lastUserMessageIndex, section: 0)
+        
+        if let cell = self.messagesList.cellForRow(at: indexPath) {
+            NSLog("🎯 找到用户消息cell，开始播放从输入框到消息位置的动画")
+            
+            // 🔧 立即清除动画标记，防止重复执行
+            self.pendingAnimationIndex = nil
+            NSLog("🎯 清除pendingAnimationIndex，防止重复动画")
+            
+            // 🔧 修正：使用更自然的动画参数，纯垂直移动
+            UIView.animate(
+                withDuration: 0.5, // 🔧 加快到0.5秒，更流畅
+                delay: 0,
+                usingSpringWithDamping: 0.85, // 🔧 稍微提高阻尼，减少弹跳
+                initialSpringVelocity: 0.6, // 🔧 提高初始速度
+                options: [.curveEaseOut, .allowUserInteraction],
+                animations: {
+                    // 🔧 关键：只有位移变换，移动到最终位置
+                    cell.transform = .identity  // 恢复原始变换（0,0位移）
+                    cell.alpha = 1.0           // 渐变显示
+                },
+                completion: { finished in
+                    NSLog("🎯 用户消息动画完成, finished: \(finished)")
+                    // pendingAnimationIndex已经在动画开始时清除了
+                }
+            )
+        } else {
+            NSLog("⚠️ 未找到用户消息cell，动画失败")
+            self.pendingAnimationIndex = nil
         }
     }
 }
@@ -982,6 +1136,11 @@ extension OverlayViewController: UITableViewDataSource, UITableViewDelegate {
             let message = messages[indexPath.row]
             NSLog("🎯 配置cell: \(message.isUser ? "用户" : "AI") - \(message.text)")
             cell.configure(with: message)
+            
+            // 🔧 简化：所有cell都设置为正常状态，动画状态在reloadData后单独设置
+            cell.transform = .identity
+            cell.alpha = 1.0
+            
         } else {
             NSLog("⚠️ 无法获取消息数据，索引: \(indexPath.row)")
         }
