@@ -81,8 +81,9 @@ public class ChatOverlayManager {
     // 背景视图变换 - 用于3D缩放效果
     private weak var backgroundView: UIView?
     
-    // 动画触发跟踪 - 记录上次处理的用户消息ID
-    private var lastUserMessageId: String = ""
+    // 动画触发跟踪 - 🎯 【关键新增】用Set管理已播放动画的消息ID
+    private var animatedMessageIDs = Set<String>()
+    private var lastMessages: [ChatMessage] = [] // 用来对比
     
     // 🔧 新增：防止重复同步的时间戳记录
     private var lastSyncTimestamp: TimeInterval = 0
@@ -234,50 +235,37 @@ public class ChatOverlayManager {
     func updateMessages(_ messages: [ChatMessage]) {
         NSLog("🎯 ChatOverlayManager: 更新消息列表，数量: \(messages.count)")
         
-        // 🔧 新增：防重复调用的时间戳检查
-        let currentTime = Date().timeIntervalSince1970
-        if currentTime - lastSyncTimestamp < syncThrottleInterval {
-            NSLog("🎯 [防重复] 距离上次同步不足\(Int(syncThrottleInterval * 1000))ms，忽略此次调用")
-            return
-        }
-        lastSyncTimestamp = currentTime
-        
         for (index, message) in messages.enumerated() {
-            NSLog("🎯 消息[\(index)]: \(message.isUser ? "用户" : "AI") - \(message.text)")
+            NSLog("🎯 消息[\(index)]: \(message.isUser ? "用户" : "AI") - \(message.text.prefix(50))")
         }
         
-        // 🔧 关键修复：保存旧消息列表，在这里进行比较
-        let oldMessages = self.messages
-        NSLog("🎯 ChatOverlayManager保存旧消息列表，数量: \(oldMessages.count)")
+        // 🎯 【智能判断】找到最新的用户消息
+        let latestUserMessage = messages.last(where: { $0.isUser })
+        var shouldAnimate = false
+        var animationIndex: Int? = nil
         
-        // 🔧 修正：检查最新用户消息ID是否改变（专门针对用户发送的消息）
-        var shouldAnimateNewUserMessage = false
-        if let lastUserMessage = messages.last(where: { $0.isUser }) {
-            if lastUserMessage.id != lastUserMessageId {
-                NSLog("🎯 发现新用户消息！用户发送了: '\(lastUserMessage.text)'")
-                NSLog("🎯 新用户消息ID: \(lastUserMessage.id), 旧ID: \(lastUserMessageId)")
-                
-                // 🔧 额外检查：确保这个用户消息在旧消息列表中不存在
-                let userMessageExistsInOldList = oldMessages.contains { $0.id == lastUserMessage.id }
-                if !userMessageExistsInOldList {
-                    NSLog("🎯 ✅ 确认为全新的用户消息，将触发动画")
-                    lastUserMessageId = lastUserMessage.id
-                    shouldAnimateNewUserMessage = true
-                } else {
-                    NSLog("🎯 ⚠️ 用户消息在旧列表中已存在，跳过动画")
-                }
-            } else {
-                NSLog("🎯 用户消息ID未变化，跳过动画")
-            }
+        if let userMessage = latestUserMessage,
+           !animatedMessageIDs.contains(userMessage.id) {
+            // 🎯 这是一条全新的、从未播放过动画的用户消息
+            shouldAnimate = true
+            animatedMessageIDs.insert(userMessage.id)
+            animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
+            NSLog("🎯 ✅ 发现新用户消息！ID: \(userMessage.id), 将播放动画，索引: \(animationIndex ?? -1)")
+        } else {
+            NSLog("🎯 ☑️ 无新用户消息或已播放过动画，跳过动画")
         }
         
-        // 现在更新messages
+        // 更新消息列表
+        self.lastMessages = self.messages
         self.messages = messages
         
-        // 通知OverlayViewController更新消息显示
+        // 🎯 通知ViewController更新UI，只在真正需要动画时才传递true
         DispatchQueue.main.async {
-            NSLog("🎯 通知OverlayViewController更新消息显示，需要动画: \(shouldAnimateNewUserMessage)")
-            self.overlayViewController?.updateMessages(messages, oldMessages: oldMessages, shouldAnimateNewUserMessage: shouldAnimateNewUserMessage)
+            NSLog("🎯 通知OverlayViewController更新消息显示，需要动画: \(shouldAnimate)")
+            if let index = animationIndex {
+                NSLog("🎯 动画索引: \(index)")
+            }
+            self.overlayViewController?.updateMessages(messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: shouldAnimate, animationIndex: animationIndex)
         }
     }
     
@@ -993,7 +981,7 @@ class OverlayViewController: UIViewController {
     
     // MARK: - 更新消息列表
     
-    func updateMessages(_ messages: [ChatMessage], oldMessages: [ChatMessage], shouldAnimateNewUserMessage: Bool) {
+    func updateMessages(_ messages: [ChatMessage], oldMessages: [ChatMessage], shouldAnimateNewUserMessage: Bool, animationIndex: Int? = nil) {
         NSLog("🎯 OverlayViewController: updateMessages被调用，消息数量: \(messages.count)")
         guard let manager = manager else { 
             NSLog("⚠️ OverlayViewController: manager为nil")
@@ -1001,49 +989,74 @@ class OverlayViewController: UIViewController {
         }
         NSLog("🎯 OverlayViewController: manager存在，准备更新UI")
         NSLog("🎯 是否需要播放用户消息动画: \(shouldAnimateNewUserMessage)")
+        if let index = animationIndex {
+            NSLog("🎯 动画索引: \(index)")
+        }
+        
+        // 记录旧消息数量，用于判断更新场景
+        let oldMessagesCount = manager.messages.count
         
         // 先更新manager的消息列表
         manager.messages = messages
         
-        // 🔧 核心修复：如果需要动画，先标记要隐藏的用户消息
-        if shouldAnimateNewUserMessage {
-            if let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) {
-                // 标记这个索引需要动画
-                self.pendingAnimationIndex = lastUserMessageIndex
-                NSLog("🎯 标记索引 \(lastUserMessageIndex) 需要动画")
-            }
-        } else {
-            self.pendingAnimationIndex = nil
-        }
-        
         DispatchQueue.main.async {
-            NSLog("🎯 OverlayViewController: 执行reloadData")
-            self.messagesList.reloadData()
-            
-            // 滚动到底部显示最新消息
-            if messages.count > 0 {
-                NSLog("🎯 OverlayViewController: 滚动到最新消息，索引: \(messages.count - 1)")
-                let indexPath = IndexPath(row: messages.count - 1, section: 0)
-                self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+            if shouldAnimateNewUserMessage, let targetIndex = animationIndex {
+                // 🎯 场景1：有新用户消息，需要整体重载并播放动画
+                NSLog("🎯 【场景1】新用户消息需要动画，执行完整重载和动画")
+                self.pendingAnimationIndex = targetIndex
+                self.messagesList.reloadData()
+                self.scrollToBottomAndPlayAnimation(messages: messages)
                 
-                // 🔧 如果需要动画新用户消息，在reloadData和滚动后立即播放
-                if shouldAnimateNewUserMessage {
-                    NSLog("🎯 准备播放用户消息动画")
-                    // 立即设置动画初始状态，防止出现直接显示
-                    DispatchQueue.main.async {
-                        NSLog("🎯 立即设置动画初始状态")
-                        self.setAnimationInitialState(messages: messages)
-                        // 然后播放动画
-                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            NSLog("🎯 开始播放动画")
-                            self.playUserMessageAnimation(messages: messages)
-                        }
-                    }
+            } else if messages.count == oldMessagesCount && messages.count > 0 {
+                // 🎯 场景2：AI流式更新（消息总数不变，只是内容变了）
+                // 【核心修复】只更新最后一个cell，而不是reload整个table
+                NSLog("🎯 【场景2】AI流式更新，使用精细化cell更新，避免打断动画")
+                let lastMessageIndex = messages.count - 1
+                let indexPath = IndexPath(row: lastMessageIndex, section: 0)
+                
+                if let lastCell = self.messagesList.cellForRow(at: indexPath) as? MessageTableViewCell {
+                    // 直接更新cell的内容，不触发reloadData
+                    NSLog("🎯 ✅ 直接更新最后一个AI消息cell，不影响用户消息动画")
+                    lastCell.configure(with: messages[lastMessageIndex])
+                    
+                    // 确保滚动到底部显示完整内容（温柔地滚动）
+                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: true)
                 } else {
-                    NSLog("🎯 跳过用户消息动画")
+                    // 如果cell不可见，reloadData是无法避免的后备方案
+                    NSLog("🎯 ⚠️ AI消息cell不可见，使用后备reloadData方案")
+                    self.messagesList.reloadData()
+                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
                 }
+                
             } else {
-                NSLog("⚠️ OverlayViewController: messages为空")
+                // 🎯 场景3：其他情况（例如，从历史记录加载），直接重载
+                NSLog("🎯 【场景3】其他更新场景，执行常规重载")
+                self.messagesList.reloadData()
+                if messages.count > 0 {
+                    let indexPath = IndexPath(row: messages.count - 1, section: 0)
+                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                }
+            }
+        }
+    }
+    
+    // 🔧 新增：滚动并播放动画的辅助方法
+    private func scrollToBottomAndPlayAnimation(messages: [ChatMessage]) {
+        guard messages.count > 0 else { return }
+        
+        NSLog("🎯 滚动到最新消息并准备动画")
+        let indexPath = IndexPath(row: messages.count - 1, section: 0)
+        self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+        
+        NSLog("🎯 准备播放用户消息动画")
+        // 立即设置动画初始状态，防止出现直接显示
+        DispatchQueue.main.async {
+            NSLog("🎯 立即设置动画初始状态")
+            self.setAnimationInitialState(messages: messages)
+            // 然后播放动画
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSLog("🎯 开始播放动画")
+                self.playUserMessageAnimation(messages: messages)
             }
         }
     }
