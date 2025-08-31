@@ -1,6 +1,4361 @@
 
 
 ---
+## 🔥 VERSION 005 📝
+**时间：** 2025-09-01 00:49:38
+
+**本次修改的文件共 5 个，分别是：`src/App.tsx`、`ios/App/App/InputDrawerManager.swift`、`cofind.md`、`ios/App/App/ChatOverlayManager.swift`、`Codefind.md`**
+### 📄 src/App.tsx
+
+```tsx
+import React, { useEffect, useState } from 'react';
+import ReactDOM from 'react-dom'; // ✨ 1. 导入 ReactDOM 用于 Portal
+import { Capacitor } from '@capacitor/core';
+import { StatusBar, Style } from '@capacitor/status-bar';
+import { SplashScreen } from '@capacitor/splash-screen';
+import { Keyboard } from '@capacitor/keyboard';
+import StarryBackground from './components/StarryBackground';
+import Constellation from './components/Constellation';
+import ChatMessages from './components/ChatMessages';
+import InspirationCard from './components/InspirationCard';
+import StarDetail from './components/StarDetail';
+import StarCollection from './components/StarCollection';
+import ConstellationSelector from './components/ConstellationSelector';
+import AIConfigPanel from './components/AIConfigPanel';
+import DrawerMenu from './components/DrawerMenu';
+import Header from './components/Header';
+// import ConversationDrawer from './components/ConversationDrawer'; // 🚫 临时屏蔽 - 专注调试原生InputDrawer
+import ChatOverlay from './components/ChatOverlay'; // React版本（Web端回退）
+import OracleInput from './components/OracleInput';
+import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
+import { triggerHapticFeedback } from './utils/hapticUtils';
+import { Menu } from 'lucide-react';
+import { useStarStore } from './store/useStarStore';
+import { useChatStore } from './store/useChatStore';
+import { ConstellationTemplate } from './types';
+import { checkApiConfiguration, generateAIResponse } from './utils/aiTaggingUtils';
+import { motion, AnimatePresence } from 'framer-motion';
+import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
+import { useNativeInputDrawer } from './hooks/useNativeInputDrawer';
+import { InputDrawer } from './plugins/InputDrawer';
+
+function App() {
+  const [isCollectionOpen, setIsCollectionOpen] = useState(false);
+  const [isConfigOpen, setIsConfigOpen] = useState(false);
+  const [isTemplateSelectorOpen, setIsTemplateSelectorOpen] = useState(false);
+  const [isDrawerMenuOpen, setIsDrawerMenuOpen] = useState(false);
+  const [appReady, setAppReady] = useState(false);
+  
+  // ✨ 原生ChatOverlay Hook
+  const nativeChatOverlay = useNativeChatOverlay();
+  
+  // ✨ 原生InputDrawer Hook (测试)
+  const nativeInputDrawer = useNativeInputDrawer();
+  
+  // 兼容性：Web端仍使用React状态
+  const [webChatOverlayOpen, setWebChatOverlayOpen] = useState(false);
+  const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>('');
+  const [initialChatInput, setInitialChatInput] = useState<string>('');
+  
+  // 🔧 现在开启原生模式，ChatOverlay插件已修复
+  const forceWebMode = false; // 设为false开启原生模式
+  const isNative = forceWebMode ? false : Capacitor.isNativePlatform();
+  const isChatOverlayOpen = isNative ? nativeChatOverlay.isOpen : webChatOverlayOpen;
+  
+  const { 
+    applyTemplate, 
+    currentInspirationCard, 
+    dismissInspirationCard 
+  } = useStarStore();
+  
+  const { messages, addUserMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, generateConversationTitle } = useChatStore(); // 获取聊天消息以判断是否有对话历史
+  // 处理后续提问的回调
+  const handleFollowUpQuestion = (question: string) => {
+    console.log('📱 App层接收到后续提问:', question);
+    setPendingFollowUpQuestion(question);
+    // 如果收到后续问题，打开对话浮层
+    if (!isChatOverlayOpen) {
+      setIsChatOverlayOpen(true);
+    }
+  };
+  
+  // 后续问题处理完成的回调
+  const handleFollowUpProcessed = () => {
+    console.log('📱 后续问题处理完成，清空pending状态');
+    setPendingFollowUpQuestion('');
+  };
+
+  // 处理输入框聚焦，打开对话浮层
+  const handleInputFocus = (inputText?: string) => {
+    console.log('🔍 输入框被聚焦，打开对话浮层', inputText, 'isChatOverlayOpen:', isChatOverlayOpen);
+    
+    if (inputText) {
+      if (isChatOverlayOpen) {
+        // 如果浮窗已经打开，直接作为后续问题发送
+        console.log('🔄 浮窗已打开，直接发送后续问题:', inputText);
+        setPendingFollowUpQuestion(inputText);
+      } else {
+        // 如果浮窗未打开，设置为初始输入并打开浮窗
+        console.log('🔄 浮窗未打开，设置初始输入并打开:', inputText);
+        setInitialChatInput(inputText);
+        if (isNative) {
+          nativeChatOverlay.showOverlay(true);
+        } else {
+          setWebChatOverlayOpen(true);
+        }
+      }
+    } else {
+      // 没有输入文本，只是打开浮窗
+      if (isNative) {
+        nativeChatOverlay.showOverlay(true);
+      } else {
+        setWebChatOverlayOpen(true);
+      }
+    }
+    
+    // 立即清空初始输入，确保不重复处理
+    setTimeout(() => {
+      setInitialChatInput('');
+    }, 500);
+  };
+
+  // ✨ 重构 handleSendMessage 支持原生和Web模式
+  const handleSendMessage = async (inputText: string) => {
+    console.log('🔍 App.tsx: 接收到发送请求', inputText, '原生模式:', isNative);
+    console.log('🔍 当前nativeChatOverlay.isOpen状态:', nativeChatOverlay.isOpen);
+
+    if (isNative) {
+      // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
+      console.log('📱 原生模式，使用ChatStore处理消息');
+      
+      // 🚨 【关键修复】移除竞态条件 - 每次都无条件调用showOverlay，让原生层自己判断
+      console.log('📱 🚨 【架构加固】每次都调用showOverlay，消除JS状态依赖');
+      await nativeChatOverlay.showOverlay(true); // 原生层会通过状态守卫忽略重复请求
+      console.log('📱 showOverlay调用完成，继续处理消息');
+      
+      // 添加用户消息到store
+      addUserMessage(inputText);
+      setLoading(true);
+      
+      try {
+        // 调用AI API
+        const messageId = addStreamingAIMessage('');
+        let streamingText = '';
+        
+        const onStream = (chunk: string) => {
+          streamingText += chunk;
+          updateStreamingMessage(messageId, streamingText);
+        };
+
+        // 获取对话历史（需要获取最新的messages）
+        const conversationHistory = messages.map(msg => ({
+          role: msg.isUser ? 'user' as const : 'assistant' as const,
+          content: msg.text
+        }));
+
+        const aiResponse = await generateAIResponse(
+          inputText, 
+          undefined, 
+          onStream,
+          conversationHistory
+        );
+        
+        if (streamingText !== aiResponse) {
+          updateStreamingMessage(messageId, aiResponse);
+        }
+        
+        finalizeStreamingMessage(messageId);
+        
+        // 在第一次AI回复后，尝试生成对话标题
+        setTimeout(() => {
+          generateConversationTitle();
+        }, 1000);
+        
+      } catch (error) {
+        console.error('❌ AI回复失败:', error);
+      } finally {
+        setLoading(false);
+        // 🔧 移除可能导致动画冲突的原生setLoading调用
+        // 原生端会通过消息同步机制自动更新loading状态，无需额外调用
+        // await nativeChatOverlay.setLoading(false);
+        console.log('📱 已跳过原生setLoading调用，避免动画冲突');
+      }
+    } else {
+      // Web模式：使用React ChatOverlay
+      console.log('🌐 Web模式，使用React ChatOverlay');
+      if (webChatOverlayOpen) {
+        setPendingFollowUpQuestion(inputText);
+      } else {
+        setInitialChatInput(inputText);
+        setWebChatOverlayOpen(true);
+      }
+    }
+  };
+
+  // Web模式的浮窗关闭处理
+  const handleCloseChatOverlay = () => {
+    if (isNative) {
+      nativeChatOverlay.hideOverlay();
+    } else {
+      console.log('❌ 关闭Web对话浮层');
+      setWebChatOverlayOpen(false);
+      setInitialChatInput('');
+    }
+  };
+
+  // 添加原生平台效果（只在原生环境下执行）
+  useEffect(() => {
+    const setupNative = async () => {
+      if (Capacitor.isNativePlatform()) {
+        // 设置状态栏为暗色模式，文字为亮色
+        await StatusBar.setStyle({ style: Style.Dark });
+        
+        // 标记应用准备就绪
+        setAppReady(true);
+        
+        // 延迟隐藏启动屏，让应用完全加载
+        setTimeout(async () => {
+          await SplashScreen.hide({
+            fadeOutDuration: 300
+          });
+        }, 500);
+
+        // 🎯 设置原生InputDrawer事件监听
+        const messageSubmittedListener = await InputDrawer.addListener('messageSubmitted', (data: any) => {
+          console.log('🎯 收到原生InputDrawer消息提交事件:', data.text);
+          handleSendMessage(data.text);
+        });
+
+        const textChangedListener = await InputDrawer.addListener('textChanged', (data: any) => {
+          console.log('🎯 原生InputDrawer文本变化:', data.text);
+          // 可以在这里处理文本变化逻辑，比如实时预览等
+        });
+
+        // 🎯 自动显示输入框
+        console.log('🎯 自动显示原生InputDrawer');
+        await InputDrawer.show();
+
+        // 清理函数
+        return () => {
+          messageSubmittedListener.remove();
+          textChangedListener.remove();
+        };
+      } else {
+        // Web环境立即设置为准备就绪
+        setAppReady(true);
+      }
+    };
+    
+    setupNative();
+  }, []);
+
+  // 检查API配置（静默模式 - 只在控制台提示）
+  useEffect(() => {
+    // 延迟检查，确保应用已完全加载
+    const timer = setTimeout(() => {
+      const isConfigValid = checkApiConfiguration();
+      // 移除UI警告，改为静默模式
+      // setShowApiWarning(!isConfigValid);
+      
+      if (!isConfigValid) {
+        console.warn('⚠️ API配置无效或不完整，请配置API以使用完整功能');
+        console.info('💡 点击右上角设置图标进行API配置');
+      } else {
+        console.log('✅ API配置正常');
+      }
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, []);
+
+  // 🔧 移除重复的消息同步 - 已在useNativeChatOverlay.ts中处理
+  // useEffect(() => {
+  //   if (isNative && messages.length > 0) {
+  //     console.log('📱 同步消息列表到原生浮窗，消息数量:', messages.length);
+  //     // 格式化消息，确保timestamp为number类型
+  //     const formattedMessages = messages.map(msg => ({
+  //       id: msg.id,
+  //       text: msg.text,
+  //       isUser: msg.isUser,
+  //       timestamp: msg.timestamp instanceof Date ? msg.timestamp.getTime() : msg.timestamp
+  //     }));
+  //     
+  //     console.log('📱 格式化后的消息:', formattedMessages);
+  //     nativeChatOverlay.updateMessages(formattedMessages);
+  //   }
+  // }, [isNative, messages, nativeChatOverlay]);
+
+  // 监控灵感卡片状态变化（保持Web版本逻辑）
+  useEffect(() => {
+    console.log('🃏 灵感卡片状态变化:', currentInspirationCard ? '显示' : '隐藏');
+    if (currentInspirationCard) {
+      console.log('📝 当前卡片问题:', currentInspirationCard.question);
+    }
+  }, [currentInspirationCard]);
+
+  // Start ambient sound when user interacts（延迟到用户交互后）
+  useEffect(() => {
+    const handleFirstInteraction = () => {
+      startAmbientSound();
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
+    };
+    
+    document.addEventListener('touchstart', handleFirstInteraction);
+    document.addEventListener('click', handleFirstInteraction);
+    
+    return () => {
+      document.removeEventListener('touchstart', handleFirstInteraction);
+      document.removeEventListener('click', handleFirstInteraction);
+      stopAmbientSound();
+    };
+  }, []);
+
+  const handleOpenCollection = () => {
+    console.log('🔍 Collection button clicked - handleOpenCollection triggered!');
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starLight');
+    setIsCollectionOpen(true);
+  };
+
+  const handleCloseCollection = () => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    setIsCollectionOpen(false);
+  };
+
+  const handleOpenConfig = () => {
+    console.log('⚙️ Settings button clicked - handleOpenConfig triggered!');
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('medium');
+    }
+    playSound('starClick');
+    setIsConfigOpen(true);
+  };
+
+  const handleCloseConfig = () => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    setIsConfigOpen(false);
+    // 静默模式：移除配置检查和UI提示
+  };
+
+  const handleOpenDrawerMenu = () => {
+    console.log('🍔 Menu button clicked - handleOpenDrawerMenu triggered!');
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starClick');
+    setIsDrawerMenuOpen(true);
+  };
+
+  const handleCloseDrawerMenu = () => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    setIsDrawerMenuOpen(false);
+  };
+
+  const handleLogoClick = () => {
+    console.log('✦ Logo button clicked - opening StarCollection!');
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starLight');
+    setIsCollectionOpen(true);
+  };
+
+  const handleOpenTemplateSelector = () => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starClick');
+    setIsTemplateSelectorOpen(true);
+  };
+
+  const handleCloseTemplateSelector = () => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    setIsTemplateSelectorOpen(false);
+  };
+
+  const handleSelectTemplate = (template: ConstellationTemplate) => {
+    // 添加触感反馈（仅原生环境）
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('success');
+    }
+    applyTemplate(template);
+    playSound('starReveal');
+  };
+  
+  return (
+    // ✨ 2. 添加根容器 div，创建稳定的布局基础
+    <div className="w-screen h-screen overflow-hidden bg-black text-gray-100">
+      <div 
+        className="min-h-screen cosmic-bg overflow-hidden relative transition-all duration-500 ease-out"
+        style={{
+          transformStyle: 'preserve-3d',
+          perspective: '1000px',
+          transform: isChatOverlayOpen
+            ? 'scale(0.92) translateY(-15px) rotateX(4deg)' 
+            : 'scale(1) translateY(0px) rotateX(0deg)',
+          filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
+        }}
+      >
+        {/* Background with stars - 已屏蔽 */}
+        {/* {appReady && <StarryBackground starCount={75} />} */}
+        
+        {/* Header - 现在包含三个元素在一行 */}
+        <Header 
+          onOpenDrawerMenu={handleOpenDrawerMenu}
+          onLogoClick={handleLogoClick}
+        />
+
+        {/* User's constellation - 延迟渲染 */}
+        {appReady && <Constellation />}
+        
+        {/* Inspiration card */}
+        {currentInspirationCard && (
+          <InspirationCard
+            card={currentInspirationCard}
+            onDismiss={dismissInspirationCard}
+          />
+        )}
+        
+        {/* Star detail modal */}
+        {appReady && <StarDetail />}
+        
+        {/* Star collection modal */}
+        <StarCollection 
+          isOpen={isCollectionOpen} 
+          onClose={handleCloseCollection} 
+        />
+
+        {/* Template selector modal */}
+        <ConstellationSelector
+          isOpen={isTemplateSelectorOpen}
+          onClose={handleCloseTemplateSelector}
+          onSelectTemplate={handleSelectTemplate}
+        />
+
+        {/* AI Configuration Panel */}
+        <AIConfigPanel
+          isOpen={isConfigOpen}
+          onClose={handleCloseConfig}
+        />
+
+        {/* Drawer Menu */}
+        <DrawerMenu
+          isOpen={isDrawerMenuOpen}
+          onClose={handleCloseDrawerMenu}
+          onOpenSettings={handleOpenConfig}
+          onOpenTemplateSelector={handleOpenTemplateSelector}
+        />
+
+        {/* Oracle Input for star creation */}
+        <OracleInput />
+      </div>
+      
+      {/* ✨ 3. 使用 Portal 将 UI 组件渲染到 body 顶层，完全避免 transform 影响 */}
+      {ReactDOM.createPortal(
+        <>
+          {/* 🚫 临时屏蔽Web版ConversationDrawer - 专注调试原生InputDrawer
+          <ConversationDrawer 
+            isOpen={true} 
+            onToggle={() => {}} 
+            onSendMessage={handleSendMessage}
+            isFloatingAttached={isNative ? nativeChatOverlay.isOpen : webChatOverlayOpen}
+          />
+          */}
+          
+          {/* Chat Overlay - 根据环境条件渲染 */}
+          {!isNative && (
+            <ChatOverlay
+              isOpen={webChatOverlayOpen}
+              onClose={handleCloseChatOverlay}
+              onReopen={() => setWebChatOverlayOpen(true)}
+              followUpQuestion={pendingFollowUpQuestion}
+              onFollowUpProcessed={handleFollowUpProcessed}
+              initialInput={initialChatInput}
+              inputBottomSpace={webChatOverlayOpen ? 34 : 70}
+            />
+          )}
+        </>,
+        document.body // ✨ 4. 指定渲染目标为 document.body
+      )}
+    </div>
+  );
+}
+
+export default App;
+```
+
+**改动标注：**
+```diff
+diff --git a/src/App.tsx b/src/App.tsx
+index 1e92733..c7b5d1f 100644
+--- a/src/App.tsx
++++ b/src/App.tsx
+@@ -118,16 +118,10 @@ function App() {
+       // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
+       console.log('📱 原生模式，使用ChatStore处理消息');
+       
+-      // 🔧 优化浮窗打开逻辑，减少动画冲突
+-      if (!nativeChatOverlay.isOpen) {
+-        console.log('📱 原生浮窗未打开，先打开浮窗');
+-        await nativeChatOverlay.showOverlay(true);
+-        // 🔧 减少等待时间，避免与InputDrawer动画冲突
+-        await new Promise(resolve => setTimeout(resolve, 100)); // 减少到100ms
+-        console.log('📱 浮窗打开完成，当前isOpen状态:', nativeChatOverlay.isOpen);
+-      } else {
+-        console.log('📱 原生浮窗已打开，直接发送消息');
+-      }
++      // 🚨 【关键修复】移除竞态条件 - 每次都无条件调用showOverlay，让原生层自己判断
++      console.log('📱 🚨 【架构加固】每次都调用showOverlay，消除JS状态依赖');
++      await nativeChatOverlay.showOverlay(true); // 原生层会通过状态守卫忽略重复请求
++      console.log('📱 showOverlay调用完成，继续处理消息');
+       
+       // 添加用户消息到store
+       addUserMessage(inputText);
+```
+
+### 📄 ios/App/App/InputDrawerManager.swift
+
+```swift
+import SwiftUI
+import UIKit
+import Capacitor
+
+// MARK: - InputPassthroughWindow - 自定义窗口类，支持触摸事件穿透
+class InputPassthroughWindow: UIWindow {
+    weak var inputDrawerViewController: InputViewController?  // 改名避免与系统属性冲突
+    
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // 先让窗口正常处理触摸测试
+        guard let hitView = super.hitTest(point, with: event) else {
+            NSLog("🎯 InputPassthroughWindow: 没有找到hitView，透传事件")
+            return nil
+        }
+        
+        // 如果点击的是窗口的根视图控制器的根视图（背景视图）
+        if hitView == self.rootViewController?.view {
+            NSLog("🎯 InputPassthroughWindow: 点击在背景视图上，收起键盘并透传事件")
+            // 收起键盘
+            inputDrawerViewController?.textField.resignFirstResponder()
+            return nil // 透传事件
+        }
+        
+        // 如果点击的是PassthroughView类型的视图
+        if let passthroughView = hitView as? PassthroughView {
+            NSLog("🎯 InputPassthroughWindow: 点击在PassthroughView上")
+            
+            // 检查是否点击在容器外
+            if let containerView = passthroughView.containerView {
+                let convertedPoint = passthroughView.convert(point, to: containerView)
+                if !containerView.bounds.contains(convertedPoint) {
+                    NSLog("🎯 点击在输入框容器外，收起键盘")
+                    // 点击在容器外，收起键盘
+                    inputDrawerViewController?.textField.resignFirstResponder()
+                    return nil // 透传事件
+                }
+            }
+            
+            // 点击在容器内，正常处理
+            return hitView
+        }
+        
+        // 其他情况，正常返回hitView（比如点击在实际的UI控件上）
+        NSLog("🎯 InputPassthroughWindow: 点击在UI控件上，正常处理")
+        return hitView
+    }
+}
+
+// MARK: - InputDrawer事件协议
+public protocol InputDrawerDelegate: AnyObject {
+    func inputDrawerDidSubmit(_ text: String)
+    func inputDrawerDidChange(_ text: String)
+    func inputDrawerDidFocus()
+    func inputDrawerDidBlur()
+}
+
+// MARK: - InputDrawerManager业务逻辑类
+public class InputDrawerManager {
+    private var inputWindow: UIWindow?
+    private var isVisible = false
+    private var currentText = ""
+    internal var placeholder = "输入文字..." // 改为internal让InputViewController访问
+    internal var bottomSpace: CGFloat = 20 // 默认20px，匹配React版本
+    private var inputViewController: InputViewController?
+    
+    // 事件代理
+    public weak var delegate: InputDrawerDelegate?
+    
+    // MARK: - Public API
+    
+    func show(animated: Bool = true, completion: @escaping (Bool) -> Void) {
+        NSLog("🎯 InputDrawerManager: 显示输入框")
+        
+        DispatchQueue.main.async {
+            if self.inputWindow != nil {
+                NSLog("🎯 输入框已存在，直接显示")
+                self.inputWindow?.isHidden = false
+                self.isVisible = true
+                completion(true)
+                return
+            }
+            
+            self.createInputWindow()
+            
+            if animated {
+                self.inputWindow?.alpha = 0
+                UIView.animate(withDuration: 0.3) {
+                    self.inputWindow?.alpha = 1
+                } completion: { _ in
+                    self.isVisible = true
+                    completion(true)
+                }
+            } else {
+                self.isVisible = true
+                completion(true)
+            }
+        }
+    }
+    
+    func hide(animated: Bool = true, completion: @escaping () -> Void = {}) {
+        NSLog("🎯 InputDrawerManager: 隐藏输入框")
+        
+        DispatchQueue.main.async {
+            guard let window = self.inputWindow else {
+                completion()
+                return
+            }
+            
+            if animated {
+                UIView.animate(withDuration: 0.3) {
+                    window.alpha = 0
+                } completion: { _ in
+                    window.isHidden = true
+                    self.isVisible = false
+                    completion()
+                }
+            } else {
+                window.isHidden = true
+                self.isVisible = false
+                completion()
+            }
+        }
+    }
+    
+    func setText(_ text: String) {
+        NSLog("🎯 InputDrawerManager: 设置文本: \(text)")
+        currentText = text
+        inputViewController?.updateText(text)
+    }
+    
+    func getText() -> String {
+        NSLog("🎯 InputDrawerManager: 获取文本")
+        return currentText
+    }
+    
+    func focus() {
+        NSLog("🎯 InputDrawerManager: 聚焦输入框")
+        inputViewController?.focusInput()
+    }
+    
+    func blur() {
+        NSLog("🎯 InputDrawerManager: 失焦输入框")
+        inputViewController?.blurInput()
+    }
+    
+    func setBottomSpace(_ space: CGFloat) {
+        NSLog("🎯 InputDrawerManager: 设置底部空间: \(space)")
+        bottomSpace = space
+        inputViewController?.updateBottomSpace(space)
+    }
+    
+    func setPlaceholder(_ placeholder: String) {
+        NSLog("🎯 InputDrawerManager: 设置占位符: \(placeholder)")
+        self.placeholder = placeholder
+        inputViewController?.updatePlaceholder(placeholder)
+    }
+    
+    func getVisibility() -> Bool {
+        return isVisible
+    }
+    
+    // MARK: - Private Methods
+    
+    private func createInputWindow() {
+        NSLog("🎯 InputDrawerManager: 创建输入框窗口")
+        
+        // 创建输入框窗口 - 使用自定义的InputPassthroughWindow支持触摸穿透
+        let window = InputPassthroughWindow(frame: UIScreen.main.bounds)
+        window.windowLevel = UIWindow.Level.statusBar - 0.5  // 略低于statusBar，但高于普通窗口
+        window.backgroundColor = UIColor.clear
+        
+        // 关键：让窗口不阻挡其他交互，只处理输入框区域的触摸
+        window.isHidden = false
+        
+        // 创建输入框视图控制器
+        inputViewController = InputViewController(manager: self)
+        window.rootViewController = inputViewController
+        
+        // 设置窗口对视图控制器的引用，用于收起键盘
+        window.inputDrawerViewController = inputViewController  // 使用新的属性名
+        
+        // 保存窗口引用
+        inputWindow = window
+        
+        // 不使用makeKeyAndVisible()，避免抢夺焦点，让触摸事件更容易透传
+        window.isHidden = false
+        
+        NSLog("🎯 InputDrawerManager: 输入框窗口创建完成")
+        NSLog("🎯 InputDrawer窗口层级: \(window.windowLevel.rawValue)")
+        NSLog("🎯 StatusBar层级: \(UIWindow.Level.statusBar.rawValue)")
+        NSLog("🎯 Alert层级: \(UIWindow.Level.alert.rawValue)")
+        NSLog("🎯 Normal层级: \(UIWindow.Level.normal.rawValue)")
+    }
+    
+    // MARK: - 输入框事件处理
+    
+    internal func handleTextChange(_ text: String) {
+        currentText = text
+        delegate?.inputDrawerDidChange(text)
+    }
+    
+    internal func handleTextSubmit(_ text: String) {
+        currentText = text
+        delegate?.inputDrawerDidSubmit(text)
+        NSLog("🎯 InputDrawerManager: 文本提交: \(text)")
+    }
+    
+    internal func handleFocus() {
+        delegate?.inputDrawerDidFocus()
+        NSLog("🎯 InputDrawerManager: 输入框获得焦点")
+    }
+    
+    internal func handleBlur() {
+        delegate?.inputDrawerDidBlur()
+        NSLog("🎯 InputDrawerManager: 输入框失去焦点")
+    }
+}
+
+// MARK: - InputViewController - 处理输入框UI显示
+class InputViewController: UIViewController {
+    private weak var manager: InputDrawerManager?
+    private var containerView: UIView!
+    internal var textField: UITextField!  // 改为internal让InputPassthroughWindow可以访问
+    private var sendButton: UIButton!
+    private var micButton: UIButton!
+    private var awarenessView: FloatingAwarenessPlanetView!
+    
+    // 约束
+    private var containerBottomConstraint: NSLayoutConstraint!
+    
+    // 添加属性来保存键盘出现前的位置
+    private var bottomSpaceBeforeKeyboard: CGFloat = 20
+    
+    init(manager: InputDrawerManager) {
+        self.manager = manager
+        super.init(nibName: nil, bundle: nil)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+        setupKeyboardObservers()
+        setupChatOverlayObservers()  // 新增：监听ChatOverlay状态
+        
+        // 关键：让view只处理输入框区域的触摸，其他区域透传
+        view.backgroundColor = UIColor.clear
+        
+        // 重要：设置view不拦截触摸事件，让PassthroughView完全控制
+        view.isUserInteractionEnabled = true
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        // 在视图出现后设置触摸事件透传
+        setupPassthroughView()
+        
+        // 发送初始位置通知，让ChatOverlay知道输入框的初始位置
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+            self.notifyInputDrawerActualPosition()
+        }
+    }
+    
+    private func setupPassthroughView() {
+        // 使用更简单的方式：PassthroughView作为背景层，不移动现有的containerView
+        let passthroughView = PassthroughView()
+        passthroughView.containerView = containerView
+        passthroughView.backgroundColor = UIColor.clear
+        
+        // 将PassthroughView插入到view的最底层，不影响现有布局
+        view.insertSubview(passthroughView, at: 0)
+        passthroughView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            passthroughView.topAnchor.constraint(equalTo: view.topAnchor),
+            passthroughView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            passthroughView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            passthroughView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        
+        NSLog("🎯 InputDrawer: PassthroughView设置完成，保持原有布局")
+    }
+    
+    private func setupUI() {
+        // 确保背景透明，不阻挡其他UI
+        view.backgroundColor = UIColor.clear
+        
+        // 创建主容器 - 匹配原版：圆角全包围，灰黑背景，边框
+        containerView = UIView()
+        containerView.backgroundColor = UIColor(red: 17/255.0, green: 24/255.0, blue: 39/255.0, alpha: 1.0) // bg-gray-900
+        containerView.layer.cornerRadius = 24 // rounded-full for h-12
+        containerView.layer.borderWidth = 1
+        containerView.layer.borderColor = UIColor(red: 31/255.0, green: 41/255.0, blue: 55/255.0, alpha: 1.0).cgColor // border-gray-800
+        containerView.layer.shadowColor = UIColor.black.cgColor
+        containerView.layer.shadowOffset = CGSize(width: 0, height: 4)
+        containerView.layer.shadowOpacity = 0.25
+        containerView.layer.shadowRadius = 8
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(containerView)
+        
+        // 创建左侧觉察动画 - 精确匹配Web版FloatingAwarenessPlanet尺寸
+        // Web版: <FloatingAwarenessPlanet className="w-8 h-8 ml-3 ... " /> (w-8 h-8 = 32x32px)
+        awarenessView = FloatingAwarenessPlanetView()
+        awarenessView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(awarenessView)
+        
+        // 创建输入框 - 匹配原版：透明背景，白色文字，灰色placeholder
+        textField = UITextField()
+        textField.placeholder = "询问任何问题" // 匹配原版placeholder
+        textField.font = UIFont.systemFont(ofSize: 16)
+        textField.borderStyle = .none
+        textField.backgroundColor = UIColor.clear
+        textField.textColor = UIColor.white
+        textField.attributedPlaceholder = NSAttributedString(
+            string: "询问任何问题",
+            attributes: [NSAttributedString.Key.foregroundColor: UIColor(white: 1.0, alpha: 0.4)]
+        )
+        textField.returnKeyType = .send
+        textField.delegate = self
+        textField.addTarget(self, action: #selector(textFieldDidChange), for: .editingChanged)
+        textField.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(textField)
+        
+        // 创建发送按钮 - 使用SF Symbols paperplane图标
+        sendButton = UIButton(type: .system)
+        sendButton.backgroundColor = UIColor.clear
+        sendButton.layer.cornerRadius = 16
+        sendButton.addTarget(self, action: #selector(sendButtonTapped), for: .touchUpInside)
+        sendButton.isEnabled = false
+        sendButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        // 使用SF Symbols paperplane图标
+        let paperplaneImage = UIImage(systemName: "paperplane.fill")
+        sendButton.setImage(paperplaneImage, for: .normal)
+        sendButton.tintColor = UIColor(white: 1.0, alpha: 0.3) // 默认灰色
+        containerView.addSubview(sendButton)
+        
+        // 创建麦克风按钮 - 使用SF Symbols mic图标
+        micButton = UIButton(type: .system)
+        micButton.backgroundColor = UIColor.clear
+        micButton.layer.cornerRadius = 16
+        micButton.addTarget(self, action: #selector(micButtonTapped), for: .touchUpInside)
+        micButton.translatesAutoresizingMaskIntoConstraints = false
+        
+        // 使用SF Symbols mic图标
+        let micImage = UIImage(systemName: "mic.fill")
+        micButton.setImage(micImage, for: .normal)
+        micButton.tintColor = UIColor(white: 1.0, alpha: 0.6) // 匹配Web版颜色
+        containerView.addSubview(micButton)
+        
+        // 设置约束 - 完全匹配原版：左侧觉察动画 + 输入框 + 右侧按钮组
+        containerBottomConstraint = containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -(manager?.bottomSpace ?? 20))
+        
+        NSLayoutConstraint.activate([
+            // 容器约束 - 匹配原版h-12 = 48px高度
+            containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
+            containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            containerView.heightAnchor.constraint(equalToConstant: 48), // h-12
+            containerBottomConstraint,
+            
+            // 左侧觉察动画约束 - 精确匹配Web版w-8 h-8 ml-3 (32x32px, 12px左边距)
+            awarenessView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor, constant: 12), // ml-3 = 12px
+            awarenessView.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            awarenessView.widthAnchor.constraint(equalToConstant: 32), // w-8 = 32px
+            awarenessView.heightAnchor.constraint(equalToConstant: 32), // h-8 = 32px
+            
+            // 输入框约束 - 精确匹配Web版pl-2 pr-4的内边距
+            textField.leadingAnchor.constraint(equalTo: awarenessView.trailingAnchor, constant: 8), // pl-2 = 8px
+            textField.trailingAnchor.constraint(equalTo: micButton.leadingAnchor, constant: -16), // pr-4 = 16px
+            textField.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            
+            // 麦克风按钮约束 - 匹配原版：space-x-2，圆形按钮 (p-2 = 8px padding)
+            micButton.trailingAnchor.constraint(equalTo: sendButton.leadingAnchor, constant: -8), // space-x-2
+            micButton.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            micButton.widthAnchor.constraint(equalToConstant: 32), // 16px icon + 8px padding each side
+            micButton.heightAnchor.constraint(equalToConstant: 32),
+            
+            // 发送按钮约束 - 匹配原版：mr-3，圆形按钮 (p-2 = 8px padding)
+            sendButton.trailingAnchor.constraint(equalTo: containerView.trailingAnchor, constant: -12), // mr-3
+            sendButton.centerYAnchor.constraint(equalTo: containerView.centerYAnchor),
+            sendButton.widthAnchor.constraint(equalToConstant: 36), // 20px icon + 8px padding each side
+            sendButton.heightAnchor.constraint(equalToConstant: 36)
+        ])
+    }
+    
+    private func setupChatOverlayObservers() {
+        // 🔧 只保留状态变化监听器，移除冗余的可见性监听器
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(chatOverlayStateChanged(_:)),
+            name: Notification.Name("chatOverlayStateChanged"),
+            object: nil
+        )
+        
+        NSLog("🎯 InputDrawer: 开始监听ChatOverlay状态变化（已移除冗余的可见性监听器）")
+    }
+    
+    @objc private func chatOverlayStateChanged(_ notification: Notification) {
+        guard let userInfo = notification.userInfo,
+              let state = userInfo["state"] as? String else { return }
+        
+        // 🔧 新增：检查visible状态（如果有）
+        let visible = userInfo["visible"] as? Bool ?? true
+        
+        NSLog("🎯 InputDrawer: 收到ChatOverlay统一状态通知 - state: \(state), visible: \(visible)")
+        
+        // 根据ChatOverlay状态调整输入框位置
+        switch state {
+        case "collapsed":
+            if visible {
+                // ChatOverlay收缩状态且可见：浮窗在输入框下方，输入框需要往上移动为浮窗留出空间
+                let newBottomSpace: CGFloat = 40
+                updateBottomSpace(newBottomSpace)
+                NSLog("🎯 InputDrawer: 移动到collapsed位置，bottomSpace: \(newBottomSpace)")
+            }
+            
+        case "expanded":
+            if visible {
+                // ChatOverlay展开状态：输入框回到原始位置
+                let originalBottomSpace: CGFloat = 20
+                updateBottomSpace(originalBottomSpace)
+                NSLog("🎯 InputDrawer: 回到expanded位置，bottomSpace: \(originalBottomSpace)")
+            }
+            
+        case "hidden":
+            // ChatOverlay隐藏：输入框回到原始位置（无论 visible 值）
+            let originalBottomSpace: CGFloat = 20
+            updateBottomSpace(originalBottomSpace)
+            NSLog("🎯 InputDrawer: 回到hidden位置，bottomSpace: \(originalBottomSpace)")
+            
+        default:
+            // 未知状态，检查visible状态
+            if !visible {
+                let originalBottomSpace: CGFloat = 20
+                updateBottomSpace(originalBottomSpace)
+                NSLog("🎯 InputDrawer: 未知状态但不可见，回到原始位置")
+            }
+        }
+    }
+    
+    // 🔧 已移除chatOverlayVisibilityChanged方法，避免重复动画
+    // 现在只使用chatOverlayStateChanged来统一管理所有状态变化
+    
+    private func setupKeyboardObservers() {
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillShow(_:)),
+            name: UIResponder.keyboardWillShowNotification,
+            object: nil
+        )
+        
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(keyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        NSLog("🎯 InputDrawer: 移除所有通知观察者")
+    }
+    
+    // MARK: - Public Methods
+    
+    func updateText(_ text: String) {
+        textField.text = text
+        updateSendButtonState()
+    }
+    
+    func updatePlaceholder(_ placeholder: String) {
+        textField.placeholder = placeholder
+    }
+    
+    func updateBottomSpace(_ space: CGFloat) {
+        // 检查是否真的需要更新
+        let oldSpace = manager?.bottomSpace ?? 20
+        if abs(oldSpace - space) < 1 {
+            NSLog("🎯 InputDrawer: 位置未发生显著变化，跳过更新")
+            return
+        }
+        
+        // 更新管理器中的bottomSpace值
+        manager?.bottomSpace = space
+        
+        // 🚨 【关键修复】移除InputDrawer的自动动画，改为瞬间移动
+        // 这避免了与ChatOverlay动画的冲突
+        containerBottomConstraint.constant = -space
+        // 不再执行动画，而是让布局立即生效
+        self.view.layoutIfNeeded()
+        
+        NSLog("🎯 InputDrawer: 位置更新完成（无动画），bottomSpace: \(space)")
+        
+        // 🚨 【关键修复】注释掉反馈通知，打破 InputDrawer -> ChatOverlay 的恶性循环
+        // 这个通知会导致ChatOverlay再次更新状态，形成无限循环触发双重动画
+        /*
+        NotificationCenter.default.post(
+            name: Notification.Name("inputDrawerPositionChanged"),
+            object: nil,
+            userInfo: ["bottomSpace": space]
+        )
+        NSLog("🎯 InputDrawer: 发送逻辑位置变化通知，bottomSpace: \(space)")
+        */
+        
+        NSLog("🎯 InputDrawer: 位置更新完成，bottomSpace: \(space)，已阻止反馈循环")
+    }
+    
+    func focusInput() {
+        textField.becomeFirstResponder()
+    }
+    
+    func blurInput() {
+        textField.resignFirstResponder()
+    }
+    
+    // MARK: - Private Methods
+    
+    private func updateSendButtonState() {
+        let hasText = !(textField.text?.isEmpty ?? true)
+        sendButton.isEnabled = hasText
+        
+        // 更新发送按钮颜色 - 精确匹配Web版逻辑
+        // Web版: 当有文字时变为cosmic-accent紫色，无文字时为白色半透明
+        let cosmicAccentColor = UIColor(red: 168/255.0, green: 85/255.0, blue: 247/255.0, alpha: 1.0) // #a855f7
+        let defaultColor = UIColor(white: 1.0, alpha: 0.3) // 匹配Web版默认白色半透明
+        sendButton.tintColor = hasText ? cosmicAccentColor : defaultColor
+    }
+    
+    @objc private func textFieldDidChange() {
+        updateSendButtonState()
+        manager?.handleTextChange(textField.text ?? "")
+    }
+    
+    @objc private func sendButtonTapped() {
+        guard let text = textField.text, !text.isEmpty else { return }
+        
+        manager?.handleTextSubmit(text)
+        textField.text = ""
+        updateSendButtonState()
+    }
+    
+    @objc private func micButtonTapped() {
+        NSLog("🎯 麦克风按钮被点击")
+        // TODO: 集成语音识别功能
+    }
+    
+    @objc private func keyboardWillShow(_ notification: Notification) {
+        guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
+        
+        // 保存键盘出现前的位置
+        bottomSpaceBeforeKeyboard = manager?.bottomSpace ?? 20
+        NSLog("🎯 键盘即将显示，保存当前bottomSpace: \(bottomSpaceBeforeKeyboard)")
+        
+        let keyboardHeight = keyboardFrame.height
+        // 获取安全区底部高度
+        let safeAreaBottom = view.safeAreaInsets.bottom
+        
+        // 计算输入框应该在键盘上方的位置
+        // 键盘高度包含了安全区，所以要减去安全区高度避免重复计算
+        let actualKeyboardHeight = keyboardHeight - safeAreaBottom
+        containerBottomConstraint.constant = -actualKeyboardHeight - 16
+        
+        NSLog("🎯 键盘高度: \(keyboardHeight), 安全区: \(safeAreaBottom), 实际键盘高度: \(actualKeyboardHeight)")
+        
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            // 动画完成后，通知ChatOverlay输入框的新位置
+            self.notifyInputDrawerActualPosition()
+        }
+    }
+    
+    @objc private func keyboardWillHide(_ notification: Notification) {
+        // 恢复到键盘出现前的位置
+        containerBottomConstraint.constant = -bottomSpaceBeforeKeyboard
+        NSLog("🎯 键盘即将隐藏，恢复到位置: \(bottomSpaceBeforeKeyboard)")
+        
+        UIView.animate(withDuration: 0.3) {
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            // 动画完成后，通知ChatOverlay输入框的新位置
+            self.notifyInputDrawerActualPosition()
+        }
+    }
+    
+    // MARK: - 通知ChatOverlay输入框的实际屏幕位置
+    private func notifyInputDrawerActualPosition() {
+        // 计算输入框底部在屏幕中的实际Y坐标
+        let containerFrame = containerView.frame
+        let containerBottom = containerFrame.maxY
+        let screenHeight = UIScreen.main.bounds.height
+        
+        // 计算输入框底部距离屏幕底部的实际距离
+        let actualBottomSpaceFromScreen = screenHeight - containerBottom
+        
+        NSLog("🎯 InputDrawer实际位置 - 容器底部Y: \(containerBottom), 屏幕高度: \(screenHeight), 实际底部距离: \(actualBottomSpaceFromScreen)")
+        
+        // 🚨 【关键修复】注释掉这个反馈通知，防止任何可能的循环触发
+        // 即使ChatOverlay当前没有监听，也要预防未来可能形成的反馈循环
+        /*
+        NotificationCenter.default.post(
+            name: Notification.Name("inputDrawerActualPositionChanged"),
+            object: nil,
+            userInfo: ["actualBottomSpace": actualBottomSpaceFromScreen]
+        )
+        */
+        
+        NSLog("🎯 InputDrawer: 实际位置计算完成，已阻止反馈通知发送")
+    }
+}
+
+// MARK: - PassthroughView - 处理触摸事件透传的自定义View
+class PassthroughView: UIView {
+    weak var containerView: UIView?
+    
+    // 重写这个方法来决定是否拦截触摸事件
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        NSLog("🎯 InputDrawer PassthroughView hitTest: \(point)")
+        
+        // 首先让父类正常处理触摸测试
+        let hitView = super.hitTest(point, with: event)
+        
+        // 如果触摸点不在containerView区域内，返回nil让事件透传
+        guard let containerView = containerView else {
+            NSLog("🎯 无containerView，返回hitView: \(String(describing: hitView))")
+            return hitView
+        }
+        
+        // 将点转换到containerView的坐标系
+        let convertedPoint = convert(point, to: containerView)
+        let containerBounds = containerView.bounds
+        
+        NSLog("🎯 转换后坐标: \(convertedPoint), 容器边界: \(containerBounds)")
+        
+        // 如果触摸点在containerView的边界内，正常返回hitView
+        if containerBounds.contains(convertedPoint) {
+            NSLog("🎯 触摸在输入框容器内，返回hitView: \(String(describing: hitView))")
+            return hitView
+        } else {
+            NSLog("🎯 触摸在输入框容器外，返回nil透传事件")
+            // 触摸点在containerView外部，返回nil透传给下层
+            return nil
+        }
+    }
+}
+
+// MARK: - UITextFieldDelegate
+extension InputViewController: UITextFieldDelegate {
+    
+    func textFieldDidBeginEditing(_ textField: UITextField) {
+        manager?.handleFocus()
+    }
+    
+    func textFieldDidEndEditing(_ textField: UITextField) {
+        manager?.handleBlur()
+    }
+    
+    func textFieldShouldReturn(_ textField: UITextField) -> Bool {
+        guard let text = textField.text, !text.isEmpty else { return false }
+        
+        sendButtonTapped()
+        return true
+    }
+}
+
+// MARK: - FloatingAwarenessPlanetView - 完全匹配原版动画效果
+class FloatingAwarenessPlanetView: UIView {
+    private var centerDot: CAShapeLayer!
+    private var rayLayers: [CAShapeLayer] = []
+    private var isAnimating = false
+    private var level: String = "medium" // none, low, medium, high
+    private var isAnalyzing = false
+    
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        setupView()
+    }
+    
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        setupView()
+    }
+    
+    private func setupView() {
+        backgroundColor = UIColor.clear
+        
+        // 创建中心圆点（跟Web版一样）
+        centerDot = CAShapeLayer()
+        let centerPath = UIBezierPath(ovalIn: CGRect(x: 14.5, y: 14.5, width: 3, height: 3)) // r=1.5, centered at 16,16
+        centerDot.path = centerPath.cgPath
+        centerDot.fillColor = getStarColor().cgColor
+        layer.addSublayer(centerDot)
+        
+        // 创建12条射线
+        for i in 0..<12 {
+            let rayLayer = CAShapeLayer()
+            let angle = Double(i) * Double.pi * 2.0 / 12.0
+            
+            // 随机长度和粗细（匹配原版算法）
+            let seedRandom = { (seed: Double) -> Double in
+                let x = sin(seed) * 10000
+                return x - floor(x)
+            }
+            let length = 5 + seedRandom(Double(i)) * 8 // 缩小长度适应32px容器
+            let strokeWidth = seedRandom(Double(i + 12)) * 1.2 + 0.3
+            
+            let startX = 16.0
+            let startY = 16.0
+            let endX = startX + cos(angle) * length
+            let endY = startY + sin(angle) * length
+            
+            let rayPath = UIBezierPath()
+            rayPath.move(to: CGPoint(x: startX, y: startY))
+            rayPath.addLine(to: CGPoint(x: endX, y: endY))
+            
+            rayLayer.path = rayPath.cgPath
+            rayLayer.strokeColor = getStarColor().cgColor
+            rayLayer.lineWidth = CGFloat(strokeWidth)
+            rayLayer.lineCap = .round
+            rayLayer.strokeStart = 0
+            rayLayer.strokeEnd = 0.2 // 初始状态
+            rayLayer.opacity = 0.2
+            
+            layer.addSublayer(rayLayer)
+            rayLayers.append(rayLayer)
+        }
+        
+        startAnimation()
+    }
+    
+    private func getStarColor() -> UIColor {
+        if isAnalyzing {
+            return UIColor(red: 138/255.0, green: 95/255.0, blue: 189/255.0, alpha: 1.0) // #8A5FBD
+        }
+        
+        let progress: Double = 
+            level == "none" ? 0 :
+            level == "low" ? 0.33 :
+            level == "medium" ? 0.66 :
+            level == "high" ? 1 : 0.66 // 默认medium
+        
+        // 从灰色到紫色的渐变
+        let gray = (r: 136.0, g: 136.0, b: 136.0)
+        let purple = (r: 138.0, g: 95.0, b: 189.0)
+        
+        let r = gray.r + (purple.r - gray.r) * progress
+        let g = gray.g + (purple.g - gray.g) * progress
+        let b = gray.b + (purple.b - gray.b) * progress
+        
+        return UIColor(red: r/255.0, green: g/255.0, blue: b/255.0, alpha: 1.0)
+    }
+    
+    private func startAnimation() {
+        guard !isAnimating else { return }
+        isAnimating = true
+        
+        // 中心圆点动画（匹配Web版）
+        let centerScaleAnimation = CAKeyframeAnimation(keyPath: "transform.scale")
+        centerScaleAnimation.values = [1.0, 1.2, 1.0]
+        centerScaleAnimation.keyTimes = [0.0, 0.5, 1.0]
+        centerScaleAnimation.duration = 2.0
+        centerScaleAnimation.repeatCount = .infinity
+        
+        let centerOpacityAnimation = CAKeyframeAnimation(keyPath: "opacity")
+        centerOpacityAnimation.values = [0.8, 1.0, 0.8]
+        centerOpacityAnimation.keyTimes = [0.0, 0.5, 1.0]
+        centerOpacityAnimation.duration = 2.0
+        centerOpacityAnimation.repeatCount = .infinity
+        
+        centerDot.add(centerScaleAnimation, forKey: "scale")
+        centerDot.add(centerOpacityAnimation, forKey: "opacity")
+        
+        // 射线动画
+        for (i, rayLayer) in rayLayers.enumerated() {
+            let strokeAnimation = CAKeyframeAnimation(keyPath: "strokeEnd")
+            strokeAnimation.values = [0.0, 1.0, 0.0]
+            strokeAnimation.keyTimes = [0.0, 0.5, 1.0]
+            strokeAnimation.duration = 2.0 + Double(i) * 0.1 // 轻微的延迟差异
+            strokeAnimation.repeatCount = .infinity
+            strokeAnimation.beginTime = CACurrentMediaTime() + Double(i) * 0.05
+            
+            let opacityAnimation = CAKeyframeAnimation(keyPath: "opacity")
+            opacityAnimation.values = [0.0, 0.7, 0.0]
+            opacityAnimation.keyTimes = [0.0, 0.5, 1.0]
+            opacityAnimation.duration = 2.0 + Double(i) * 0.1
+            opacityAnimation.repeatCount = .infinity
+            opacityAnimation.beginTime = CACurrentMediaTime() + Double(i) * 0.05
+            
+            rayLayer.add(strokeAnimation, forKey: "strokeEnd")
+            rayLayer.add(opacityAnimation, forKey: "opacity")
+        }
+    }
+}
+```
+
+**改动标注：**
+```diff
+diff --git a/ios/App/App/InputDrawerManager.swift b/ios/App/App/InputDrawerManager.swift
+index 9aef188..408e423 100644
+--- a/ios/App/App/InputDrawerManager.swift
++++ b/ios/App/App/InputDrawerManager.swift
+@@ -487,11 +487,13 @@ class InputViewController: UIViewController {
+         // 更新管理器中的bottomSpace值
+         manager?.bottomSpace = space
+         
+-        // 更新UI约束
++        // 🚨 【关键修复】移除InputDrawer的自动动画，改为瞬间移动
++        // 这避免了与ChatOverlay动画的冲突
+         containerBottomConstraint.constant = -space
+-        UIView.animate(withDuration: 0.3) {
+-            self.view.layoutIfNeeded()
+-        }
++        // 不再执行动画，而是让布局立即生效
++        self.view.layoutIfNeeded()
++        
++        NSLog("🎯 InputDrawer: 位置更新完成（无动画），bottomSpace: \(space)")
+         
+         // 🚨 【关键修复】注释掉反馈通知，打破 InputDrawer -> ChatOverlay 的恶性循环
+         // 这个通知会导致ChatOverlay再次更新状态，形成无限循环触发双重动画
+```
+
+### 📄 cofind.md
+
+```md
+# 🔍 CodeFind 报告: 输入框点击发送到内容发送到浮窗的全流程相关代码 (Input Send Flow)
+
+**生成时间**: 2025-08-31
+
+---
+
+## 📂 项目目录结构
+
+```
+staroracle-app_v1/
+├── src/                        # React Web层
+│   ├── components/
+│   │   ├── ConversationDrawer.tsx  # React版输入框
+│   │   └── App.tsx                 # 主应用入口
+│   ├── hooks/
+│   │   ├── useNativeChatOverlay.ts # 原生聊天浮窗Hook  
+│   │   └── useNativeInputDrawer.ts # 原生输入框Hook
+│   ├── plugins/
+│   │   ├── ChatOverlay.ts          # 聊天浮窗插件定义
+│   │   └── InputDrawer.ts          # 输入框插件定义
+│   ├── store/
+│   │   ├── useStarStore.ts         # 星星状态管理
+│   │   └── useChatStore.ts         # 聊天状态管理
+│   └── utils/
+│       └── aiTaggingUtils.ts       # AI工具函数
+└── ios/App/App/                # iOS Swift原生层
+    ├── InputDrawerManager.swift    # 原生输入框管理器
+    ├── InputDrawerPlugin.swift     # 原生输入框插件
+    ├── ChatOverlayManager.swift    # 原生聊天浮窗管理器
+    └── ChatOverlayPlugin.swift     # 原生聊天浮窗插件
+```
+
+---
+
+## 🎯 功能指代确认
+
+**"输入框点击发送到内容发送到浮窗的全流程"** 对应技术模块：
+
+1. **输入框**: `ConversationDrawer` (React) + `InputDrawerManager` (Swift)
+2. **发送流程**: 从用户输入 → AI处理 → 星星创建 → 浮窗显示
+3. **浮窗**: `ChatOverlay` (React/Web回退) + `ChatOverlayManager` (Swift)  
+4. **状态管理**: `useStarStore` (星星管理) + `useChatStore` (聊天管理)
+
+---
+
+## 📁 涉及文件列表 (按重要度评级)
+
+### ⭐⭐⭐ 核心流程文件
+- `src/components/ConversationDrawer.tsx` - React版输入框组件
+- `src/App.tsx` - 主应用，处理发送逻辑
+- `src/store/useStarStore.ts` - 星星创建核心逻辑
+- `ios/App/App/InputDrawerManager.swift` - 原生输入框实现
+
+### ⭐⭐ 重要支持文件
+- `src/hooks/useNativeChatOverlay.ts` - 原生浮窗集成
+- `ios/App/App/ChatOverlayManager.swift` - 原生浮窗实现
+- `src/store/useChatStore.ts` - 聊天状态管理
+- `src/utils/aiTaggingUtils.ts` - AI响应处理
+
+### ⭐ 插件接口文件
+- `ios/App/App/InputDrawerPlugin.swift` - 原生输入框插件
+- `ios/App/App/ChatOverlayPlugin.swift` - 原生浮窗插件
+- `src/plugins/InputDrawer.ts` - 输入框插件定义
+- `src/plugins/ChatOverlay.ts` - 浮窗插件定义
+
+---
+
+## 📄 完整代码内容
+
+### ⭐⭐⭐ ConversationDrawer.tsx - React版输入框
+```typescript
+import React, { useState, useRef, useCallback } from 'react';
+import { Mic } from 'lucide-react';
+import { playSound } from '../utils/soundUtils';
+import { triggerHapticFeedback } from '../utils/hapticUtils';
+import StarRayIcon from './StarRayIcon';
+import FloatingAwarenessPlanet from './FloatingAwarenessPlanet';
+import { Capacitor } from '@capacitor/core';
+import { useChatStore } from '../store/useChatStore';
+import { useKeyboard } from '../hooks/useKeyboard';
+
+interface ConversationDrawerProps {
+  isOpen: boolean;
+  onToggle: () => void;
+  onSendMessage?: (inputText: string) => void;
+  showChatHistory?: boolean;
+  followUpQuestion?: string;
+  onFollowUpProcessed?: () => void;
+  isFloatingAttached?: boolean;
+}
+
+const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ 
+  onSendMessage,
+  isFloatingAttached = false
+}) => {
+  const [inputValue, setInputValue] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [starAnimated, setStarAnimated] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { conversationAwareness } = useChatStore();
+  const { keyboardHeight, isKeyboardOpen } = useKeyboard();
+
+  // 🎯 使用Capacitor键盘数据动态计算位置
+  const getBottomPosition = () => {
+    if (isKeyboardOpen && keyboardHeight > 0) {
+      // 键盘打开时，使用键盘高度 + 少量间距
+      return keyboardHeight + 10;
+    } else {
+      // 键盘关闭时，使用底部安全区域或浮窗间距
+      return isFloatingAttached ? 70 : 20;
+    }
+  };
+
+  const handleMicClick = () => {
+    setIsRecording(!isRecording);
+    console.log('Microphone clicked, recording:', !isRecording);
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starClick');
+  };
+
+  const handleStarClick = () => {
+    setStarAnimated(true);
+    console.log('Star ray button clicked');
+    if (inputValue.trim()) {
+      handleSend();
+    }
+    setTimeout(() => {
+      setStarAnimated(false);
+    }, 1000);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  };
+
+  // 🎯 【核心发送逻辑】
+  const handleSend = useCallback(async () => {
+    const trimmedInput = inputValue.trim();
+    if (!trimmedInput) return;
+    
+    if (onSendMessage) {
+      onSendMessage(trimmedInput);
+    }
+    
+    setInputValue('');
+    console.log('🔍 ConversationDrawer: 消息已发送，请求打开ChatOverlay');
+  }, [inputValue, onSendMessage]);
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSend();
+    }
+  };
+
+  return (
+    <div 
+      className="fixed left-0 right-0 z-50 p-4"
+      style={{
+        bottom: `${getBottomPosition()}px`, // 🎯 使用Capacitor键盘高度
+        transition: 'bottom 0.3s ease-out', // 🎯 平滑过渡动画
+        pointerEvents: 'none'
+      }}
+    >
+      <div className="w-full max-w-md mx-auto pointer-events-auto">
+        <div className="relative">
+          <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
+            {/* 左侧：觉察动画 */}
+            <div className="ml-3 flex-shrink-0">
+              <FloatingAwarenessPlanet
+                level={conversationAwareness.overallLevel}
+                isAnalyzing={conversationAwareness.isAnalyzing}
+                conversationDepth={conversationAwareness.conversationDepth}
+                onTogglePanel={() => console.log('觉察动画被点击')}
+              />
+            </div>
+            
+            {/* Input field */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyPress={handleKeyPress}
+              placeholder="询问任何问题"
+              className="flex-1 bg-transparent text-white placeholder-gray-400 pl-2 pr-4 py-2 focus:outline-none stellar-body"
+              inputMode="text"
+              autoComplete="off"
+              autoCapitalize="sentences"
+              spellCheck="false"
+            />
+
+            <div className="flex items-center space-x-2 mr-3">
+              {/* Mic Button */}
+              <button
+                type="button"
+                onClick={handleMicClick}
+                className={`p-2 rounded-full dialog-transparent-button transition-colors duration-200 ${
+                  isRecording ? 'recording' : ''
+                }`}
+              >
+                <Mic className="w-4 h-4" strokeWidth={2} />
+              </button>
+
+              {/* Star Button */}
+              <button
+                type="button"
+                onClick={handleStarClick}
+                className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
+              >
+                <StarRayIcon 
+                  size={16} 
+                  animated={starAnimated || !!inputValue.trim()} 
+                  iconColor="currentColor"
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
+              <div className="flex items-center space-x-2 text-red-400 text-xs">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span>Recording...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ConversationDrawer;
+```
+
+**第67行**: 🎯 核心发送处理函数`handleSend`
+**第72行**: 🎯 调用`onSendMessage`回调传递消息
+**第52行**: 🎯 星星按钮点击触发发送
+
+### ⭐⭐⭐ App.tsx - 主应用发送逻辑
+```typescript
+// 🎯 【核心发送流程】App.tsx中的关键部分
+const handleSendMessage = async (inputText: string) => {
+  console.log('🔍 App.tsx: 接收到发送请求', inputText, '原生模式:', isNative);
+  console.log('🔍 当前nativeChatOverlay.isOpen状态:', nativeChatOverlay.isOpen);
+
+  if (isNative) {
+    // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
+    console.log('📱 原生模式，使用ChatStore处理消息');
+    
+    // 🔧 优化浮窗打开逻辑，减少动画冲突
+    if (!nativeChatOverlay.isOpen) {
+      console.log('📱 原生浮窗未打开，先打开浮窗');
+      await nativeChatOverlay.showOverlay(true);
+      // 🔧 减少等待时间，避免与InputDrawer动画冲突
+      await new Promise(resolve => setTimeout(resolve, 100)); // 减少到100ms
+      console.log('📱 浮窗打开完成，当前isOpen状态:', nativeChatOverlay.isOpen);
+    } else {
+      console.log('📱 原生浮窗已打开，直接发送消息');
+    }
+    
+    // 添加用户消息到store
+    addUserMessage(inputText);
+    setLoading(true);
+    
+    try {
+      // 调用AI API
+      const messageId = addStreamingAIMessage('');
+      let streamingText = '';
+      
+      const onStream = (chunk: string) => {
+        streamingText += chunk;
+        updateStreamingMessage(messageId, streamingText);
+      };
+
+      // 获取对话历史（需要获取最新的messages）
+      const conversationHistory = messages.map(msg => ({
+        role: msg.isUser ? 'user' as const : 'assistant' as const,
+        content: msg.text
+      }));
+
+      const aiResponse = await generateAIResponse(
+        inputText, 
+        undefined, 
+        onStream,
+        conversationHistory
+      );
+      
+      if (streamingText !== aiResponse) {
+        updateStreamingMessage(messageId, aiResponse);
+      }
+      
+      finalizeStreamingMessage(messageId);
+      
+      // 在第一次AI回复后，尝试生成对话标题
+      setTimeout(() => {
+        generateConversationTitle();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ AI回复失败:', error);
+    } finally {
+      setLoading(false);
+      // 🔧 移除可能导致动画冲突的原生setLoading调用
+      // 原生端会通过消息同步机制自动更新loading状态，无需额外调用
+      // await nativeChatOverlay.setLoading(false);
+      console.log('📱 已跳过原生setLoading调用，避免动画冲突');
+    }
+  } else {
+    // Web模式：使用React ChatOverlay
+    console.log('🌐 Web模式，使用React ChatOverlay');
+    if (webChatOverlayOpen) {
+      setPendingFollowUpQuestion(inputText);
+    } else {
+      setInitialChatInput(inputText);
+      setWebChatOverlayOpen(true);
+    }
+  }
+};
+
+// 🎯 【原生输入框监听】设置原生InputDrawer事件监听
+useEffect(() => {
+  const setupNative = async () => {
+    if (Capacitor.isNativePlatform()) {
+      // 🎯 设置原生InputDrawer事件监听
+      const messageSubmittedListener = await InputDrawer.addListener('messageSubmitted', (data: any) => {
+        console.log('🎯 收到原生InputDrawer消息提交事件:', data.text);
+        handleSendMessage(data.text);
+      });
+
+      const textChangedListener = await InputDrawer.addListener('textChanged', (data: any) => {
+        console.log('🎯 原生InputDrawer文本变化:', data.text);
+        // 可以在这里处理文本变化逻辑，比如实时预览等
+      });
+
+      // 🎯 自动显示输入框
+      console.log('🎯 自动显示原生InputDrawer');
+      await InputDrawer.show();
+
+      // 清理函数
+      return () => {
+        messageSubmittedListener.remove();
+        textChangedListener.remove();
+      };
+    } else {
+      // Web环境立即设置为准备就绪
+      setAppReady(true);
+    }
+  };
+  
+  setupNative();
+}, []);
+```
+
+**第113行**: 🎯 主发送消息处理函数`handleSendMessage`
+**第135行**: 🎯 添加用户消息到ChatStore
+**第139行**: 🎯 创建AI流式回复消息
+**第220行**: 🎯 监听原生InputDrawer的`messageSubmitted`事件
+
+### ⭐⭐⭐ useStarStore.ts - 星星创建核心
+```typescript
+// 🎯 【星星创建核心】addStar方法的关键部分
+addStar: async (question: string) => {
+  const { constellation, pendingStarPosition } = get();
+  const { stars } = constellation;
+  
+  console.log(`===== User asked a question =====`);
+  console.log(`Question: "${question}"`);
+  
+  // Set loading state to true
+  set({ isLoading: true });
+  
+  // Get AI configuration
+  const aiConfig = getAIConfig();
+  console.log('Retrieved AI config result:', {
+    hasApiKey: !!aiConfig.apiKey,
+    hasEndpoint: !!aiConfig.endpoint,
+    provider: aiConfig.provider,
+    model: aiConfig.model
+  });
+  
+  // Create new star at the clicked position or random position first (with placeholder answer)
+  const x = pendingStarPosition?.x ?? (Math.random() * 70 + 15); // 15-85%
+  const y = pendingStarPosition?.y ?? (Math.random() * 70 + 15); // 15-85%
+  
+  // Create placeholder star (we'll update it with AI response later)
+  const newStar: Star = {
+    id: `star-${Date.now()}`,
+    x,
+    y,
+    size: Math.random() * 1.5 + 2.0, // Will be updated based on AI analysis
+    brightness: 0.6, // Placeholder brightness
+    question,
+    answer: '', // Empty initially, will be filled by streaming
+    imageUrl: generateRandomStarImage(),
+    createdAt: new Date(),
+    isSpecial: false, // Will be updated based on AI analysis
+    tags: [], // Will be filled by AI analysis
+    primary_category: 'philosophy_and_existence', // Placeholder
+    emotional_tone: ['探寻中'], // Placeholder
+    question_type: '探索型', // Placeholder
+    insight_level: { value: 1, description: '星尘' }, // Placeholder
+    initial_luminosity: 10, // Placeholder
+    connection_potential: 3, // Placeholder
+    suggested_follow_up: '', // Will be filled by AI analysis
+    card_summary: question, // Placeholder
+    isTemplate: false,
+    isStreaming: true, // Mark as currently streaming
+  };
+  
+  // Add placeholder star to constellation immediately for better UX
+  const updatedStars = [...stars, newStar];
+  set({
+    constellation: {
+      stars: updatedStars,
+      connections: constellation.connections, // Keep existing connections for now
+    },
+    activeStarId: newStar.id, // Show the star being created
+    isAsking: false,
+    pendingStarPosition: null,
+  });
+  
+  // Generate AI response with streaming
+  console.log('Starting AI response generation with streaming...');
+  let answer: string;
+  let streamingAnswer = '';
+  
+  try {
+    // Set up streaming callback
+    const onStream = (chunk: string) => {
+      streamingAnswer += chunk;
+      
+      // Update star with streaming content in real time
+      set(state => ({
+        constellation: {
+          ...state.constellation,
+          stars: state.constellation.stars.map(star => 
+            star.id === newStar.id 
+              ? { ...star, answer: streamingAnswer }
+              : star
+          )
+        }
+      }));
+    };
+    
+    answer = await generateAIResponse(question, aiConfig, onStream);
+    console.log(`Got AI response: "${answer}"`);
+    
+    // Ensure we have a valid answer
+    if (!answer || answer.trim().length === 0) {
+      throw new Error('Empty AI response');
+    }
+  } catch (error) {
+    console.warn('AI response failed, using fallback:', error);
+    // Use fallback response generation
+    answer = generateFallbackResponse(question);
+    console.log(`Fallback response: "${answer}"`);
+    
+    // Update with fallback answer
+    streamingAnswer = answer;
+  }
+  
+  // Analyze content with AI for tags and categorization
+  const analysis = await analyzeStarContent(question, answer, aiConfig);
+  
+  // Update star with final AI analysis results
+  const finalStar: Star = {
+    ...newStar,
+    // 根据洞察等级调整星星大小，洞察等级越高，星星越大
+    size: Math.random() * 1.5 + 2.0 + (analysis.insight_level?.value || 0) * 0.5, // 2.0-6.5px
+    // 亮度也受洞察等级影响
+    brightness: (analysis.initial_luminosity || 60) / 100, // 转换为0-1范围
+    answer: streamingAnswer || answer, // Use final streamed answer
+    isSpecial: Math.random() < 0.12 || (analysis.insight_level?.value || 0) >= 4, // 启明星和超新星自动成为特殊星
+    tags: analysis.tags,
+    primary_category: analysis.primary_category,
+    emotional_tone: analysis.emotional_tone,
+    question_type: analysis.question_type,
+    insight_level: analysis.insight_level,
+    initial_luminosity: analysis.initial_luminosity,
+    connection_potential: analysis.connection_potential,
+    suggested_follow_up: analysis.suggested_follow_up,
+    card_summary: analysis.card_summary,
+    isStreaming: false, // Streaming completed
+  };
+  
+  console.log('⭐ Final star with AI analysis:', {
+    question: finalStar.question,
+    answer: finalStar.answer,
+    answerLength: finalStar.answer.length,
+    tags: finalStar.tags,
+    primary_category: finalStar.primary_category,
+    emotional_tone: finalStar.emotional_tone,
+    insight_level: finalStar.insight_level,
+    connection_potential: finalStar.connection_potential
+  });
+  
+  // Update with final star and regenerate connections
+  const finalStars = updatedStars.map(star => 
+    star.id === newStar.id ? finalStar : star
+  );
+  const smartConnections = generateSmartConnections(finalStars);
+  
+  set({
+    constellation: {
+      stars: finalStars,
+      connections: smartConnections,
+    },
+    isLoading: false, // Set loading state back to false
+  });
+  
+  return finalStar;
+}
+```
+
+**第67行**: 🎯 主星星创建函数`addStar`开始
+**第91行**: 🎯 创建占位符星星，立即显示给用户
+**第116行**: 🎯 立即添加星星到constellation，提升用户体验
+**第134行**: 🎯 设置流式回复回调函数`onStream`
+**第150行**: 🎯 调用`generateAIResponse`开始AI处理
+**第169行**: 🎯 分析AI内容并分类标记
+**第171行**: 🎯 创建最终星星对象
+
+### ⭐⭐ InputDrawerManager.swift - 原生输入框
+```swift
+// 🎯 【原生输入框核心】handleTextSubmit方法
+internal func handleTextSubmit(_ text: String) {
+    currentText = text
+    delegate?.inputDrawerDidSubmit(text)
+    NSLog("🎯 InputDrawerManager: 文本提交: \(text)")
+}
+
+// 🎯 【发送按钮处理】
+@objc private func sendButtonTapped() {
+    guard let text = textField.text, !text.isEmpty else { return }
+    
+    manager?.handleTextSubmit(text)
+    textField.text = ""
+    updateSendButtonState()
+}
+
+// 🎯 【文本变化处理】
+@objc private func textFieldDidChange() {
+    updateSendButtonState()
+    manager?.handleTextChange(textField.text ?? "")
+}
+```
+
+**第202行**: 🎯 处理文本提交的核心方法`handleTextSubmit`
+**第538行**: 🎯 发送按钮点击处理`sendButtonTapped`
+**第533行**: 🎯 文本变化实时处理`textFieldDidChange`
+
+### ⭐⭐ useNativeChatOverlay.ts - 原生浮窗集成
+```typescript
+// 🎯 【消息同步核心】简化同步逻辑
+useEffect(() => {
+  if (!Capacitor.isNativePlatform() || storeMessages.length === 0) {
+    return;
+  }
+
+  console.log('📱 [简化同步] 消息列表发生变化，同步到原生ChatOverlay');
+  console.log('📱 当前store消息数量:', storeMessages.length);
+  
+  // 将store的ChatMessage转换为原生可识别的格式
+  const nativeMessages = storeMessages.map(msg => ({
+    id: msg.id,
+    text: msg.text,
+    isUser: msg.isUser,
+    timestamp: msg.timestamp.getTime() // 转换Date为毫秒时间戳
+  }));
+
+  // 🎯 关键简化：无差别同步，让原生端自己决定何时播放动画
+  const syncMessages = async () => {
+    try {
+      await ChatOverlay.updateMessages({ messages: nativeMessages });
+      console.log('✅ [简化同步] 消息同步成功，动画判断交由原生端处理');
+    } catch (error) {
+      console.error('❌ [简化同步] 消息同步失败:', error);
+    }
+  };
+
+  // 立即执行同步，不再区分用户消息、AI消息或流式更新
+  syncMessages();
+}, [storeMessages]); // 只依赖storeMessages数组变化
+```
+
+**第85行**: 🎯 消息同步的核心useEffect
+**第94行**: 🎯 转换消息格式为原生可识别
+**第102-112行**: 🎯 执行消息同步到原生ChatOverlay
+
+---
+
+## 🔍 关键功能点标注
+
+### 📍 发送流程关键节点
+
+1. **第67行** (ConversationDrawer.tsx): 用户点击发送触发`handleSend`
+2. **第113行** (App.tsx): 主应用接收发送请求`handleSendMessage`  
+3. **第220行** (App.tsx): 监听原生InputDrawer的消息提交事件
+4. **第135行** (App.tsx): 添加用户消息到ChatStore
+5. **第67行** (useStarStore.ts): 创建星星`addStar`方法
+6. **第150行** (useStarStore.ts): 调用AI生成响应
+7. **第104行** (useNativeChatOverlay.ts): 同步消息到原生浮窗
+
+### 📍 状态管理关键节点
+
+1. **第25行** (ConversationDrawer.tsx): React输入框状态管理
+2. **第61行** (App.tsx): ChatStore状态获取
+3. **第49行** (useStarStore.ts): Zustand状态定义
+4. **第16行** (useNativeChatOverlay.ts): 原生浮窗状态管理
+
+### 📍 原生集成关键节点
+
+1. **第202行** (InputDrawerManager.swift): 原生输入框文本提交处理
+2. **第85-113行** (useNativeChatOverlay.ts): React到原生消息同步
+3. **第220-228行** (App.tsx): 原生事件监听器设置
+
+---
+
+## 📊 技术特性总结
+
+### 🏗️ 架构模式
+- **混合架构**: React Web层 + iOS Swift原生层
+- **双向通信**: Capacitor插件桥接Web和原生
+- **状态同步**: Zustand管理全局状态，实时同步到原生
+
+### 🔄 数据流向  
+```
+用户输入 → ConversationDrawer → App.tsx → ChatStore → 
+useNativeChatOverlay → ChatOverlay原生 → 显示结果
+```
+
+### ⚡ 关键优化
+- **流式AI响应**: 实时更新用户界面，提升体验
+- **动画同步**: 统一动画指挥权，避免双重动画冲突
+- **状态守卫**: 防止AI流式响应与用户操作竞争条件
+- **触摸穿透**: 原生窗口支持智能触摸事件处理
+
+### 🎯 核心流程
+1. **输入阶段**: 用户在React或原生输入框中输入内容
+2. **发送阶段**: 点击发送触发`handleSendMessage`函数
+3. **处理阶段**: ChatStore管理消息，useStarStore创建星星
+4. **AI阶段**: 调用AI API生成流式响应
+5. **显示阶段**: 同步到原生ChatOverlay浮窗显示结果
+
+---
+
+*报告生成完毕 - 包含输入框点击发送到浮窗显示的完整代码流程*
+```
+
+_无改动_
+
+### 📄 ios/App/App/ChatOverlayManager.swift
+
+```swift
+import SwiftUI
+import UIKit
+import Capacitor
+
+// MARK: - PassthroughWindow - 自定义窗口类，支持触摸事件穿透
+class PassthroughWindow: UIWindow {
+    weak var overlayViewController: OverlayViewController?
+    
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        // 先让窗口正常处理触摸测试
+        guard let hitView = super.hitTest(point, with: event) else {
+            NSLog("🎯 PassthroughWindow: 没有找到hitView，透传事件")
+            return nil
+        }
+        
+        // 获取containerView
+        guard let containerView = overlayViewController?.containerView else {
+            // 如果没有containerView，检查是否点击在根视图上
+            if hitView == self.rootViewController?.view {
+                NSLog("🎯 PassthroughWindow: 点击在背景上，透传事件")
+                return nil
+            }
+            return hitView
+        }
+        
+        // 将点转换到containerView的坐标系
+        let convertedPoint = convert(point, to: containerView)
+        
+        // 如果点击在containerView区域内，正常处理
+        if containerView.bounds.contains(convertedPoint) {
+            NSLog("🎯 PassthroughWindow: 点击在ChatOverlay内，正常处理")
+            return hitView
+        }
+        
+        // 如果点击在containerView外，透传事件
+        NSLog("🎯 PassthroughWindow: 点击在ChatOverlay外，透传事件")
+        self.endEditing(true) // 收起键盘
+        return nil // 透传事件
+    }
+}
+
+// MARK: - ChatOverlay数据模型
+public struct ChatMessage: Codable {
+    let id: String
+    let text: String
+    let isUser: Bool
+    let timestamp: Double
+}
+
+// MARK: - ChatOverlay状态管理
+enum OverlayState {
+    case collapsed   // 收缩状态：65px高度
+    case expanded    // 展开状态：全屏显示
+    case hidden      // 隐藏状态
+}
+
+// MARK: - ChatOverlay状态变化通知
+extension Notification.Name {
+    static let chatOverlayStateChanged = Notification.Name("chatOverlayStateChanged")
+    // 🔧 已移除chatOverlayVisibilityChanged，统一使用chatOverlayStateChanged
+    static let inputDrawerPositionChanged = Notification.Name("inputDrawerPositionChanged")  // 新增：输入框位置变化通知
+}
+
+// MARK: - ChatOverlayManager业务逻辑类
+public class ChatOverlayManager {
+    private var overlayWindow: UIWindow?
+    private var isVisible = false
+    internal var currentState: OverlayState = .collapsed
+    internal var messages: [ChatMessage] = []
+    private var isLoading = false
+    private var conversationTitle = ""
+    private var keyboardHeight: CGFloat = 0
+    private var viewportHeight: CGFloat = UIScreen.main.bounds.height
+    private var initialInput = ""
+    private var followUpQuestion = ""
+    private var overlayViewController: OverlayViewController?
+    
+    // 状态变化回调
+    private var onStateChange: ((OverlayState) -> Void)?
+    
+    // 背景视图变换 - 用于3D缩放效果
+    private weak var backgroundView: UIView?
+    
+    // 动画触发跟踪 - 🎯 【关键新增】用Set管理已播放动画的消息ID
+    private var animatedMessageIDs = Set<String>()
+    private var lastMessages: [ChatMessage] = [] // 用来对比
+    
+    // 🔧 新增：防止重复同步的时间戳记录
+    private var lastSyncTimestamp: TimeInterval = 0
+    private let syncThrottleInterval: TimeInterval = 0.1  // 100ms内的重复调用将被忽略
+    
+    // MARK: - Public API
+    
+    func show(animated: Bool = true, expanded: Bool = false, completion: @escaping (Bool) -> Void) {
+        NSLog("🎯 ChatOverlayManager: 显示浮窗, expanded: \(expanded)")
+        
+        DispatchQueue.main.async {
+            if self.overlayWindow != nil {
+                NSLog("🎯 浮窗已存在，直接显示并设置状态")
+                self.overlayWindow?.isHidden = false
+                self.overlayWindow?.alpha = 1  // 🔧 修复：恢复alpha值
+                self.isVisible = true
+                
+                // 根据参数设置初始状态
+                if expanded {
+                    self.currentState = .expanded
+                    self.applyBackgroundTransform(for: .expanded, animated: animated)
+                    // 发送状态通知
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100]
+                    )
+                } else {
+                    self.currentState = .collapsed
+                    self.applyBackgroundTransform(for: .collapsed, animated: animated)
+                    // 发送状态通知，让InputDrawer先调整位置
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: ["state": "collapsed", "height": 65]
+                    )
+                }
+                
+                // 稍微延迟更新UI，确保InputDrawer已经调整位置
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    self.updateUI(animated: animated)
+                }
+                
+                // 🔧 只发送状态通知，移除冗余的可见性通知
+                NotificationCenter.default.post(
+                    name: .chatOverlayStateChanged,
+                    object: nil,
+                    userInfo: [
+                        "state": expanded ? "expanded" : "collapsed", 
+                        "height": expanded ? UIScreen.main.bounds.height - 100 : 65,
+                        "visible": true  // 🔧 在状态通知中包含可见性信息
+                    ]
+                )
+                
+                completion(true)
+                return
+            }
+            
+            self.createOverlayWindow()
+            
+            // 根据参数设置初始状态
+            self.currentState = expanded ? .expanded : .collapsed
+            NSLog("🎯 设置初始状态为: \(self.currentState)")
+            
+            if animated {
+                self.overlayWindow?.alpha = 0
+                UIView.animate(withDuration: 0.3) {
+                    self.overlayWindow?.alpha = 1
+                } completion: { _ in
+                    self.isVisible = true
+                    
+                    // 初始显示时立即更新UI
+                    self.updateUI(animated: false)
+                    self.applyBackgroundTransform(for: self.currentState, animated: true)
+                    
+                    // 发送通知让InputDrawer调整位置
+                    if self.currentState == .collapsed {
+                        NotificationCenter.default.post(
+                            name: .chatOverlayStateChanged,
+                            object: nil,
+                            userInfo: ["state": "collapsed", "height": 65]
+                        )
+                    }
+                    
+                    completion(true)
+                }
+            } else {
+                self.isVisible = true
+                self.updateUI(animated: false)
+                self.applyBackgroundTransform(for: self.currentState, animated: false)
+                
+                // 发送通知让InputDrawer调整位置
+                if self.currentState == .collapsed {
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: ["state": "collapsed", "height": 65]
+                    )
+                }
+                
+                completion(true)
+            }
+        }
+    }
+    
+    func hide(animated: Bool = true, completion: @escaping () -> Void = {}) {
+        NSLog("🎯 ChatOverlayManager: 隐藏浮窗")
+        
+        // 立即更新状态，不等动画完成
+        self.isVisible = false
+        self.currentState = .hidden
+        
+        DispatchQueue.main.async {
+            guard let window = self.overlayWindow else {
+                completion()
+                return
+            }
+            
+            // 🔧 修复：恢复背景状态应该对应hidden状态（等同于collapsed的效果）
+            self.applyBackgroundTransform(for: .hidden, animated: animated)
+            
+            // 🔧 修复：触发状态变化回调，确保前端能收到正确的状态
+            self.onStateChange?(.hidden)
+            
+            // 🔧 只发送状态通知，移除冗余的可见性通知  
+            NotificationCenter.default.post(
+                name: .chatOverlayStateChanged,
+                object: nil,
+                userInfo: [
+                    "state": "hidden",
+                    "visible": false  // 🔧 在状态通知中包含可见性信息
+                ]
+            )
+            
+            if animated {
+                UIView.animate(withDuration: 0.3) {
+                    window.alpha = 0
+                } completion: { _ in
+                    window.isHidden = true
+                    completion()
+                }
+            } else {
+                window.isHidden = true
+                completion()
+            }
+        }
+    }
+    
+    func updateMessages(_ messages: [ChatMessage]) {
+        NSLog("🎯 ChatOverlayManager: 更新消息列表，数量: \(messages.count)")
+        
+        for (index, message) in messages.enumerated() {
+            NSLog("🎯 消息[\(index)]: \(message.isUser ? "用户" : "AI") - \(message.text.prefix(50))")
+        }
+        
+        // 🎯 【智能判断】找到最新的用户消息
+        let latestUserMessage = messages.last(where: { $0.isUser })
+        var shouldAnimate = false
+        var animationIndex: Int? = nil
+        
+        if let userMessage = latestUserMessage,
+           !animatedMessageIDs.contains(userMessage.id) {
+            // 🎯 这是一条全新的、从未播放过动画的用户消息
+            shouldAnimate = true
+            animatedMessageIDs.insert(userMessage.id)
+            animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
+            NSLog("🎯 ✅ 发现新用户消息！ID: \(userMessage.id), 将播放动画，索引: \(animationIndex ?? -1)")
+        } else {
+            NSLog("🎯 ☑️ 无新用户消息或已播放过动画，跳过动画")
+        }
+        
+        // 更新消息列表
+        self.lastMessages = self.messages
+        self.messages = messages
+        
+        // 🎯 通知ViewController更新UI，只在真正需要动画时才传递true
+        DispatchQueue.main.async {
+            NSLog("🎯 通知OverlayViewController更新消息显示，需要动画: \(shouldAnimate)")
+            if let index = animationIndex {
+                NSLog("🎯 动画索引: \(index)")
+            }
+            self.overlayViewController?.updateMessages(messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: shouldAnimate, animationIndex: animationIndex)
+        }
+    }
+    
+    func setLoading(_ loading: Bool) {
+        NSLog("🎯 ChatOverlayManager: 设置加载状态: \(loading)")
+        self.isLoading = loading
+        // 这里可以更新UI，暂时先简化
+    }
+    
+    func setConversationTitle(_ title: String) {
+        NSLog("🎯 ChatOverlayManager: 设置对话标题: \(title)")
+        self.conversationTitle = title
+        // 这里可以更新UI，暂时先简化
+    }
+    
+    func setKeyboardHeight(_ height: CGFloat) {
+        NSLog("🎯 ChatOverlayManager: 设置键盘高度: \(height)")
+        self.keyboardHeight = height
+        // 这里可以更新UI，暂时先简化
+    }
+    
+    func setViewportHeight(_ height: CGFloat) {
+        NSLog("🎯 ChatOverlayManager: 设置视口高度: \(height)")
+        self.viewportHeight = height
+        // 这里可以更新UI，暂时先简化
+    }
+    
+    func setInitialInput(_ input: String) {
+        NSLog("🎯 ChatOverlayManager: 设置初始输入: \(input)")
+        self.initialInput = input
+        // 这里可以更新UI，暂时先简化
+    }
+    
+    func setFollowUpQuestion(_ question: String) {
+        NSLog("🎯 ChatOverlayManager: 设置后续问题: \(question)")
+        self.followUpQuestion = question
+        // 这里可以更新UI，暂时先简化
+    }
+    
+    func setInputBottomSpace(_ space: CGFloat) {
+        NSLog("🎯 ChatOverlayManager: InputDrawer位置设置为: \(space)px")
+        // 注意：浮窗位置固定，无需根据输入框位置调整
+    }
+    
+    func getVisibility() -> Bool {
+        return isVisible
+    }
+    
+    // MARK: - 状态切换方法
+    
+    func switchToCollapsed() {
+        NSLog("🎯 ChatOverlayManager: 切换到收缩状态")
+        currentState = .collapsed
+        
+        // 先发送状态变化通知，让InputDrawer调整位置
+        NotificationCenter.default.post(
+            name: .chatOverlayStateChanged,
+            object: nil,
+            userInfo: ["state": "collapsed", "height": 65]
+        )
+        
+        // 延迟更新UI，等待InputDrawer完成位置调整（从0.0改为0.2秒）
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            self.updateUI(animated: true)
+        }
+        
+        applyBackgroundTransform(for: .collapsed, animated: true)
+        onStateChange?(.collapsed)
+        
+        // 注意：浮窗位置会在延迟后更新，确保基于正确的InputDrawer位置
+    }
+    
+    // 新增：专门用于拖拽切换的流畅方法，无延迟
+    func switchToCollapsedFromDrag() {
+        NSLog("🎯 ChatOverlayManager: 从拖拽切换到收缩状态（无延迟）")
+        currentState = .collapsed
+        
+        // 发送状态变化通知
+        NotificationCenter.default.post(
+            name: .chatOverlayStateChanged,
+            object: nil,
+            userInfo: ["state": "collapsed", "height": 65]
+        )
+        
+        // 立即更新UI和背景，创造流畅的拖拽体验
+        updateUI(animated: true)
+        applyBackgroundTransform(for: .collapsed, animated: true)
+        onStateChange?(.collapsed)
+        
+        NSLog("🎯 拖拽切换完成，UI和背景同步更新")
+    }
+    
+    func switchToExpanded() {
+        NSLog("🎯 ChatOverlayManager: 切换到展开状态")
+        currentState = .expanded
+        updateUI(animated: true)
+        applyBackgroundTransform(for: .expanded, animated: true)
+        onStateChange?(.expanded)
+        
+        // 发送状态变化通知
+        NotificationCenter.default.post(
+            name: .chatOverlayStateChanged,
+            object: nil,
+            userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100]
+        )
+    }
+    
+    func toggleState() {
+        NSLog("🎯 ChatOverlayManager: 切换状态")
+        currentState = (currentState == .collapsed) ? .expanded : .collapsed
+        updateUI(animated: true)
+        applyBackgroundTransform(for: currentState, animated: true)
+        onStateChange?(currentState)
+    }
+    
+    func setOnStateChange(_ callback: @escaping (OverlayState) -> Void) {
+        self.onStateChange = callback
+    }
+    
+    // MARK: - 背景3D效果方法
+    
+    func setBackgroundView(_ view: UIView) {
+        NSLog("🎯 ChatOverlayManager: 设置背景视图用于3D变换")
+        self.backgroundView = view
+    }
+    
+    private func applyBackgroundTransform(for state: OverlayState, animated: Bool = true) {
+        guard let backgroundView = backgroundView else { 
+            NSLog("⚠️ 背景视图未设置，跳过3D变换")
+            return 
+        }
+        
+        NSLog("🎯 应用背景3D变换，状态: \(state)")
+        
+        if animated {
+            // 使用与浮窗相同的春天动效参数，实现协调的过渡效果
+            UIView.animate(withDuration: 0.6,
+                         delay: 0,
+                         usingSpringWithDamping: 0.8,
+                         initialSpringVelocity: 0.5,
+                         options: [.allowUserInteraction, .curveEaseInOut],
+                         animations: {
+                switch state {
+                case .expanded:
+                    // 展开状态：缩放0.92，向上移动15px，绕X轴旋转4度，降低亮度
+                    var transform = CATransform3DIdentity
+                    transform.m34 = -1.0 / 1000.0  // 设置透视效果
+                    transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
+                    transform = CATransform3DTranslate(transform, 0, -15, 0)
+                    transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)  // 绕X轴旋转4度
+                    
+                    backgroundView.layer.transform = transform
+                    backgroundView.alpha = 0.6  // 降低亮度到60%
+                    
+                case .collapsed, .hidden:
+                    // 收缩状态或隐藏状态：还原到原始状态
+                    backgroundView.layer.transform = CATransform3DIdentity
+                    backgroundView.alpha = 1.0  // 恢复原始亮度
+                }
+            }, completion: nil)
+        } else {
+            // 无动画模式：立即设置状态
+            switch state {
+            case .expanded:
+                var transform = CATransform3DIdentity
+                transform.m34 = -1.0 / 1000.0
+                transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
+                transform = CATransform3DTranslate(transform, 0, -15, 0)
+                transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)
+                
+                backgroundView.layer.transform = transform
+                backgroundView.alpha = 0.6
+                
+            case .collapsed, .hidden:
+                backgroundView.layer.transform = CATransform3DIdentity
+                backgroundView.alpha = 1.0
+            }
+        }
+    }
+    
+    // MARK: - Private Methods
+    
+    private func createOverlayWindow() {
+        NSLog("🎯 ChatOverlayManager: 创建双状态浮窗视图")
+        
+        // 创建浮窗窗口 - 使用自定义的PassthroughWindow支持触摸穿透
+        let window = PassthroughWindow(frame: UIScreen.main.bounds)
+        // 设置层级：确保在星座之上但低于InputDrawer (statusBar-0.5)
+        window.windowLevel = UIWindow.Level.statusBar - 1  // 比InputDrawer低0.5级
+        window.backgroundColor = UIColor.clear
+        
+        // 关键：让窗口不阻挡其他交互，只处理容器内的触摸
+        window.isHidden = false
+        
+        // 创建自定义视图控制器
+        overlayViewController = OverlayViewController(manager: self)
+        window.rootViewController = overlayViewController
+        
+        // 设置窗口对视图控制器的引用
+        window.overlayViewController = overlayViewController
+        
+        // 保存窗口引用
+        overlayWindow = window
+        
+        // 不使用makeKeyAndVisible()，避免抢夺焦点，确保InputDrawer始终在最前
+        window.isHidden = false
+        
+        // 注意：不在这里设置初始状态，由show方法控制
+        NSLog("🎯 ChatOverlayManager: 双状态浮窗创建完成")
+        NSLog("🎯 ChatOverlayManager: 窗口层级: \(window.windowLevel.rawValue)")
+        NSLog("🎯 StatusBar层级: \(UIWindow.Level.statusBar.rawValue)")
+        NSLog("🎯 Alert层级: \(UIWindow.Level.alert.rawValue)")
+        NSLog("🎯 Normal层级: \(UIWindow.Level.normal.rawValue)")
+    }
+    
+    private func updateUI(animated: Bool) {
+        guard let overlayViewController = overlayViewController else { return }
+        
+        if animated {
+            // 使用春天动效，营造丝滑的过渡感觉
+            UIView.animate(withDuration: 0.6,
+                         delay: 0,
+                         usingSpringWithDamping: 0.8,
+                         initialSpringVelocity: 0.5,
+                         options: [.allowUserInteraction, .curveEaseInOut],
+                         animations: {
+                overlayViewController.updateForState(self.currentState)
+                overlayViewController.view.layoutIfNeeded()
+            }, completion: nil)
+        } else {
+            overlayViewController.updateForState(self.currentState)
+        }
+    }
+    
+    @objc private func closeButtonTapped() {
+        NSLog("🎯 ChatOverlayManager: 关闭按钮被点击")
+        hide()
+    }
+}
+
+// MARK: - OverlayViewController - 处理双状态UI显示
+class OverlayViewController: UIViewController {
+    private weak var manager: ChatOverlayManager?
+    internal var containerView: UIView!  // 改为internal让PassthroughWindow可以访问
+    private var collapsedView: UIView!
+    private var expandedView: UIView!
+    private var backgroundMaskView: UIView!
+    private var messagesList: UITableView!
+    private var dragIndicator: UIView!
+    
+    // 拖拽相关状态 - 移到OverlayViewController中
+    private var isDragging = false
+    private var dragStartY: CGFloat = 0
+    private var originalTopConstraint: CGFloat = 0  // 记录拖拽开始时的原始位置
+    
+    // 滚动收起相关状态
+    private var hasTriggeredScrollCollapse = false  // 防止重复触发滚动收起
+    
+    // 🔧 新增：动画相关状态
+    private var pendingAnimationIndex: Int?  // 需要播放动画的消息索引
+    
+    // 🚨 【动画锁定机制】核心属性
+    private var isAnimatingInsert = false  // 动画期间锁定标记
+    private var pendingAIUpdates: [ChatMessage] = []  // 动画期间暂存的AI更新
+    
+    // 🚨 【新增】专门用于抑制AI滚动动画的状态
+    private var isAnimatingUserMessage = false  // 用户消息飞入动画期间的标记
+    
+    // 约束
+    private var containerTopConstraint: NSLayoutConstraint!
+    private var containerHeightConstraint: NSLayoutConstraint!
+    private var containerLeadingConstraint: NSLayoutConstraint!
+    private var containerTrailingConstraint: NSLayoutConstraint!
+    
+    init(manager: ChatOverlayManager) {
+        self.manager = manager
+        super.init(nibName: nil, bundle: nil)
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        setupUI()
+        setupInputDrawerObservers()  // 新增：监听输入框位置变化
+    }
+    
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        
+        // 在视图出现后设置触摸事件透传
+        setupPassthroughView()
+    }
+    
+    private func setupInputDrawerObservers() {
+        // 注意：浮窗位置固定，不需要监听输入框位置变化
+        // 只有InputDrawer会根据浮窗状态调整自己的位置
+        NSLog("🎯 ChatOverlay: 浮窗使用固定位置，无需监听InputDrawer位置变化")
+    }
+    
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+        NSLog("🎯 ChatOverlay: 移除所有通知观察者")
+    }
+    
+    private func setupPassthroughView() {
+        // 使用更简单的方式：PassthroughView作为背景层，不移动现有的视图
+        let passthroughView = ChatPassthroughView()
+        passthroughView.manager = manager
+        passthroughView.containerView = containerView
+        passthroughView.backgroundColor = UIColor.clear
+        
+        // 将PassthroughView插入到view的最底层，不影响现有布局
+        view.insertSubview(passthroughView, at: 0)
+        passthroughView.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            passthroughView.topAnchor.constraint(equalTo: view.topAnchor),
+            passthroughView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            passthroughView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            passthroughView.bottomAnchor.constraint(equalTo: view.bottomAnchor)
+        ])
+        
+        NSLog("🎯 ChatOverlay: PassthroughView设置完成，保持原有布局")
+    }
+    
+    private func setupUI() {
+        view.backgroundColor = UIColor.clear
+        
+        // 创建背景遮罩（仅在展开时显示）
+        backgroundMaskView = UIView()
+        backgroundMaskView.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        backgroundMaskView.alpha = 0
+        backgroundMaskView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(backgroundMaskView)
+        
+        // 创建主容器
+        containerView = UIView()
+        containerView.backgroundColor = UIColor.systemGray6
+        containerView.layer.cornerRadius = 12
+        // 设置只有顶部两个角为圆角，营造从屏幕底部延伸上来的效果
+        containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        containerView.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(containerView)
+        
+        // 设置约束
+        NSLayoutConstraint.activate([
+            // 背景遮罩填满整个屏幕
+            backgroundMaskView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            backgroundMaskView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            backgroundMaskView.topAnchor.constraint(equalTo: view.topAnchor),
+            backgroundMaskView.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        
+        // 创建可变约束 - 包括宽度约束
+        containerTopConstraint = containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80)
+        containerHeightConstraint = containerView.heightAnchor.constraint(equalToConstant: 65)
+        containerLeadingConstraint = containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
+        containerTrailingConstraint = containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
+        
+        containerTopConstraint.isActive = true
+        containerHeightConstraint.isActive = true
+        containerLeadingConstraint.isActive = true
+        containerTrailingConstraint.isActive = true
+        
+        setupCollapsedView()
+        setupExpandedView()
+        
+        // 只添加拖拽手势到整个容器，移除点击手势避免误触
+        let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
+        containerView.addGestureRecognizer(panGesture)
+    }
+    
+    private func setupCollapsedView() {
+        collapsedView = UIView()
+        collapsedView.translatesAutoresizingMaskIntoConstraints = false
+        containerView.addSubview(collapsedView)
+        
+        // 创建收缩状态的控制栏
+        let controlBar = UIView()
+        controlBar.translatesAutoresizingMaskIntoConstraints = false
+        collapsedView.addSubview(controlBar)
+        
+        // 完成按钮
+        let completeButton = UIButton(type: .system)
+        completeButton.setTitle("完成", for: .normal)
+        completeButton.setTitleColor(.systemBlue, for: .normal)
+        completeButton.titleLabel?.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        completeButton.addTarget(self, action: #selector(completeButtonTapped), for: .touchUpInside)
+        completeButton.translatesAutoresizingMaskIntoConstraints = false
+        controlBar.addSubview(completeButton)
+        
+        // 当前对话标题
+        let titleLabel = UILabel()
+        titleLabel.text = "当前对话"
+        titleLabel.textColor = .systemGray
+        titleLabel.font = UIFont.systemFont(ofSize: 14, weight: .medium)
+        titleLabel.textAlignment = .center
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        controlBar.addSubview(titleLabel)
+        
+        // 关闭按钮
+        let closeButton = UIButton(type: .system)
+        closeButton.setTitle("×", for: .normal)
+        closeButton.setTitleColor(.systemGray, for: .normal)
+        closeButton.titleLabel?.font = UIFont.systemFont(ofSize: 18, weight: .medium)
+        closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .touchUpInside)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        controlBar.addSubview(closeButton)
+        
+        // 为收缩状态添加点击放大手势
+        let collapsedTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleCollapsedTap))
+        collapsedView.addGestureRecognizer(collapsedTapGesture)
+        
+        NSLayoutConstraint.activate([
+            // 收缩视图填满容器
+            collapsedView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            collapsedView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            collapsedView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            collapsedView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            
+            // 控制栏约束
+            controlBar.leadingAnchor.constraint(equalTo: collapsedView.leadingAnchor, constant: 16),
+            controlBar.trailingAnchor.constraint(equalTo: collapsedView.trailingAnchor, constant: -16),
+            controlBar.centerYAnchor.constraint(equalTo: collapsedView.centerYAnchor),
+            controlBar.heightAnchor.constraint(equalToConstant: 40),
+            
+            // 按钮约束
+            completeButton.leadingAnchor.constraint(equalTo: controlBar.leadingAnchor),
+            completeButton.centerYAnchor.constraint(equalTo: controlBar.centerYAnchor),
+            
+            titleLabel.centerXAnchor.constraint(equalTo: controlBar.centerXAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: controlBar.centerYAnchor),
+            
+            closeButton.trailingAnchor.constraint(equalTo: controlBar.trailingAnchor),
+            closeButton.centerYAnchor.constraint(equalTo: controlBar.centerYAnchor),
+        ])
+    }
+    
+    private func setupExpandedView() {
+        expandedView = UIView()
+        expandedView.translatesAutoresizingMaskIntoConstraints = false
+        expandedView.alpha = 0
+        containerView.addSubview(expandedView)
+        
+        // 拖拽指示器
+        dragIndicator = UIView()
+        dragIndicator.backgroundColor = .systemGray3
+        dragIndicator.layer.cornerRadius = 2
+        dragIndicator.translatesAutoresizingMaskIntoConstraints = false
+        expandedView.addSubview(dragIndicator)
+        
+        // 头部标题区域
+        let headerView = UIView()
+        headerView.translatesAutoresizingMaskIntoConstraints = false
+        expandedView.addSubview(headerView)
+        
+        let titleLabel = UILabel()
+        titleLabel.text = "ChatOverlay 对话"
+        titleLabel.textColor = .label
+        titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
+        titleLabel.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(titleLabel)
+        
+        let closeButton = UIButton(type: .system)
+        closeButton.setTitle("×", for: .normal)
+        closeButton.setTitleColor(.systemGray, for: .normal)
+        closeButton.titleLabel?.font = UIFont.systemFont(ofSize: 20, weight: .medium)
+        closeButton.addTarget(self, action: #selector(closeButtonTapped), for: .touchUpInside)
+        closeButton.translatesAutoresizingMaskIntoConstraints = false
+        headerView.addSubview(closeButton)
+        
+        // 为头部区域添加点击收起手势（只在头部有效）
+        let headerTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleHeaderTap))
+        headerView.addGestureRecognizer(headerTapGesture)
+        
+        // 为拖拽指示器也添加点击手势
+        let dragIndicatorTapGesture = UITapGestureRecognizer(target: self, action: #selector(handleHeaderTap))
+        dragIndicator.addGestureRecognizer(dragIndicatorTapGesture)
+        
+        // 消息列表
+        messagesList = UITableView()
+        messagesList.backgroundColor = .clear
+        messagesList.separatorStyle = .none
+        messagesList.translatesAutoresizingMaskIntoConstraints = false
+        messagesList.dataSource = self
+        messagesList.delegate = self
+        messagesList.register(MessageTableViewCell.self, forCellReuseIdentifier: "MessageCell")
+        messagesList.estimatedRowHeight = 60
+        messagesList.rowHeight = UITableView.automaticDimension
+        expandedView.addSubview(messagesList)
+        
+        // 底部留空区域
+        let bottomSpaceView = UIView()
+        bottomSpaceView.translatesAutoresizingMaskIntoConstraints = false
+        expandedView.addSubview(bottomSpaceView)
+        
+        NSLayoutConstraint.activate([
+            // 展开视图填满容器
+            expandedView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
+            expandedView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
+            expandedView.topAnchor.constraint(equalTo: containerView.topAnchor),
+            expandedView.bottomAnchor.constraint(equalTo: containerView.bottomAnchor),
+            
+            // 拖拽指示器
+            dragIndicator.topAnchor.constraint(equalTo: expandedView.topAnchor, constant: 16),
+            dragIndicator.centerXAnchor.constraint(equalTo: expandedView.centerXAnchor),
+            dragIndicator.widthAnchor.constraint(equalToConstant: 48),
+            dragIndicator.heightAnchor.constraint(equalToConstant: 4),
+            
+            // 头部区域
+            headerView.topAnchor.constraint(equalTo: dragIndicator.bottomAnchor, constant: 16),
+            headerView.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor, constant: 16),
+            headerView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor, constant: -16),
+            headerView.heightAnchor.constraint(equalToConstant: 44),
+            
+            titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
+            titleLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            
+            closeButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
+            closeButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            
+            // 消息列表
+            messagesList.topAnchor.constraint(equalTo: headerView.bottomAnchor, constant: 16),
+            messagesList.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor),
+            messagesList.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor),
+            messagesList.bottomAnchor.constraint(equalTo: bottomSpaceView.topAnchor),
+            
+            // 底部留空
+            bottomSpaceView.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor),
+            bottomSpaceView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor),
+            bottomSpaceView.bottomAnchor.constraint(equalTo: expandedView.bottomAnchor),
+        ])
+        
+        // 🚨 【关键修复】将底部空间的高度约束优先级降低，避免展开时的布局冲突
+        let bottomSpaceHeightConstraint = bottomSpaceView.heightAnchor.constraint(equalToConstant: 120)  // 增加到120px，为输入框预留足够空间
+        bottomSpaceHeightConstraint.priority = UILayoutPriority(999)  // 从1000(required)降到999(high)
+        bottomSpaceHeightConstraint.isActive = true
+        NSLog("🚨 【布局修复】底部空间约束优先级设为999，避免展开冲突")
+    }
+    
+    func updateForState(_ state: OverlayState) {
+        let screenHeight = UIScreen.main.bounds.height
+        let safeAreaTop = view.safeAreaLayoutGuide.layoutFrame.minY
+        let safeAreaBottom = screenHeight - view.safeAreaLayoutGuide.layoutFrame.maxY
+        
+        NSLog("🎯 更新UI状态: \(state), 屏幕高度: \(screenHeight), 安全区顶部: \(safeAreaTop), 安全区底部: \(safeAreaBottom)")
+        
+        switch state {
+        case .collapsed:
+            // 收缩状态：浮窗顶部与收缩状态下输入框底部-10px对齐
+            let floatingHeight: CGFloat = 65
+            let gap: CGFloat = 10  // 浮窗顶部与输入框底部的间隙
+            
+            // InputDrawer在collapsed状态下的bottomSpace是40px（降低整体高度50px）
+            let inputBottomSpaceCollapsed: CGFloat = 40
+            
+            // 计算输入框在collapsed状态下的底部位置
+            // 输入框底部 = 屏幕高度 - 安全区底部 - bottomSpace
+            let inputDrawerBottomCollapsed = screenHeight - safeAreaBottom - inputBottomSpaceCollapsed
+            
+            // 浮窗顶部 = 输入框底部 + 间隙
+            // 浮窗在输入框下方10px
+            let floatingTop = inputDrawerBottomCollapsed + gap
+            
+            // 转换为相对于安全区顶部的坐标
+            let relativeTopFromSafeArea = floatingTop - safeAreaTop
+            
+            containerTopConstraint.constant = relativeTopFromSafeArea
+            containerHeightConstraint.constant = floatingHeight
+            
+            // 收起状态：与输入框一样宽度（屏幕宽度减去左右各16px边距）
+            containerLeadingConstraint.constant = 16
+            containerTrailingConstraint.constant = -16
+            
+            collapsedView.alpha = 1
+            expandedView.alpha = 0
+            backgroundMaskView.alpha = 0
+            // 收缩状态圆角：恢复原始12px圆角
+            containerView.layer.cornerRadius = 12
+            containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner, .layerMinXMaxYCorner, .layerMaxXMaxYCorner]
+            
+            // 重置滚动收起标记，允许下次触发
+            hasTriggeredScrollCollapse = false
+            
+            NSLog("🎯 收缩状态 - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
+            
+        case .expanded:
+            // 展开状态：覆盖整个屏幕高度，营造从屏幕外延伸的效果
+            let expandedTopMargin = max(safeAreaTop, 80)  // 顶部留空
+            let expandedBottomExtension: CGFloat = 20  // 底部向外延伸20px，营造延伸效果
+            
+            containerTopConstraint.constant = expandedTopMargin - safeAreaTop  // 转换为相对安全区坐标
+            // 高度计算：从顶部到屏幕底部再延伸20px
+            containerHeightConstraint.constant = screenHeight - expandedTopMargin + expandedBottomExtension
+            
+            // 展开状态：覆盖整个屏幕宽度（无边距）
+            containerLeadingConstraint.constant = 0
+            containerTrailingConstraint.constant = 0
+            
+            collapsedView.alpha = 0
+            expandedView.alpha = 1
+            backgroundMaskView.alpha = 1
+            // 展开状态圆角：只有顶部圆角，底部延伸到屏幕外
+            containerView.layer.cornerRadius = 12
+            containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+            
+            // 重置滚动收起标记，允许触发
+            hasTriggeredScrollCollapse = false
+            
+            NSLog("🎯 展开状态 - 顶部位置: \(expandedTopMargin)px, 高度: \(screenHeight - expandedTopMargin + expandedBottomExtension)px, 底部延伸: \(expandedBottomExtension)px")
+            
+        case .hidden:
+            // 隐藏状态：不显示
+            containerView.alpha = 0
+            hasTriggeredScrollCollapse = false
+            NSLog("🎯 隐藏状态")
+        }
+        
+        NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
+    }
+    
+    @objc private func handleHeaderTap() {
+        NSLog("🎯 头部区域被点击，切换状态")
+        guard let manager = manager else { return }
+        manager.toggleState()
+    }
+    
+    @objc private func handleCollapsedTap() {
+        NSLog("🎯 收缩状态被点击，放大浮窗")
+        guard let manager = manager else { return }
+        manager.switchToExpanded()
+    }
+    
+    @objc private func handleTap() {
+        // 这个方法现在不会被调用，因为已经移除了通用点击手势
+        // 保留方法以防后续需要
+        NSLog("🎯 通用点击处理（已禁用）")
+    }
+    
+    @objc private func handlePan(_ gesture: UIPanGestureRecognizer) {
+        let translation = gesture.translation(in: view)
+        let velocity = gesture.velocity(in: view)
+        
+        switch gesture.state {
+        case .began:
+            NSLog("🎯 开始拖拽手势")
+            dragStartY = gesture.location(in: view).y
+            originalTopConstraint = containerTopConstraint.constant  // 记录拖拽开始的位置
+            isDragging = true
+            
+            // 检查是否在拖拽区域
+            let touchPoint = gesture.location(in: containerView)
+            let isDragHandle = expandedView.alpha > 0 && touchPoint.y <= 80 // 头部80px为拖拽区域
+            NSLog("🎯 触摸点: \(touchPoint), 是否在拖拽区域: \(isDragHandle), 初始Top: \(originalTopConstraint)")
+            
+        case .changed:
+            guard isDragging else { return }
+            
+            let deltaY = translation.y
+            NSLog("🎯 拖拽变化: \(deltaY)px")
+            
+            // 处理展开状态下的拖拽
+            if manager?.currentState == .expanded {
+                // 只允许向下拖拽收起
+                if deltaY > 0 {
+                    // 检查消息列表是否滚动到顶部
+                    if let messagesList = expandedView.subviews.first(where: { $0 is UITableView }) as? UITableView {
+                        let isAtTop = messagesList.contentOffset.y <= 1
+                        
+                        if isAtTop || deltaY <= 20 { // 微小拖拽优先级最高
+                            NSLog("🎯 允许拖拽收起: deltaY=\(deltaY), isAtTop=\(isAtTop)")
+                            // 更流畅的实时预览 - 基于原始位置计算
+                            let dampedDelta = deltaY * 0.2 // 减少跟手程度
+                            let newTop = originalTopConstraint + dampedDelta
+                            
+                            // 直接设置约束，无动画，实现流畅跟手
+                            containerTopConstraint.constant = newTop
+                            view.layoutIfNeeded()
+                        }
+                    }
+                }
+            }
+            
+        case .ended, .cancelled:
+            guard isDragging else { return }
+            isDragging = false
+            
+            let deltaY = translation.y
+            let velocityY = velocity.y
+            
+            NSLog("🎯 拖拽结束: deltaY=\(deltaY), velocityY=\(velocityY)")
+            
+            // 判断是否应该切换状态
+            let shouldSwitchToCollapsed = deltaY > 50 || (deltaY > 20 && velocityY > 500)
+            
+            if manager?.currentState == .expanded && shouldSwitchToCollapsed {
+                NSLog("🎯 拖拽距离/速度足够，切换到收缩状态")
+                // 使用专门的拖拽切换方法，避免延迟造成的卡顿
+                manager?.switchToCollapsedFromDrag()
+            } else {
+                NSLog("🎯 拖拽不足，回弹到原状态")
+                // 回弹动画 - 使用与主动画相同的spring参数
+                UIView.animate(withDuration: 0.6, delay: 0, usingSpringWithDamping: 0.8, initialSpringVelocity: 0.5, options: [.allowUserInteraction, .curveEaseInOut], animations: {
+                    if let currentState = self.manager?.currentState {
+                        self.updateForState(currentState)
+                    }
+                    self.view.layoutIfNeeded()
+                })
+            }
+            
+        default:
+            break
+        }
+    }
+    
+    @objc private func completeButtonTapped() {
+        manager?.hide()
+    }
+    
+    @objc private func closeButtonTapped() {
+        manager?.hide()
+    }
+    
+    // MARK: - 更新消息列表
+    
+    func updateMessages(_ messages: [ChatMessage], oldMessages: [ChatMessage], shouldAnimateNewUserMessage: Bool, animationIndex: Int? = nil) {
+        NSLog("🎯 OverlayViewController: updateMessages被调用，消息数量: \(messages.count)")
+        guard let manager = manager else { 
+            NSLog("⚠️ OverlayViewController: manager为nil")
+            return 
+        }
+        
+        // 🚨 【动画锁定机制】第一层检查：如果正在播放插入动画，拦截所有更新
+        if isAnimatingInsert {
+            NSLog("🚨 【动画锁定】正在播放动画，拦截更新并暂存AI消息")
+            // 只暂存最新的完整消息列表，用于动画完成后的最终同步
+            if !messages.isEmpty {
+                manager.messages = messages  // 确保数据层同步
+                // 暂存最新的AI消息（如果有的话）
+                if let lastMessage = messages.last, !lastMessage.isUser {
+                    // 清空旧的暂存，只保留最新的
+                    pendingAIUpdates = [lastMessage]
+                    NSLog("🚨 【动画锁定】暂存最新AI消息，ID: \(lastMessage.id)")
+                }
+            }
+            return  // 🚫 直接返回，不进行任何UI更新
+        }
+        
+        NSLog("🎯 OverlayViewController: manager存在，准备更新UI")
+        NSLog("🎯 是否需要播放用户消息动画: \(shouldAnimateNewUserMessage)")
+        if let index = animationIndex {
+            NSLog("🎯 动画索引: \(index)")
+        }
+        
+        // 记录旧消息数量，用于判断更新场景
+        let oldMessagesCount = manager.messages.count
+        
+        // 先更新manager的消息列表
+        manager.messages = messages
+        
+        DispatchQueue.main.async {
+            if shouldAnimateNewUserMessage, let targetIndex = animationIndex {
+                // 🎯 场景1：有新用户消息，需要整体重载并播放动画
+                NSLog("🎯 【场景1】新用户消息需要动画，执行完整重载和动画")
+                
+                // 🚨 【动画锁定】加锁
+                self.isAnimatingInsert = true
+                self.pendingAnimationIndex = targetIndex
+                self.messagesList.reloadData()
+                
+                self.scrollToBottomAndPlayAnimation(messages: messages) {
+                    // 🚨 【动画锁定】动画完成回调 - 解锁并处理暂存的更新
+                    NSLog("🚨 【动画锁定】动画完成，解锁并处理暂存更新")
+                    self.isAnimatingInsert = false
+                    
+                    // 处理动画期间暂存的AI更新
+                    if !self.pendingAIUpdates.isEmpty {
+                        NSLog("🚨 【动画锁定】处理暂存的\(self.pendingAIUpdates.count)个AI更新")
+                        let latestAIMessage = self.pendingAIUpdates.last!
+                        self.pendingAIUpdates.removeAll()
+                        
+                        // 🔄 重新调用自己，处理暂存的AI消息（此时不会有动画）
+                        guard let manager = self.manager else { return }
+                        let updatedMessages = manager.messages
+                        self.updateMessages(updatedMessages, oldMessages: updatedMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+                    }
+                }
+                
+            } else if messages.count == oldMessagesCount && messages.count > 0 {
+                // 🎯 场景2：AI流式更新（消息总数不变，只是内容变了）
+                NSLog("🎯 【场景2】AI流式更新，使用精细化cell更新")
+                let lastMessageIndex = messages.count - 1
+                let indexPath = IndexPath(row: lastMessageIndex, section: 0)
+                
+                if let lastCell = self.messagesList.cellForRow(at: indexPath) as? MessageTableViewCell {
+                    // 直接更新cell的内容，不触发reloadData
+                    NSLog("🎯 ✅ 直接更新最后一个AI消息cell")
+                    lastCell.configure(with: messages[lastMessageIndex])
+                    
+                    // 🚨 【关键修复】检查是否正在播放用户消息动画，决定是否滚动
+                    let shouldAnimateScroll = !self.isAnimatingUserMessage
+                    NSLog("🚨 【动画抑制】AI更新滚动检查: isAnimatingUserMessage = \(self.isAnimatingUserMessage), shouldAnimateScroll = \(shouldAnimateScroll)")
+                    
+                    // 确保滚动到底部显示完整内容（根据动画状态决定是否使用动画）
+                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: shouldAnimateScroll)
+                    
+                    if shouldAnimateScroll {
+                        NSLog("🎯 ✅ AI滚动动画正常执行")
+                    } else {
+                        NSLog("🚨 【动画抑制】AI滚动动画被抑制，使用静默滚动")
+                    }
+                } else {
+                    // 如果cell不可见，reloadData是无法避免的后备方案
+                    NSLog("🎯 ⚠️ AI消息cell不可见，使用后备reloadData方案")
+                    self.messagesList.reloadData()
+                    
+                    // 同样应用动画抑制逻辑到后备方案
+                    let shouldAnimateScroll = !self.isAnimatingUserMessage
+                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: shouldAnimateScroll)
+                }
+                
+            } else {
+                // 🎯 场景3：其他情况（例如，从历史记录加载），直接重载
+                NSLog("🎯 【场景3】其他更新场景，执行常规重载")
+                self.messagesList.reloadData()
+                if messages.count > 0 {
+                    let indexPath = IndexPath(row: messages.count - 1, section: 0)
+                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                }
+            }
+        }
+    }
+    
+    // 🔧 修改：滚动并播放动画的辅助方法 - 添加完成回调支持
+    private func scrollToBottomAndPlayAnimation(messages: [ChatMessage], completion: @escaping () -> Void) {
+        guard messages.count > 0 else { 
+            completion()  // 如果没有消息，直接调用完成回调
+            return 
+        }
+        
+        NSLog("🎯 滚动到最新消息并准备动画")
+        let indexPath = IndexPath(row: messages.count - 1, section: 0)
+        self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+        
+        NSLog("🎯 准备播放用户消息动画")
+        // 立即设置动画初始状态，防止出现直接显示
+        DispatchQueue.main.async {
+            NSLog("🎯 立即设置动画初始状态")
+            self.setAnimationInitialState(messages: messages)
+            // 然后播放动画 - 传递完成回调
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                NSLog("🎯 开始播放动画")
+                self.playUserMessageAnimation(messages: messages, completion: completion)
+            }
+        }
+    }
+    
+    // 🔧 新增：设置动画初始状态
+    private func setAnimationInitialState(messages: [ChatMessage]) {
+        guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { return }
+        
+        NSLog("🎯 设置动画初始状态，索引: \(lastUserMessageIndex)")
+        NSLog("🎯 当前pendingAnimationIndex: \(pendingAnimationIndex ?? -1)")
+        
+        let indexPath = IndexPath(row: lastUserMessageIndex, section: 0)
+        
+        if let cell = self.messagesList.cellForRow(at: indexPath) {
+            NSLog("🎯 找到用户消息cell，设置初始动画状态")
+            
+            // 🔧 关键修复：设置动画起始位置
+            let inputToMessageDistance: CGFloat = 180
+            let initialTransform = CGAffineTransform(translationX: 0, y: inputToMessageDistance)
+            cell.transform = initialTransform
+            cell.alpha = 0.0
+            
+            NSLog("🎯 ✅ 成功设置动画初始状态：Y偏移 \(inputToMessageDistance)px, alpha=0")
+        } else {
+            NSLog("⚠️ 未找到用户消息cell，无法设置初始状态")
+        }
+    }
+    
+    // 🔧 新增：播放用户消息动画
+    // 🔧 修改：播放用户消息动画 - 添加完成回调支持
+    private func playUserMessageAnimation(messages: [ChatMessage], completion: @escaping () -> Void) {
+        guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { 
+            completion()  // 如果没有用户消息，直接调用完成回调
+            return 
+        }
+        
+        NSLog("🎯 播放用户消息动画，索引: \(lastUserMessageIndex)")
+        NSLog("🎯 当前pendingAnimationIndex: \(pendingAnimationIndex ?? -1)")
+        
+        // 🔧 安全检查：确保这是我们要动画的消息
+        guard pendingAnimationIndex == lastUserMessageIndex else {
+            NSLog("⚠️ 索引不匹配，跳过动画。期望: \(pendingAnimationIndex ?? -1), 实际: \(lastUserMessageIndex)")
+            completion()  // 即使跳过动画，也要调用完成回调
+            return
+        }
+        
+        let indexPath = IndexPath(row: lastUserMessageIndex, section: 0)
+        
+        if let cell = self.messagesList.cellForRow(at: indexPath) {
+            NSLog("🎯 找到用户消息cell，开始播放从输入框到消息位置的动画")
+            
+            // 🔧 立即清除动画标记，防止重复执行
+            self.pendingAnimationIndex = nil
+            NSLog("🎯 清除pendingAnimationIndex，防止重复动画")
+            
+            // 🚨 【关键修复】设置用户消息动画状态，抑制AI滚动动画
+            self.isAnimatingUserMessage = true
+            NSLog("🚨 【动画抑制】开始用户消息动画，设置isAnimatingUserMessage = true")
+            
+            // 🔧 修正：使用更自然的动画参数，纯垂直移动
+            UIView.animate(
+                withDuration: 0.5, // 🔧 加快到0.5秒，更流畅
+                delay: 0,
+                usingSpringWithDamping: 0.85, // 🔧 稍微提高阻尼，减少弹跳
+                initialSpringVelocity: 0.6, // 🔧 提高初始速度
+                options: [.curveEaseOut, .allowUserInteraction],
+                animations: {
+                    // 🔧 关键：只有位移变换，移动到最终位置
+                    cell.transform = .identity  // 恢复原始变换（0,0位移）
+                    cell.alpha = 1.0           // 渐变显示
+                    
+                    // 🚨 【统一动画指挥权】在ChatOverlay动画中同步控制InputDrawer位移
+                    // 发送消息后，ChatOverlay通常会切换到collapsed状态，InputDrawer需要上移
+                    NSLog("🚨 【统一动画】同步控制InputDrawer位移到collapsed位置")
+                    NotificationCenter.default.post(
+                        name: Notification.Name("chatOverlayStateChanged"),
+                        object: nil,
+                        userInfo: [
+                            "state": "collapsed",
+                            "visible": true,
+                            "source": "unified_animation"  // 标记这是统一动画控制
+                        ]
+                    )
+                },
+                completion: { finished in
+                    NSLog("🎯 🚨 用户消息动画完成, finished: \(finished)")
+                    
+                    // 🚨 【关键修复】清除动画状态，允许后续AI滚动动画
+                    self.isAnimatingUserMessage = false
+                    NSLog("🚨 【动画抑制】用户消息动画完成，设置isAnimatingUserMessage = false")
+                    
+                    // 🚨 【关键】调用完成回调，通知动画锁定机制解锁
+                    completion()
+                }
+            )
+        } else {
+            NSLog("⚠️ 未找到用户消息cell，动画失败")
+            self.pendingAnimationIndex = nil
+            self.isAnimatingUserMessage = false
+            completion()  // 即使动画失败，也要调用完成回调
+        }
+    }
+}
+
+// MARK: - UITableViewDataSource & UITableViewDelegate
+
+extension OverlayViewController: UITableViewDataSource, UITableViewDelegate {
+    
+    func tableView(_ tableView: UITableView, numberOfRowsInSection section: Int) -> Int {
+        let count = manager?.messages.count ?? 0
+        NSLog("🎯 TableView numberOfRows: \(count)")
+        return count
+    }
+    
+    func tableView(_ tableView: UITableView, cellForRowAt indexPath: IndexPath) -> UITableViewCell {
+        NSLog("🎯 TableView cellForRowAt: \(indexPath.row)")
+        let cell = tableView.dequeueReusableCell(withIdentifier: "MessageCell", for: indexPath) as! MessageTableViewCell
+        
+        if let messages = manager?.messages, indexPath.row < messages.count {
+            let message = messages[indexPath.row]
+            NSLog("🎯 配置cell: \(message.isUser ? "用户" : "AI") - \(message.text)")
+            cell.configure(with: message)
+            
+            // 🔧 简化：所有cell都设置为正常状态，动画状态在reloadData后单独设置
+            cell.transform = .identity
+            cell.alpha = 1.0
+            
+        } else {
+            NSLog("⚠️ 无法获取消息数据，索引: \(indexPath.row)")
+        }
+        
+        return cell
+    }
+    
+    // MARK: - 滚动监听：简化的下滑收起功能
+    
+    func scrollViewDidScroll(_ scrollView: UIScrollView) {
+        // 只在展开状态下处理滚动收起逻辑
+        guard manager?.currentState == .expanded else { return }
+        
+        // 如果已经触发过滚动收起，不再重复处理
+        guard !hasTriggeredScrollCollapse else { return }
+        
+        let currentOffset = scrollView.contentOffset.y
+        NSLog("🎯 TableView滚动监听: contentOffset.y = \(currentOffset)")
+        
+        // 简化逻辑：只要向下拉超过110px就收起浮窗
+        let minimumDownwardPull: CGFloat = -110.0
+        
+        if currentOffset <= minimumDownwardPull {
+            NSLog("🎯 向下拉超过110px (\(currentOffset)px)，触发收起浮窗")
+            
+            // 设置标记，防止重复触发
+            hasTriggeredScrollCollapse = true
+            
+            // 立即收起浮窗
+            manager?.switchToCollapsedFromDrag()
+        }
+    }
+    
+    func scrollViewWillBeginDragging(_ scrollView: UIScrollView) {
+        let currentOffset = scrollView.contentOffset.y
+        NSLog("🎯 开始拖拽TableView，起始offset: \(currentOffset)")
+    }
+    
+    func scrollViewDidEndDragging(_ scrollView: UIScrollView, willDecelerate decelerate: Bool) {
+        let finalOffset = scrollView.contentOffset.y
+        NSLog("🎯 结束拖拽TableView，最终offset: \(finalOffset)，是否继续减速: \(decelerate)")
+    }
+}
+
+// MARK: - MessageTableViewCell - 消息显示Cell
+
+class MessageTableViewCell: UITableViewCell {
+    
+    private let messageContainerView = UIView()
+    private let messageLabel = UILabel()
+    private let timeLabel = UILabel()
+    
+    private var leadingConstraint: NSLayoutConstraint?
+    private var trailingConstraint: NSLayoutConstraint?
+    private var timeLabelConstraint: NSLayoutConstraint?
+    
+    override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
+        super.init(style: style, reuseIdentifier: reuseIdentifier)
+        setupUI()
+    }
+    
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+    
+    override func prepareForReuse() {
+        super.prepareForReuse()
+        // 重置约束
+        leadingConstraint?.isActive = false
+        trailingConstraint?.isActive = false
+        timeLabelConstraint?.isActive = false
+    }
+    
+    private func setupUI() {
+        backgroundColor = .clear
+        selectionStyle = .none
+        
+        // 消息容器
+        messageContainerView.layer.cornerRadius = 16
+        messageContainerView.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(messageContainerView)
+        
+        // 消息文本
+        messageLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        messageLabel.numberOfLines = 0
+        messageLabel.translatesAutoresizingMaskIntoConstraints = false
+        messageContainerView.addSubview(messageLabel)
+        
+        // 时间标签
+        timeLabel.font = UIFont.systemFont(ofSize: 12, weight: .regular)
+        timeLabel.textColor = .systemGray
+        timeLabel.translatesAutoresizingMaskIntoConstraints = false
+        contentView.addSubview(timeLabel)
+        
+        // 设置固定的约束
+        NSLayoutConstraint.activate([
+            messageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
+            messageContainerView.bottomAnchor.constraint(equalTo: timeLabel.topAnchor, constant: -4),
+            
+            messageLabel.topAnchor.constraint(equalTo: messageContainerView.topAnchor, constant: 12),
+            messageLabel.leadingAnchor.constraint(equalTo: messageContainerView.leadingAnchor, constant: 16),
+            messageLabel.trailingAnchor.constraint(equalTo: messageContainerView.trailingAnchor, constant: -16),
+            messageLabel.bottomAnchor.constraint(equalTo: messageContainerView.bottomAnchor, constant: -12),
+            
+            timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+        ])
+    }
+    
+    func configure(with message: ChatMessage) {
+        messageLabel.text = message.text
+        
+        // 重置之前的约束
+        leadingConstraint?.isActive = false
+        trailingConstraint?.isActive = false
+        timeLabelConstraint?.isActive = false
+        
+        // 根据是否是用户消息设置不同的样式
+        if message.isUser {
+            // 用户消息 - 右侧蓝色气泡
+            messageContainerView.backgroundColor = UIColor.systemBlue
+            messageLabel.textColor = .white
+            
+            // 设置约束 - 右对齐
+            leadingConstraint = messageContainerView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 80)
+            trailingConstraint = messageContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+            timeLabelConstraint = timeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+            
+        } else {
+            // AI消息 - 左侧灰色气泡
+            messageContainerView.backgroundColor = UIColor.systemGray5
+            messageLabel.textColor = .label
+            
+            // 设置约束 - 左对齐
+            leadingConstraint = messageContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+            trailingConstraint = messageContainerView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -80)
+            timeLabelConstraint = timeLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+        }
+        
+        // 激活新约束
+        leadingConstraint?.isActive = true
+        trailingConstraint?.isActive = true
+        timeLabelConstraint?.isActive = true
+        
+        // 格式化时间显示
+        let date = Date(timeIntervalSince1970: message.timestamp / 1000)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        timeLabel.text = formatter.string(from: date)
+    }
+}
+
+// MARK: - ChatPassthroughView - 处理ChatOverlay触摸事件透传的自定义View
+class ChatPassthroughView: UIView {
+    weak var manager: ChatOverlayManager?
+    weak var containerView: UIView?
+    
+    override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
+        NSLog("🎯 ChatPassthroughView hitTest: \(point), state: \(manager?.currentState ?? .collapsed)")
+        
+        guard let containerView = containerView else {
+            NSLog("🎯 无containerView，透传触摸事件")
+            return nil // 透传所有触摸
+        }
+        
+        // 将点转换到containerView的坐标系
+        let convertedPoint = convert(point, to: containerView)
+        let containerBounds = containerView.bounds
+        
+        // 如果触摸点在containerView的边界内
+        if containerBounds.contains(convertedPoint) {
+            NSLog("🎯 触摸在ChatOverlay容器内，处理事件")
+            return super.hitTest(point, with: event)
+        } else {
+            NSLog("🎯 触摸在ChatOverlay容器外，透传给下层")
+            // 触摸点在containerView外部，透传给下层
+            return nil
+        }
+    }
+    
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool {
+        guard let containerView = containerView else {
+            return false
+        }
+        
+        let convertedPoint = convert(point, to: containerView)
+        let isInside = containerView.bounds.contains(convertedPoint)
+        NSLog("🎯 ChatPassthroughView point inside: \(point) -> \(isInside)")
+        return isInside
+    }
+}
+```
+
+**改动标注：**
+```diff
+diff --git a/ios/App/App/ChatOverlayManager.swift b/ios/App/App/ChatOverlayManager.swift
+index 2d80336..ab00162 100644
+--- a/ios/App/App/ChatOverlayManager.swift
++++ b/ios/App/App/ChatOverlayManager.swift
+@@ -527,6 +527,13 @@ class OverlayViewController: UIViewController {
+     // 🔧 新增：动画相关状态
+     private var pendingAnimationIndex: Int?  // 需要播放动画的消息索引
+     
++    // 🚨 【动画锁定机制】核心属性
++    private var isAnimatingInsert = false  // 动画期间锁定标记
++    private var pendingAIUpdates: [ChatMessage] = []  // 动画期间暂存的AI更新
++    
++    // 🚨 【新增】专门用于抑制AI滚动动画的状态
++    private var isAnimatingUserMessage = false  // 用户消息飞入动画期间的标记
++    
+     // 约束
+     private var containerTopConstraint: NSLayoutConstraint!
+     private var containerHeightConstraint: NSLayoutConstraint!
+@@ -792,8 +799,13 @@ class OverlayViewController: UIViewController {
+             bottomSpaceView.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor),
+             bottomSpaceView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor),
+             bottomSpaceView.bottomAnchor.constraint(equalTo: expandedView.bottomAnchor),
+-            bottomSpaceView.heightAnchor.constraint(equalToConstant: 120)  // 增加到120px，为输入框预留足够空间
+         ])
++        
++        // 🚨 【关键修复】将底部空间的高度约束优先级降低，避免展开时的布局冲突
++        let bottomSpaceHeightConstraint = bottomSpaceView.heightAnchor.constraint(equalToConstant: 120)  // 增加到120px，为输入框预留足够空间
++        bottomSpaceHeightConstraint.priority = UILayoutPriority(999)  // 从1000(required)降到999(high)
++        bottomSpaceHeightConstraint.isActive = true
++        NSLog("🚨 【布局修复】底部空间约束优先级设为999，避免展开冲突")
+     }
+     
+     func updateForState(_ state: OverlayState) {
+@@ -987,6 +999,23 @@ class OverlayViewController: UIViewController {
+             NSLog("⚠️ OverlayViewController: manager为nil")
+             return 
+         }
++        
++        // 🚨 【动画锁定机制】第一层检查：如果正在播放插入动画，拦截所有更新
++        if isAnimatingInsert {
++            NSLog("🚨 【动画锁定】正在播放动画，拦截更新并暂存AI消息")
++            // 只暂存最新的完整消息列表，用于动画完成后的最终同步
++            if !messages.isEmpty {
++                manager.messages = messages  // 确保数据层同步
++                // 暂存最新的AI消息（如果有的话）
++                if let lastMessage = messages.last, !lastMessage.isUser {
++                    // 清空旧的暂存，只保留最新的
++                    pendingAIUpdates = [lastMessage]
++                    NSLog("🚨 【动画锁定】暂存最新AI消息，ID: \(lastMessage.id)")
++                }
++            }
++            return  // 🚫 直接返回，不进行任何UI更新
++        }
++        
+         NSLog("🎯 OverlayViewController: manager存在，准备更新UI")
+         NSLog("🎯 是否需要播放用户消息动画: \(shouldAnimateNewUserMessage)")
+         if let index = animationIndex {
+@@ -1003,29 +1032,61 @@ class OverlayViewController: UIViewController {
+             if shouldAnimateNewUserMessage, let targetIndex = animationIndex {
+                 // 🎯 场景1：有新用户消息，需要整体重载并播放动画
+                 NSLog("🎯 【场景1】新用户消息需要动画，执行完整重载和动画")
++                
++                // 🚨 【动画锁定】加锁
++                self.isAnimatingInsert = true
+                 self.pendingAnimationIndex = targetIndex
+                 self.messagesList.reloadData()
+-                self.scrollToBottomAndPlayAnimation(messages: messages)
++                
++                self.scrollToBottomAndPlayAnimation(messages: messages) {
++                    // 🚨 【动画锁定】动画完成回调 - 解锁并处理暂存的更新
++                    NSLog("🚨 【动画锁定】动画完成，解锁并处理暂存更新")
++                    self.isAnimatingInsert = false
++                    
++                    // 处理动画期间暂存的AI更新
++                    if !self.pendingAIUpdates.isEmpty {
++                        NSLog("🚨 【动画锁定】处理暂存的\(self.pendingAIUpdates.count)个AI更新")
++                        let latestAIMessage = self.pendingAIUpdates.last!
++                        self.pendingAIUpdates.removeAll()
++                        
++                        // 🔄 重新调用自己，处理暂存的AI消息（此时不会有动画）
++                        guard let manager = self.manager else { return }
++                        let updatedMessages = manager.messages
++                        self.updateMessages(updatedMessages, oldMessages: updatedMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
++                    }
++                }
+                 
+             } else if messages.count == oldMessagesCount && messages.count > 0 {
+                 // 🎯 场景2：AI流式更新（消息总数不变，只是内容变了）
+-                // 【核心修复】只更新最后一个cell，而不是reload整个table
+-                NSLog("🎯 【场景2】AI流式更新，使用精细化cell更新，避免打断动画")
++                NSLog("🎯 【场景2】AI流式更新，使用精细化cell更新")
+                 let lastMessageIndex = messages.count - 1
+                 let indexPath = IndexPath(row: lastMessageIndex, section: 0)
+                 
+                 if let lastCell = self.messagesList.cellForRow(at: indexPath) as? MessageTableViewCell {
+                     // 直接更新cell的内容，不触发reloadData
+-                    NSLog("🎯 ✅ 直接更新最后一个AI消息cell，不影响用户消息动画")
++                    NSLog("🎯 ✅ 直接更新最后一个AI消息cell")
+                     lastCell.configure(with: messages[lastMessageIndex])
+                     
+-                    // 确保滚动到底部显示完整内容（温柔地滚动）
+-                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: true)
++                    // 🚨 【关键修复】检查是否正在播放用户消息动画，决定是否滚动
++                    let shouldAnimateScroll = !self.isAnimatingUserMessage
++                    NSLog("🚨 【动画抑制】AI更新滚动检查: isAnimatingUserMessage = \(self.isAnimatingUserMessage), shouldAnimateScroll = \(shouldAnimateScroll)")
++                    
++                    // 确保滚动到底部显示完整内容（根据动画状态决定是否使用动画）
++                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: shouldAnimateScroll)
++                    
++                    if shouldAnimateScroll {
++                        NSLog("🎯 ✅ AI滚动动画正常执行")
++                    } else {
++                        NSLog("🚨 【动画抑制】AI滚动动画被抑制，使用静默滚动")
++                    }
+                 } else {
+                     // 如果cell不可见，reloadData是无法避免的后备方案
+                     NSLog("🎯 ⚠️ AI消息cell不可见，使用后备reloadData方案")
+                     self.messagesList.reloadData()
+-                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
++                    
++                    // 同样应用动画抑制逻辑到后备方案
++                    let shouldAnimateScroll = !self.isAnimatingUserMessage
++                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: shouldAnimateScroll)
+                 }
+                 
+             } else {
+@@ -1040,9 +1101,12 @@ class OverlayViewController: UIViewController {
+         }
+     }
+     
+-    // 🔧 新增：滚动并播放动画的辅助方法
+-    private func scrollToBottomAndPlayAnimation(messages: [ChatMessage]) {
+-        guard messages.count > 0 else { return }
++    // 🔧 修改：滚动并播放动画的辅助方法 - 添加完成回调支持
++    private func scrollToBottomAndPlayAnimation(messages: [ChatMessage], completion: @escaping () -> Void) {
++        guard messages.count > 0 else { 
++            completion()  // 如果没有消息，直接调用完成回调
++            return 
++        }
+         
+         NSLog("🎯 滚动到最新消息并准备动画")
+         let indexPath = IndexPath(row: messages.count - 1, section: 0)
+@@ -1053,10 +1117,10 @@ class OverlayViewController: UIViewController {
+         DispatchQueue.main.async {
+             NSLog("🎯 立即设置动画初始状态")
+             self.setAnimationInitialState(messages: messages)
+-            // 然后播放动画
++            // 然后播放动画 - 传递完成回调
+             DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                 NSLog("🎯 开始播放动画")
+-                self.playUserMessageAnimation(messages: messages)
++                self.playUserMessageAnimation(messages: messages, completion: completion)
+             }
+         }
+     }
+@@ -1086,8 +1150,12 @@ class OverlayViewController: UIViewController {
+     }
+     
+     // 🔧 新增：播放用户消息动画
+-    private func playUserMessageAnimation(messages: [ChatMessage]) {
+-        guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { return }
++    // 🔧 修改：播放用户消息动画 - 添加完成回调支持
++    private func playUserMessageAnimation(messages: [ChatMessage], completion: @escaping () -> Void) {
++        guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { 
++            completion()  // 如果没有用户消息，直接调用完成回调
++            return 
++        }
+         
+         NSLog("🎯 播放用户消息动画，索引: \(lastUserMessageIndex)")
+         NSLog("🎯 当前pendingAnimationIndex: \(pendingAnimationIndex ?? -1)")
+@@ -1095,6 +1163,7 @@ class OverlayViewController: UIViewController {
+         // 🔧 安全检查：确保这是我们要动画的消息
+         guard pendingAnimationIndex == lastUserMessageIndex else {
+             NSLog("⚠️ 索引不匹配，跳过动画。期望: \(pendingAnimationIndex ?? -1), 实际: \(lastUserMessageIndex)")
++            completion()  // 即使跳过动画，也要调用完成回调
+             return
+         }
+         
+@@ -1107,6 +1176,10 @@ class OverlayViewController: UIViewController {
+             self.pendingAnimationIndex = nil
+             NSLog("🎯 清除pendingAnimationIndex，防止重复动画")
+             
++            // 🚨 【关键修复】设置用户消息动画状态，抑制AI滚动动画
++            self.isAnimatingUserMessage = true
++            NSLog("🚨 【动画抑制】开始用户消息动画，设置isAnimatingUserMessage = true")
++            
+             // 🔧 修正：使用更自然的动画参数，纯垂直移动
+             UIView.animate(
+                 withDuration: 0.5, // 🔧 加快到0.5秒，更流畅
+@@ -1118,15 +1191,36 @@ class OverlayViewController: UIViewController {
+                     // 🔧 关键：只有位移变换，移动到最终位置
+                     cell.transform = .identity  // 恢复原始变换（0,0位移）
+                     cell.alpha = 1.0           // 渐变显示
++                    
++                    // 🚨 【统一动画指挥权】在ChatOverlay动画中同步控制InputDrawer位移
++                    // 发送消息后，ChatOverlay通常会切换到collapsed状态，InputDrawer需要上移
++                    NSLog("🚨 【统一动画】同步控制InputDrawer位移到collapsed位置")
++                    NotificationCenter.default.post(
++                        name: Notification.Name("chatOverlayStateChanged"),
++                        object: nil,
++                        userInfo: [
++                            "state": "collapsed",
++                            "visible": true,
++                            "source": "unified_animation"  // 标记这是统一动画控制
++                        ]
++                    )
+                 },
+                 completion: { finished in
+-                    NSLog("🎯 用户消息动画完成, finished: \(finished)")
+-                    // pendingAnimationIndex已经在动画开始时清除了
++                    NSLog("🎯 🚨 用户消息动画完成, finished: \(finished)")
++                    
++                    // 🚨 【关键修复】清除动画状态，允许后续AI滚动动画
++                    self.isAnimatingUserMessage = false
++                    NSLog("🚨 【动画抑制】用户消息动画完成，设置isAnimatingUserMessage = false")
++                    
++                    // 🚨 【关键】调用完成回调，通知动画锁定机制解锁
++                    completion()
+                 }
+             )
+         } else {
+             NSLog("⚠️ 未找到用户消息cell，动画失败")
+             self.pendingAnimationIndex = nil
++            self.isAnimatingUserMessage = false
++            completion()  // 即使动画失败，也要调用完成回调
+         }
+     }
+ }
+```
+
+### 📄 Codefind.md
+
+```md
+# 🔍 CodeFind 报告: 输入框点击发送到内容发送到浮窗的全流程相关代码 (Input Send Flow)
+
+**生成时间**: 2025-08-31
+
+---
+
+## 📂 项目目录结构
+
+```
+staroracle-app_v1/
+├── src/                        # React Web层
+│   ├── components/
+│   │   ├── ConversationDrawer.tsx  # React版输入框
+│   │   └── App.tsx                 # 主应用入口
+│   ├── hooks/
+│   │   ├── useNativeChatOverlay.ts # 原生聊天浮窗Hook  
+│   │   └── useNativeInputDrawer.ts # 原生输入框Hook
+│   ├── plugins/
+│   │   ├── ChatOverlay.ts          # 聊天浮窗插件定义
+│   │   └── InputDrawer.ts          # 输入框插件定义
+│   ├── store/
+│   │   ├── useStarStore.ts         # 星星状态管理
+│   │   └── useChatStore.ts         # 聊天状态管理
+│   └── utils/
+│       └── aiTaggingUtils.ts       # AI工具函数
+└── ios/App/App/                # iOS Swift原生层
+    ├── InputDrawerManager.swift    # 原生输入框管理器
+    ├── InputDrawerPlugin.swift     # 原生输入框插件
+    ├── ChatOverlayManager.swift    # 原生聊天浮窗管理器
+    └── ChatOverlayPlugin.swift     # 原生聊天浮窗插件
+```
+
+---
+
+## 🎯 功能指代确认
+
+**"输入框点击发送到内容发送到浮窗的全流程"** 对应技术模块：
+
+1. **输入框**: `ConversationDrawer` (React) + `InputDrawerManager` (Swift)
+2. **发送流程**: 从用户输入 → AI处理 → 星星创建 → 浮窗显示
+3. **浮窗**: `ChatOverlay` (React/Web回退) + `ChatOverlayManager` (Swift)  
+4. **状态管理**: `useStarStore` (星星管理) + `useChatStore` (聊天管理)
+
+---
+
+## 📁 涉及文件列表 (按重要度评级)
+
+### ⭐⭐⭐ 核心流程文件
+- `src/components/ConversationDrawer.tsx` - React版输入框组件
+- `src/App.tsx` - 主应用，处理发送逻辑
+- `src/store/useStarStore.ts` - 星星创建核心逻辑
+- `ios/App/App/InputDrawerManager.swift` - 原生输入框实现
+
+### ⭐⭐ 重要支持文件
+- `src/hooks/useNativeChatOverlay.ts` - 原生浮窗集成
+- `ios/App/App/ChatOverlayManager.swift` - 原生浮窗实现
+- `src/store/useChatStore.ts` - 聊天状态管理
+- `src/utils/aiTaggingUtils.ts` - AI响应处理
+
+### ⭐ 插件接口文件
+- `ios/App/App/InputDrawerPlugin.swift` - 原生输入框插件
+- `ios/App/App/ChatOverlayPlugin.swift` - 原生浮窗插件
+- `src/plugins/InputDrawer.ts` - 输入框插件定义
+- `src/plugins/ChatOverlay.ts` - 浮窗插件定义
+
+---
+
+## 📄 完整代码内容
+
+### ⭐⭐⭐ ConversationDrawer.tsx - React版输入框
+```typescript
+import React, { useState, useRef, useCallback } from 'react';
+import { Mic } from 'lucide-react';
+import { playSound } from '../utils/soundUtils';
+import { triggerHapticFeedback } from '../utils/hapticUtils';
+import StarRayIcon from './StarRayIcon';
+import FloatingAwarenessPlanet from './FloatingAwarenessPlanet';
+import { Capacitor } from '@capacitor/core';
+import { useChatStore } from '../store/useChatStore';
+import { useKeyboard } from '../hooks/useKeyboard';
+
+interface ConversationDrawerProps {
+  isOpen: boolean;
+  onToggle: () => void;
+  onSendMessage?: (inputText: string) => void;
+  showChatHistory?: boolean;
+  followUpQuestion?: string;
+  onFollowUpProcessed?: () => void;
+  isFloatingAttached?: boolean;
+}
+
+const ConversationDrawer: React.FC<ConversationDrawerProps> = ({ 
+  onSendMessage,
+  isFloatingAttached = false
+}) => {
+  const [inputValue, setInputValue] = useState('');
+  const [isRecording, setIsRecording] = useState(false);
+  const [starAnimated, setStarAnimated] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  const { conversationAwareness } = useChatStore();
+  const { keyboardHeight, isKeyboardOpen } = useKeyboard();
+
+  // 🎯 使用Capacitor键盘数据动态计算位置
+  const getBottomPosition = () => {
+    if (isKeyboardOpen && keyboardHeight > 0) {
+      // 键盘打开时，使用键盘高度 + 少量间距
+      return keyboardHeight + 10;
+    } else {
+      // 键盘关闭时，使用底部安全区域或浮窗间距
+      return isFloatingAttached ? 70 : 20;
+    }
+  };
+
+  const handleMicClick = () => {
+    setIsRecording(!isRecording);
+    console.log('Microphone clicked, recording:', !isRecording);
+    if (Capacitor.isNativePlatform()) {
+      triggerHapticFeedback('light');
+    }
+    playSound('starClick');
+  };
+
+  const handleStarClick = () => {
+    setStarAnimated(true);
+    console.log('Star ray button clicked');
+    if (inputValue.trim()) {
+      handleSend();
+    }
+    setTimeout(() => {
+      setStarAnimated(false);
+    }, 1000);
+  };
+
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setInputValue(e.target.value);
+  };
+
+  // 🎯 【核心发送逻辑】
+  const handleSend = useCallback(async () => {
+    const trimmedInput = inputValue.trim();
+    if (!trimmedInput) return;
+    
+    if (onSendMessage) {
+      onSendMessage(trimmedInput);
+    }
+    
+    setInputValue('');
+    console.log('🔍 ConversationDrawer: 消息已发送，请求打开ChatOverlay');
+  }, [inputValue, onSendMessage]);
+
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      handleSend();
+    }
+  };
+
+  return (
+    <div 
+      className="fixed left-0 right-0 z-50 p-4"
+      style={{
+        bottom: `${getBottomPosition()}px`, // 🎯 使用Capacitor键盘高度
+        transition: 'bottom 0.3s ease-out', // 🎯 平滑过渡动画
+        pointerEvents: 'none'
+      }}
+    >
+      <div className="w-full max-w-md mx-auto pointer-events-auto">
+        <div className="relative">
+          <div className="flex items-center bg-gray-900 rounded-full h-12 shadow-lg border border-gray-800">
+            {/* 左侧：觉察动画 */}
+            <div className="ml-3 flex-shrink-0">
+              <FloatingAwarenessPlanet
+                level={conversationAwareness.overallLevel}
+                isAnalyzing={conversationAwareness.isAnalyzing}
+                conversationDepth={conversationAwareness.conversationDepth}
+                onTogglePanel={() => console.log('觉察动画被点击')}
+              />
+            </div>
+            
+            {/* Input field */}
+            <input
+              ref={inputRef}
+              type="text"
+              value={inputValue}
+              onChange={handleInputChange}
+              onKeyPress={handleKeyPress}
+              placeholder="询问任何问题"
+              className="flex-1 bg-transparent text-white placeholder-gray-400 pl-2 pr-4 py-2 focus:outline-none stellar-body"
+              inputMode="text"
+              autoComplete="off"
+              autoCapitalize="sentences"
+              spellCheck="false"
+            />
+
+            <div className="flex items-center space-x-2 mr-3">
+              {/* Mic Button */}
+              <button
+                type="button"
+                onClick={handleMicClick}
+                className={`p-2 rounded-full dialog-transparent-button transition-colors duration-200 ${
+                  isRecording ? 'recording' : ''
+                }`}
+              >
+                <Mic className="w-4 h-4" strokeWidth={2} />
+              </button>
+
+              {/* Star Button */}
+              <button
+                type="button"
+                onClick={handleStarClick}
+                className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
+              >
+                <StarRayIcon 
+                  size={16} 
+                  animated={starAnimated || !!inputValue.trim()} 
+                  iconColor="currentColor"
+                />
+              </button>
+            </div>
+          </div>
+
+          {/* Recording indicator */}
+          {isRecording && (
+            <div className="absolute -bottom-8 left-1/2 transform -translate-x-1/2">
+              <div className="flex items-center space-x-2 text-red-400 text-xs">
+                <div className="w-2 h-2 bg-red-500 rounded-full animate-pulse"></div>
+                <span>Recording...</span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default ConversationDrawer;
+```
+
+**第67行**: 🎯 核心发送处理函数`handleSend`
+**第72行**: 🎯 调用`onSendMessage`回调传递消息
+**第52行**: 🎯 星星按钮点击触发发送
+
+### ⭐⭐⭐ App.tsx - 主应用发送逻辑
+```typescript
+// 🎯 【核心发送流程】App.tsx中的关键部分
+const handleSendMessage = async (inputText: string) => {
+  console.log('🔍 App.tsx: 接收到发送请求', inputText, '原生模式:', isNative);
+  console.log('🔍 当前nativeChatOverlay.isOpen状态:', nativeChatOverlay.isOpen);
+
+  if (isNative) {
+    // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
+    console.log('📱 原生模式，使用ChatStore处理消息');
+    
+    // 🔧 优化浮窗打开逻辑，减少动画冲突
+    if (!nativeChatOverlay.isOpen) {
+      console.log('📱 原生浮窗未打开，先打开浮窗');
+      await nativeChatOverlay.showOverlay(true);
+      // 🔧 减少等待时间，避免与InputDrawer动画冲突
+      await new Promise(resolve => setTimeout(resolve, 100)); // 减少到100ms
+      console.log('📱 浮窗打开完成，当前isOpen状态:', nativeChatOverlay.isOpen);
+    } else {
+      console.log('📱 原生浮窗已打开，直接发送消息');
+    }
+    
+    // 添加用户消息到store
+    addUserMessage(inputText);
+    setLoading(true);
+    
+    try {
+      // 调用AI API
+      const messageId = addStreamingAIMessage('');
+      let streamingText = '';
+      
+      const onStream = (chunk: string) => {
+        streamingText += chunk;
+        updateStreamingMessage(messageId, streamingText);
+      };
+
+      // 获取对话历史（需要获取最新的messages）
+      const conversationHistory = messages.map(msg => ({
+        role: msg.isUser ? 'user' as const : 'assistant' as const,
+        content: msg.text
+      }));
+
+      const aiResponse = await generateAIResponse(
+        inputText, 
+        undefined, 
+        onStream,
+        conversationHistory
+      );
+      
+      if (streamingText !== aiResponse) {
+        updateStreamingMessage(messageId, aiResponse);
+      }
+      
+      finalizeStreamingMessage(messageId);
+      
+      // 在第一次AI回复后，尝试生成对话标题
+      setTimeout(() => {
+        generateConversationTitle();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('❌ AI回复失败:', error);
+    } finally {
+      setLoading(false);
+      // 🔧 移除可能导致动画冲突的原生setLoading调用
+      // 原生端会通过消息同步机制自动更新loading状态，无需额外调用
+      // await nativeChatOverlay.setLoading(false);
+      console.log('📱 已跳过原生setLoading调用，避免动画冲突');
+    }
+  } else {
+    // Web模式：使用React ChatOverlay
+    console.log('🌐 Web模式，使用React ChatOverlay');
+    if (webChatOverlayOpen) {
+      setPendingFollowUpQuestion(inputText);
+    } else {
+      setInitialChatInput(inputText);
+      setWebChatOverlayOpen(true);
+    }
+  }
+};
+
+// 🎯 【原生输入框监听】设置原生InputDrawer事件监听
+useEffect(() => {
+  const setupNative = async () => {
+    if (Capacitor.isNativePlatform()) {
+      // 🎯 设置原生InputDrawer事件监听
+      const messageSubmittedListener = await InputDrawer.addListener('messageSubmitted', (data: any) => {
+        console.log('🎯 收到原生InputDrawer消息提交事件:', data.text);
+        handleSendMessage(data.text);
+      });
+
+      const textChangedListener = await InputDrawer.addListener('textChanged', (data: any) => {
+        console.log('🎯 原生InputDrawer文本变化:', data.text);
+        // 可以在这里处理文本变化逻辑，比如实时预览等
+      });
+
+      // 🎯 自动显示输入框
+      console.log('🎯 自动显示原生InputDrawer');
+      await InputDrawer.show();
+
+      // 清理函数
+      return () => {
+        messageSubmittedListener.remove();
+        textChangedListener.remove();
+      };
+    } else {
+      // Web环境立即设置为准备就绪
+      setAppReady(true);
+    }
+  };
+  
+  setupNative();
+}, []);
+```
+
+**第113行**: 🎯 主发送消息处理函数`handleSendMessage`
+**第135行**: 🎯 添加用户消息到ChatStore
+**第139行**: 🎯 创建AI流式回复消息
+**第220行**: 🎯 监听原生InputDrawer的`messageSubmitted`事件
+
+### ⭐⭐⭐ useStarStore.ts - 星星创建核心
+```typescript
+// 🎯 【星星创建核心】addStar方法的关键部分
+addStar: async (question: string) => {
+  const { constellation, pendingStarPosition } = get();
+  const { stars } = constellation;
+  
+  console.log(`===== User asked a question =====`);
+  console.log(`Question: "${question}"`);
+  
+  // Set loading state to true
+  set({ isLoading: true });
+  
+  // Get AI configuration
+  const aiConfig = getAIConfig();
+  console.log('Retrieved AI config result:', {
+    hasApiKey: !!aiConfig.apiKey,
+    hasEndpoint: !!aiConfig.endpoint,
+    provider: aiConfig.provider,
+    model: aiConfig.model
+  });
+  
+  // Create new star at the clicked position or random position first (with placeholder answer)
+  const x = pendingStarPosition?.x ?? (Math.random() * 70 + 15); // 15-85%
+  const y = pendingStarPosition?.y ?? (Math.random() * 70 + 15); // 15-85%
+  
+  // Create placeholder star (we'll update it with AI response later)
+  const newStar: Star = {
+    id: `star-${Date.now()}`,
+    x,
+    y,
+    size: Math.random() * 1.5 + 2.0, // Will be updated based on AI analysis
+    brightness: 0.6, // Placeholder brightness
+    question,
+    answer: '', // Empty initially, will be filled by streaming
+    imageUrl: generateRandomStarImage(),
+    createdAt: new Date(),
+    isSpecial: false, // Will be updated based on AI analysis
+    tags: [], // Will be filled by AI analysis
+    primary_category: 'philosophy_and_existence', // Placeholder
+    emotional_tone: ['探寻中'], // Placeholder
+    question_type: '探索型', // Placeholder
+    insight_level: { value: 1, description: '星尘' }, // Placeholder
+    initial_luminosity: 10, // Placeholder
+    connection_potential: 3, // Placeholder
+    suggested_follow_up: '', // Will be filled by AI analysis
+    card_summary: question, // Placeholder
+    isTemplate: false,
+    isStreaming: true, // Mark as currently streaming
+  };
+  
+  // Add placeholder star to constellation immediately for better UX
+  const updatedStars = [...stars, newStar];
+  set({
+    constellation: {
+      stars: updatedStars,
+      connections: constellation.connections, // Keep existing connections for now
+    },
+    activeStarId: newStar.id, // Show the star being created
+    isAsking: false,
+    pendingStarPosition: null,
+  });
+  
+  // Generate AI response with streaming
+  console.log('Starting AI response generation with streaming...');
+  let answer: string;
+  let streamingAnswer = '';
+  
+  try {
+    // Set up streaming callback
+    const onStream = (chunk: string) => {
+      streamingAnswer += chunk;
+      
+      // Update star with streaming content in real time
+      set(state => ({
+        constellation: {
+          ...state.constellation,
+          stars: state.constellation.stars.map(star => 
+            star.id === newStar.id 
+              ? { ...star, answer: streamingAnswer }
+              : star
+          )
+        }
+      }));
+    };
+    
+    answer = await generateAIResponse(question, aiConfig, onStream);
+    console.log(`Got AI response: "${answer}"`);
+    
+    // Ensure we have a valid answer
+    if (!answer || answer.trim().length === 0) {
+      throw new Error('Empty AI response');
+    }
+  } catch (error) {
+    console.warn('AI response failed, using fallback:', error);
+    // Use fallback response generation
+    answer = generateFallbackResponse(question);
+    console.log(`Fallback response: "${answer}"`);
+    
+    // Update with fallback answer
+    streamingAnswer = answer;
+  }
+  
+  // Analyze content with AI for tags and categorization
+  const analysis = await analyzeStarContent(question, answer, aiConfig);
+  
+  // Update star with final AI analysis results
+  const finalStar: Star = {
+    ...newStar,
+    // 根据洞察等级调整星星大小，洞察等级越高，星星越大
+    size: Math.random() * 1.5 + 2.0 + (analysis.insight_level?.value || 0) * 0.5, // 2.0-6.5px
+    // 亮度也受洞察等级影响
+    brightness: (analysis.initial_luminosity || 60) / 100, // 转换为0-1范围
+    answer: streamingAnswer || answer, // Use final streamed answer
+    isSpecial: Math.random() < 0.12 || (analysis.insight_level?.value || 0) >= 4, // 启明星和超新星自动成为特殊星
+    tags: analysis.tags,
+    primary_category: analysis.primary_category,
+    emotional_tone: analysis.emotional_tone,
+    question_type: analysis.question_type,
+    insight_level: analysis.insight_level,
+    initial_luminosity: analysis.initial_luminosity,
+    connection_potential: analysis.connection_potential,
+    suggested_follow_up: analysis.suggested_follow_up,
+    card_summary: analysis.card_summary,
+    isStreaming: false, // Streaming completed
+  };
+  
+  console.log('⭐ Final star with AI analysis:', {
+    question: finalStar.question,
+    answer: finalStar.answer,
+    answerLength: finalStar.answer.length,
+    tags: finalStar.tags,
+    primary_category: finalStar.primary_category,
+    emotional_tone: finalStar.emotional_tone,
+    insight_level: finalStar.insight_level,
+    connection_potential: finalStar.connection_potential
+  });
+  
+  // Update with final star and regenerate connections
+  const finalStars = updatedStars.map(star => 
+    star.id === newStar.id ? finalStar : star
+  );
+  const smartConnections = generateSmartConnections(finalStars);
+  
+  set({
+    constellation: {
+      stars: finalStars,
+      connections: smartConnections,
+    },
+    isLoading: false, // Set loading state back to false
+  });
+  
+  return finalStar;
+}
+```
+
+**第67行**: 🎯 主星星创建函数`addStar`开始
+**第91行**: 🎯 创建占位符星星，立即显示给用户
+**第116行**: 🎯 立即添加星星到constellation，提升用户体验
+**第134行**: 🎯 设置流式回复回调函数`onStream`
+**第150行**: 🎯 调用`generateAIResponse`开始AI处理
+**第169行**: 🎯 分析AI内容并分类标记
+**第171行**: 🎯 创建最终星星对象
+
+### ⭐⭐ InputDrawerManager.swift - 原生输入框
+```swift
+// 🎯 【原生输入框核心】handleTextSubmit方法
+internal func handleTextSubmit(_ text: String) {
+    currentText = text
+    delegate?.inputDrawerDidSubmit(text)
+    NSLog("🎯 InputDrawerManager: 文本提交: \(text)")
+}
+
+// 🎯 【发送按钮处理】
+@objc private func sendButtonTapped() {
+    guard let text = textField.text, !text.isEmpty else { return }
+    
+    manager?.handleTextSubmit(text)
+    textField.text = ""
+    updateSendButtonState()
+}
+
+// 🎯 【文本变化处理】
+@objc private func textFieldDidChange() {
+    updateSendButtonState()
+    manager?.handleTextChange(textField.text ?? "")
+}
+```
+
+**第202行**: 🎯 处理文本提交的核心方法`handleTextSubmit`
+**第538行**: 🎯 发送按钮点击处理`sendButtonTapped`
+**第533行**: 🎯 文本变化实时处理`textFieldDidChange`
+
+### ⭐⭐ useNativeChatOverlay.ts - 原生浮窗集成
+```typescript
+// 🎯 【消息同步核心】简化同步逻辑
+useEffect(() => {
+  if (!Capacitor.isNativePlatform() || storeMessages.length === 0) {
+    return;
+  }
+
+  console.log('📱 [简化同步] 消息列表发生变化，同步到原生ChatOverlay');
+  console.log('📱 当前store消息数量:', storeMessages.length);
+  
+  // 将store的ChatMessage转换为原生可识别的格式
+  const nativeMessages = storeMessages.map(msg => ({
+    id: msg.id,
+    text: msg.text,
+    isUser: msg.isUser,
+    timestamp: msg.timestamp.getTime() // 转换Date为毫秒时间戳
+  }));
+
+  // 🎯 关键简化：无差别同步，让原生端自己决定何时播放动画
+  const syncMessages = async () => {
+    try {
+      await ChatOverlay.updateMessages({ messages: nativeMessages });
+      console.log('✅ [简化同步] 消息同步成功，动画判断交由原生端处理');
+    } catch (error) {
+      console.error('❌ [简化同步] 消息同步失败:', error);
+    }
+  };
+
+  // 立即执行同步，不再区分用户消息、AI消息或流式更新
+  syncMessages();
+}, [storeMessages]); // 只依赖storeMessages数组变化
+```
+
+**第85行**: 🎯 消息同步的核心useEffect
+**第94行**: 🎯 转换消息格式为原生可识别
+**第102-112行**: 🎯 执行消息同步到原生ChatOverlay
+
+---
+
+## 🔍 关键功能点标注
+
+### 📍 发送流程关键节点
+
+1. **第67行** (ConversationDrawer.tsx): 用户点击发送触发`handleSend`
+2. **第113行** (App.tsx): 主应用接收发送请求`handleSendMessage`  
+3. **第220行** (App.tsx): 监听原生InputDrawer的消息提交事件
+4. **第135行** (App.tsx): 添加用户消息到ChatStore
+5. **第67行** (useStarStore.ts): 创建星星`addStar`方法
+6. **第150行** (useStarStore.ts): 调用AI生成响应
+7. **第104行** (useNativeChatOverlay.ts): 同步消息到原生浮窗
+
+### 📍 状态管理关键节点
+
+1. **第25行** (ConversationDrawer.tsx): React输入框状态管理
+2. **第61行** (App.tsx): ChatStore状态获取
+3. **第49行** (useStarStore.ts): Zustand状态定义
+4. **第16行** (useNativeChatOverlay.ts): 原生浮窗状态管理
+
+### 📍 原生集成关键节点
+
+1. **第202行** (InputDrawerManager.swift): 原生输入框文本提交处理
+2. **第85-113行** (useNativeChatOverlay.ts): React到原生消息同步
+3. **第220-228行** (App.tsx): 原生事件监听器设置
+
+---
+
+## 📊 技术特性总结
+
+### 🏗️ 架构模式
+- **混合架构**: React Web层 + iOS Swift原生层
+- **双向通信**: Capacitor插件桥接Web和原生
+- **状态同步**: Zustand管理全局状态，实时同步到原生
+
+### 🔄 数据流向  
+```
+用户输入 → ConversationDrawer → App.tsx → ChatStore → 
+useNativeChatOverlay → ChatOverlay原生 → 显示结果
+```
+
+### ⚡ 关键优化
+- **流式AI响应**: 实时更新用户界面，提升体验
+- **动画同步**: 统一动画指挥权，避免双重动画冲突
+- **状态守卫**: 防止AI流式响应与用户操作竞争条件
+- **触摸穿透**: 原生窗口支持智能触摸事件处理
+
+### 🎯 核心流程
+1. **输入阶段**: 用户在React或原生输入框中输入内容
+2. **发送阶段**: 点击发送触发`handleSendMessage`函数
+3. **处理阶段**: ChatStore管理消息，useStarStore创建星星
+4. **AI阶段**: 调用AI API生成流式响应
+5. **显示阶段**: 同步到原生ChatOverlay浮窗显示结果
+
+---
+
+*报告生成完毕 - 包含输入框点击发送到浮窗显示的完整代码流程*
+```
+
+_无改动_
+
+
+---
 ## 🔥 VERSION 004 📝
 **时间：** 2025-08-25 01:28:14
 

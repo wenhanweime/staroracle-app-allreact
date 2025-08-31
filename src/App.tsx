@@ -118,16 +118,10 @@ function App() {
       // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
       console.log('📱 原生模式，使用ChatStore处理消息');
       
-      // 🔧 优化浮窗打开逻辑，减少动画冲突
-      if (!nativeChatOverlay.isOpen) {
-        console.log('📱 原生浮窗未打开，先打开浮窗');
-        await nativeChatOverlay.showOverlay(true);
-        // 🔧 减少等待时间，避免与InputDrawer动画冲突
-        await new Promise(resolve => setTimeout(resolve, 100)); // 减少到100ms
-        console.log('📱 浮窗打开完成，当前isOpen状态:', nativeChatOverlay.isOpen);
-      } else {
-        console.log('📱 原生浮窗已打开，直接发送消息');
-      }
+      // 🚨 【关键修复】移除竞态条件 - 每次都无条件调用showOverlay，让原生层自己判断
+      console.log('📱 🚨 【架构加固】每次都调用showOverlay，消除JS状态依赖');
+      await nativeChatOverlay.showOverlay(true); // 原生层会通过状态守卫忽略重复请求
+      console.log('📱 showOverlay调用完成，继续处理消息');
       
       // 添加用户消息到store
       addUserMessage(inputText);

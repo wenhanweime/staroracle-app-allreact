@@ -487,11 +487,13 @@ class InputViewController: UIViewController {
         // 更新管理器中的bottomSpace值
         manager?.bottomSpace = space
         
-        // 更新UI约束
+        // 🚨 【关键修复】移除InputDrawer的自动动画，改为瞬间移动
+        // 这避免了与ChatOverlay动画的冲突
         containerBottomConstraint.constant = -space
-        UIView.animate(withDuration: 0.3) {
-            self.view.layoutIfNeeded()
-        }
+        // 不再执行动画，而是让布局立即生效
+        self.view.layoutIfNeeded()
+        
+        NSLog("🎯 InputDrawer: 位置更新完成（无动画），bottomSpace: \(space)")
         
         // 🚨 【关键修复】注释掉反馈通知，打破 InputDrawer -> ChatOverlay 的恶性循环
         // 这个通知会导致ChatOverlay再次更新状态，形成无限循环触发双重动画
