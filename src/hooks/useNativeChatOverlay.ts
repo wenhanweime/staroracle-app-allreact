@@ -117,27 +117,38 @@ export const useNativeChatOverlay = () => {
     
     lastSyncMessagesRef.current = messagesHash;
 
-    // 🚨 【关键修复】智能节流同步：根据消息类型调整节流时间
+    // 🚨 【关键修复】基于内容变化的智能同步策略
     if (syncThrottleRef.current) {
       clearTimeout(syncThrottleRef.current);
     }
     
-    // 根据消息类型调整节流时间
+    // 分析消息变化类型
     const lastMessage = nativeMessages[nativeMessages.length - 1];
     const isUserMessage = lastMessage?.isUser;
+    const isNewMessage = nativeMessages.length !== (lastSyncMessagesRef.current ? JSON.parse(lastSyncMessagesRef.current).length : 0);
     const isStreamingUpdate = lastMessage && !lastMessage.isUser && lastMessage.text.length > 0;
     
-    // 用户消息：立即同步（需要动画）
-    // AI流式更新：较长节流时间（避免频繁更新）
-    // 其他情况：中等节流时间
-    const throttleDelay = isUserMessage ? 0 : (isStreamingUpdate ? 200 : 100);
+    // 智能同步策略：
+    // 1. 新用户消息：立即同步（需要动画）
+    // 2. 新AI消息：短延迟同步（避免与用户动画冲突）
+    // 3. AI流式更新：较长延迟（避免频繁更新）
+    // 4. 其他情况：中等延迟
+    let throttleDelay = 100; // 默认延迟
+    
+    if (isUserMessage && isNewMessage) {
+      throttleDelay = 0; // 用户消息立即同步
+    } else if (!isUserMessage && isNewMessage) {
+      throttleDelay = 50; // 新AI消息短延迟
+    } else if (isStreamingUpdate) {
+      throttleDelay = 150; // AI流式更新较长延迟
+    }
     
     syncThrottleRef.current = setTimeout(async () => {
       try {
         await ChatOverlay.updateMessages({ messages: nativeMessages });
-        console.log(`✅ [智能节流同步] 消息同步成功，类型: ${isUserMessage ? '用户消息' : (isStreamingUpdate ? 'AI流式' : '其他')}`);
+        console.log(`✅ [智能同步] 消息同步成功，类型: ${isUserMessage ? '用户消息' : (isStreamingUpdate ? 'AI流式' : '其他')}, 延迟: ${throttleDelay}ms`);
       } catch (error) {
-        console.error('❌ [智能节流同步] 消息同步失败:', error);
+        console.error('❌ [智能同步] 消息同步失败:', error);
       }
     }, throttleDelay);
 

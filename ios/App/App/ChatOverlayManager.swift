@@ -89,10 +89,18 @@ public class ChatOverlayManager {
     private var lastSyncTimestamp: TimeInterval = 0
     private let syncThrottleInterval: TimeInterval = 0.1  // 100ms内的重复调用将被忽略
     
-    // 🚨 【关键修复】消息内容去重机制
+    // 🚨 【关键修复】基于状态机的消息去重机制
     private var lastMessagesHash: String = ""
-    private var lastAnimationTriggerTime: TimeInterval = 0
-    private let animationCooldownInterval: TimeInterval = 0.5  // 500ms内不重复触发动画
+    private var animationState: AnimationState = .idle
+    private var pendingUserMessageId: String? = nil
+    
+    // 动画状态枚举
+    private enum AnimationState {
+        case idle           // 空闲状态
+        case userAnimating  // 用户消息动画中
+        case aiStreaming    // AI流式输出中
+        case completed      // 完成状态
+    }
     
     // MARK: - Public API
     
@@ -255,29 +263,37 @@ public class ChatOverlayManager {
         
         lastMessagesHash = messagesHash
         
-        // 🚨 【关键修复】动画冷却期检查
-        let currentTime = CACurrentMediaTime()
-        if currentTime - lastAnimationTriggerTime < animationCooldownInterval {
-            NSLog("🎯 [冷却期] 距离上次动画触发时间过短，跳过动画")
-        }
-        
-        // 🎯 【智能判断】找到最新的用户消息
+        // 🚨 【关键修复】基于状态机的动画判断
         let latestUserMessage = messages.last(where: { $0.isUser })
         var shouldAnimate = false
         var animationIndex: Int? = nil
         
+        // 状态机逻辑：只有在idle状态且发现新用户消息时才触发动画
         if let userMessage = latestUserMessage,
            !animatedMessageIDs.contains(userMessage.id),
-           currentTime - lastAnimationTriggerTime >= animationCooldownInterval {
-            // 🎯 这是一条全新的、从未播放过动画的用户消息，且不在冷却期内
+           animationState == .idle {
+            
+            // 🎯 发现新用户消息，准备进入动画状态
             shouldAnimate = true
-            // ✅ 关键：在判定阶段立刻记录，防止紧随其后的第二次update再次触发动画
+            animationState = .userAnimating
+            pendingUserMessageId = userMessage.id
             animatedMessageIDs.insert(userMessage.id)
-            lastAnimationTriggerTime = currentTime
             animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
-            NSLog("🎯 ✅ 发现新用户消息！ID: \(userMessage.id), 将播放动画，索引: \(animationIndex ?? -1)")
+            
+            NSLog("🎯 ✅ [状态机] 发现新用户消息！ID: \(userMessage.id), 状态: \(animationState), 索引: \(animationIndex ?? -1)")
         } else {
-            NSLog("🎯 ☑️ 无新用户消息或已播放过动画或冷却期内，跳过动画")
+            // 根据当前状态决定处理方式
+            switch animationState {
+            case .idle:
+                NSLog("🎯 ☑️ [状态机] 空闲状态，无新用户消息")
+            case .userAnimating:
+                NSLog("🎯 ☑️ [状态机] 用户消息动画中，跳过新动画")
+            case .aiStreaming:
+                NSLog("🎯 ☑️ [状态机] AI流式输出中，跳过新动画")
+            case .completed:
+                NSLog("🎯 ☑️ [状态机] 完成状态，重置为空闲")
+                animationState = .idle
+            }
         }
         
         // 更新消息列表
@@ -1329,6 +1345,10 @@ class OverlayViewController: UIViewController {
             }
             
             NSLog("🚨 【流式协调】AI流式更新处理完成，内容长度: \(latestAIContent.count)")
+            
+            // 🚨 【关键修复】状态机转换：AI流式完成 -> 完成状态
+            animationState = .completed
+            NSLog("🚨 【状态机】AI流式更新完成，状态转换: aiStreaming -> completed")
         }
     }
     
@@ -1422,10 +1442,12 @@ class OverlayViewController: UIViewController {
                 completion: { finished in
                     NSLog("🎯 🚨 用户消息动画完成, finished: \(finished)")
                     
-                    // 🚨 【关键修复】清除动画状态，允许后续AI滚动动画
+                    // 🚨 【关键修复】状态机转换：用户动画完成 -> AI流式状态
                     self.isAnimatingUserMessage = false
-                    self.isUserMessageAnimating = false  // 新增：清除用户消息动画标记
-                    NSLog("🚨 【动画抑制】用户消息动画完成，设置isAnimatingUserMessage = false")
+                    self.isUserMessageAnimating = false
+                    self.animationState = .aiStreaming  // 转换到AI流式状态
+                    NSLog("🚨 【状态机】用户消息动画完成，状态转换: userAnimating -> aiStreaming")
+                    
                     // 🔧 动画完成后，继续短暂抑制AI滚动动画，避免紧随的首包造成叠加观感
                     self.suppressAIAnimatedScrollUntil = CACurrentMediaTime() + 0.15
                     // 记录已播放动画的消息ID与时间戳
