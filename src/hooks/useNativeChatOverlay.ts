@@ -81,13 +81,17 @@ export const useNativeChatOverlay = () => {
   // 🚨 【关键新增】状态守卫：防止AI流式响应与用户操作的竞争条件
   const lastSentOverlayStateRef = useRef<{ expanded: boolean; visible: boolean } | null>(null);
   
-  // 🔧 简化同步：监听store中的消息变化并同步到原生ChatOverlay
+  // 🚨 【关键修复】添加消息同步节流和去重机制
+  const lastSyncMessagesRef = useRef<string>('');
+  const syncThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  
+  // 🔧 优化同步：监听store中的消息变化并同步到原生ChatOverlay
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || storeMessages.length === 0) {
       return;
     }
 
-    console.log('📱 [简化同步] 消息列表发生变化，同步到原生ChatOverlay');
+    console.log('📱 [优化同步] 消息列表发生变化，同步到原生ChatOverlay');
     console.log('📱 当前store消息数量:', storeMessages.length);
     
     // 将store的ChatMessage转换为原生可识别的格式
@@ -98,18 +102,45 @@ export const useNativeChatOverlay = () => {
       timestamp: msg.timestamp.getTime() // 转换Date为毫秒时间戳
     }));
 
-    // 🎯 关键简化：无差别同步，让原生端自己决定何时播放动画
-    const syncMessages = async () => {
+    // 🚨 【关键修复】消息内容去重：生成消息内容的哈希值
+    const messagesHash = JSON.stringify(nativeMessages.map(msg => ({
+      id: msg.id,
+      text: msg.text,
+      isUser: msg.isUser
+    })));
+    
+    // 如果消息内容没有变化，跳过同步
+    if (lastSyncMessagesRef.current === messagesHash) {
+      console.log('📱 [去重] 消息内容未变化，跳过同步');
+      return;
+    }
+    
+    lastSyncMessagesRef.current = messagesHash;
+
+    // 🚨 【关键修复】智能节流同步：根据消息类型调整节流时间
+    if (syncThrottleRef.current) {
+      clearTimeout(syncThrottleRef.current);
+    }
+    
+    // 根据消息类型调整节流时间
+    const lastMessage = nativeMessages[nativeMessages.length - 1];
+    const isUserMessage = lastMessage?.isUser;
+    const isStreamingUpdate = lastMessage && !lastMessage.isUser && lastMessage.text.length > 0;
+    
+    // 用户消息：立即同步（需要动画）
+    // AI流式更新：较长节流时间（避免频繁更新）
+    // 其他情况：中等节流时间
+    const throttleDelay = isUserMessage ? 0 : (isStreamingUpdate ? 200 : 100);
+    
+    syncThrottleRef.current = setTimeout(async () => {
       try {
         await ChatOverlay.updateMessages({ messages: nativeMessages });
-        console.log('✅ [简化同步] 消息同步成功，动画判断交由原生端处理');
+        console.log(`✅ [智能节流同步] 消息同步成功，类型: ${isUserMessage ? '用户消息' : (isStreamingUpdate ? 'AI流式' : '其他')}`);
       } catch (error) {
-        console.error('❌ [简化同步] 消息同步失败:', error);
+        console.error('❌ [智能节流同步] 消息同步失败:', error);
       }
-    };
+    }, throttleDelay);
 
-    // 立即执行同步，不再区分用户消息、AI消息或流式更新
-    syncMessages();
   }, [storeMessages]); // 只依赖storeMessages数组变化
 
   // 🔧 删除清理定时器逻辑（不再需要）

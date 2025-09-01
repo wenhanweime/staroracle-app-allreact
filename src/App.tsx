@@ -109,12 +109,24 @@ function App() {
     }, 500);
   };
 
+  // 🚨 【关键修复】添加发送状态管理，防止重复发送
+  const [isSending, setIsSending] = useState(false);
+  
   // ✨ 重构 handleSendMessage 支持原生和Web模式
   const handleSendMessage = async (inputText: string) => {
     console.log('🔍 App.tsx: 接收到发送请求', inputText, '原生模式:', isNative);
     console.log('🔍 当前nativeChatOverlay.isOpen状态:', nativeChatOverlay.isOpen);
 
-    if (isNative) {
+    // 🚨 【关键修复】防止重复发送
+    if (isSending) {
+      console.log('🚨 [防重复] 正在发送中，忽略重复请求');
+      return;
+    }
+    
+    setIsSending(true);
+
+    try {
+      if (isNative) {
       // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
       console.log('📱 原生模式，使用ChatStore处理消息');
       
@@ -179,6 +191,10 @@ function App() {
         setInitialChatInput(inputText);
         setWebChatOverlayOpen(true);
       }
+    }
+    } finally {
+      // 🚨 【关键修复】确保发送状态被重置
+      setIsSending(false);
     }
   };
 

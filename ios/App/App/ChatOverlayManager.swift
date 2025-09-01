@@ -89,6 +89,11 @@ public class ChatOverlayManager {
     private var lastSyncTimestamp: TimeInterval = 0
     private let syncThrottleInterval: TimeInterval = 0.1  // 100ms内的重复调用将被忽略
     
+    // 🚨 【关键修复】消息内容去重机制
+    private var lastMessagesHash: String = ""
+    private var lastAnimationTriggerTime: TimeInterval = 0
+    private let animationCooldownInterval: TimeInterval = 0.5  // 500ms内不重复触发动画
+    
     // MARK: - Public API
     
     func show(animated: Bool = true, expanded: Bool = false, completion: @escaping (Bool) -> Void) {
@@ -239,21 +244,40 @@ public class ChatOverlayManager {
             NSLog("🎯 消息[\(index)]: \(message.isUser ? "用户" : "AI") - \(message.text.prefix(50))")
         }
         
+        // 🚨 【关键修复】消息内容去重：生成消息内容的哈希值
+        let messagesHash = messages.map { "\($0.id)-\($0.isUser)-\($0.text)" }.joined(separator: "|")
+        
+        // 如果消息内容没有变化，跳过更新
+        if lastMessagesHash == messagesHash {
+            NSLog("🎯 [去重] 消息内容未变化，跳过更新")
+            return
+        }
+        
+        lastMessagesHash = messagesHash
+        
+        // 🚨 【关键修复】动画冷却期检查
+        let currentTime = CACurrentMediaTime()
+        if currentTime - lastAnimationTriggerTime < animationCooldownInterval {
+            NSLog("🎯 [冷却期] 距离上次动画触发时间过短，跳过动画")
+        }
+        
         // 🎯 【智能判断】找到最新的用户消息
         let latestUserMessage = messages.last(where: { $0.isUser })
         var shouldAnimate = false
         var animationIndex: Int? = nil
         
         if let userMessage = latestUserMessage,
-           !animatedMessageIDs.contains(userMessage.id) {
-            // 🎯 这是一条全新的、从未播放过动画的用户消息
+           !animatedMessageIDs.contains(userMessage.id),
+           currentTime - lastAnimationTriggerTime >= animationCooldownInterval {
+            // 🎯 这是一条全新的、从未播放过动画的用户消息，且不在冷却期内
             shouldAnimate = true
             // ✅ 关键：在判定阶段立刻记录，防止紧随其后的第二次update再次触发动画
             animatedMessageIDs.insert(userMessage.id)
+            lastAnimationTriggerTime = currentTime
             animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
             NSLog("🎯 ✅ 发现新用户消息！ID: \(userMessage.id), 将播放动画，索引: \(animationIndex ?? -1)")
         } else {
-            NSLog("🎯 ☑️ 无新用户消息或已播放过动画，跳过动画")
+            NSLog("🎯 ☑️ 无新用户消息或已播放过动画或冷却期内，跳过动画")
         }
         
         // 更新消息列表
@@ -543,6 +567,11 @@ class OverlayViewController: UIViewController {
     // 🚨 【动画锁定机制】核心属性
     private var isAnimatingInsert = false  // 动画期间锁定标记
     private var pendingAIUpdates: [ChatMessage] = []  // 动画期间暂存的AI更新
+    
+    // 🚨 【关键修复】流式输出与动画协调机制
+    private var isUserMessageAnimating = false  // 用户消息动画进行中
+    private var aiStreamingBuffer: [String] = []  // AI流式内容缓冲
+    private var lastAIStreamingTime: TimeInterval = 0  // 上次AI流式更新时间
     
     // 🚨 【新增】专门用于抑制AI滚动动画的状态
     private var isAnimatingUserMessage = false  // 用户消息飞入动画期间的标记
@@ -1037,6 +1066,18 @@ class OverlayViewController: UIViewController {
             return
         }
         
+        // 🚨 【关键修复】流式输出与动画协调：如果用户消息动画进行中，缓冲AI流式更新
+        if isUserMessageAnimating {
+            NSLog("🚨 【流式协调】用户消息动画进行中，缓冲AI流式更新")
+            if let last = messages.last, !last.isUser {
+                // 将AI流式更新加入缓冲
+                aiStreamingBuffer.append(last.text)
+                lastAIStreamingTime = CACurrentMediaTime()
+                NSLog("🚨 【流式协调】AI流式内容已缓冲，当前缓冲长度: \(aiStreamingBuffer.count)")
+            }
+            return
+        }
+        
         NSLog("🎯 OverlayViewController: manager存在，准备更新UI")
         NSLog("🎯 是否需要播放用户消息动画: \(shouldAnimateNewUserMessage)")
         if let index = animationIndex {
@@ -1250,6 +1291,47 @@ class OverlayViewController: UIViewController {
         }
     }
     
+    // 🚨 【关键修复】处理缓冲的AI流式更新
+    private func processBufferedAIUpdates() {
+        guard !aiStreamingBuffer.isEmpty else {
+            NSLog("🚨 【流式协调】无缓冲的AI更新需要处理")
+            return
+        }
+        
+        NSLog("🚨 【流式协调】开始处理\(aiStreamingBuffer.count)个缓冲的AI更新")
+        
+        // 获取最新的AI内容
+        let latestAIContent = aiStreamingBuffer.last ?? ""
+        aiStreamingBuffer.removeAll()
+        
+        // 更新消息列表中的AI内容
+        if !visibleMessages.isEmpty, let lastIndex = visibleMessages.lastIndex(where: { !$0.isUser }) {
+            var updatedMessages = visibleMessages
+            updatedMessages[lastIndex] = ChatMessage(
+                id: updatedMessages[lastIndex].id,
+                text: latestAIContent,
+                isUser: updatedMessages[lastIndex].isUser,
+                timestamp: updatedMessages[lastIndex].timestamp
+            )
+            visibleMessages = updatedMessages
+            
+            // 更新UI
+            let indexPath = IndexPath(row: lastIndex, section: 0)
+            if let cell = messagesList.cellForRow(at: indexPath) as? MessageTableViewCell {
+                cell.configure(with: updatedMessages[lastIndex])
+                cell.setNeedsLayout()
+                cell.layoutIfNeeded()
+                messagesList.beginUpdates()
+                messagesList.endUpdates()
+                messagesList.scrollToRow(at: indexPath, at: .bottom, animated: true)
+            } else {
+                messagesList.reloadData()
+            }
+            
+            NSLog("🚨 【流式协调】AI流式更新处理完成，内容长度: \(latestAIContent.count)")
+        }
+    }
+    
     // 🔧 新增：设置动画初始状态
     private func setAnimationInitialState(messages: [ChatMessage]) {
         guard let lastUserMessageIndex = messages.lastIndex(where: { $0.isUser }) else { return }
@@ -1305,9 +1387,10 @@ class OverlayViewController: UIViewController {
             self.pendingAnimationIndex = nil
             NSLog("🎯 清除pendingAnimationIndex，防止重复动画")
             
-            // 🚨 【关键修复】设置用户消息动画状态，抑制AI滚动动画
-            self.isAnimatingUserMessage = true
-            NSLog("🚨 【动画抑制】开始用户消息动画，设置isAnimatingUserMessage = true")
+                            // 🚨 【关键修复】设置用户消息动画状态，抑制AI滚动动画
+                self.isAnimatingUserMessage = true
+                self.isUserMessageAnimating = true  // 新增：标记用户消息动画进行中
+                NSLog("🚨 【动画抑制】开始用户消息动画，设置isAnimatingUserMessage = true")
             
             // 🔧 修正：使用更自然的动画参数，纯垂直移动
             UIView.animate(
@@ -1341,6 +1424,7 @@ class OverlayViewController: UIViewController {
                     
                     // 🚨 【关键修复】清除动画状态，允许后续AI滚动动画
                     self.isAnimatingUserMessage = false
+                    self.isUserMessageAnimating = false  // 新增：清除用户消息动画标记
                     NSLog("🚨 【动画抑制】用户消息动画完成，设置isAnimatingUserMessage = false")
                     // 🔧 动画完成后，继续短暂抑制AI滚动动画，避免紧随的首包造成叠加观感
                     self.suppressAIAnimatedScrollUntil = CACurrentMediaTime() + 0.15
@@ -1349,6 +1433,9 @@ class OverlayViewController: UIViewController {
                         self.lastAnimatedUserMessageId = messages[userIdx].id
                         self.lastAnimationTimestamp = CACurrentMediaTime()
                     }
+                    
+                    // 🚨 【关键修复】处理缓冲的AI流式更新
+                    self.processBufferedAIUpdates()
                     
                     // 🚨 【关键】调用完成回调，通知动画锁定机制解锁
                     completion()
