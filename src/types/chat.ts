@@ -16,6 +16,10 @@ export interface ChatMessage {
   timestamp: Date;
   isLoading?: boolean;
   isStreaming?: boolean; // 标记是否正在流式输出
+  // 🚀 基于iChatGPT设计的流式输出支持
+  isResponse?: boolean;  // 是否已完成响应（类似iChatGPT的isResponse）
+  streamingText?: string;  // 流式文本内容
+  model?: string;  // 使用的AI模型
   // 觉察相关字段
   awarenessInsight?: AwarenessInsight; // AI分析的觉察洞见
   isAnalyzingAwareness?: boolean; // 是否正在分析觉察

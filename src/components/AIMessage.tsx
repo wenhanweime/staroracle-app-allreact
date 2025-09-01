@@ -3,11 +3,10 @@ import { motion } from 'framer-motion';
 import { Copy, RotateCcw, ThumbsUp, ThumbsDown, Download } from 'lucide-react';
 import { Capacitor } from '@capacitor/core';
 import { ChatMessage } from '../types/chat';
-import StarLoadingAnimation from './StarLoadingAnimation';
 import AwarenessIcon from './AwarenessIcon';
 import AwarenessDetailModal from './AwarenessDetailModal';
 import MessageContextMenu from './MessageContextMenu';
-import { analyzeStarContent, analyzeAwarenessValue } from '../utils/aiTaggingUtils';
+import { analyzeAwarenessValue } from '../utils/aiTaggingUtils';
 import { useChatStore } from '../store/useChatStore';
 
 interface AIMessageProps {
@@ -32,11 +31,12 @@ const AIMessageContent: React.FC<{
 
   const messageRef = useRef<HTMLDivElement>(null);
   
-  // 标准化文本格式，统一换行符和段落间距
-  const normalizedText = useMemo(() => {
-    if (!message.text) return '';
+  // 🚀 基于iChatGPT设计的文本处理：优先使用streamingText
+  const displayText = useMemo(() => {
+    const text = message.streamingText || message.text || '';
+    if (!text) return '';
     
-    return message.text
+    return text
       // 统一换行符为 \n
       .replace(/\r\n/g, '\n')
       .replace(/\r/g, '\n')
@@ -48,15 +48,25 @@ const AIMessageContent: React.FC<{
       .join('\n')
       // 最后清理开头结尾的多余换行
       .replace(/^\n+|\n+$/g, '');
-  }, [message.text]);
+  }, [message.streamingText, message.text]);
+  
+  // 🚀 基于iChatGPT的流式状态判断
+  const isStreaming = message.isStreaming && !message.isResponse;
 
   return (
     <div className="py-2 text-white stellar-body">
-      {message.isStreaming && !message.text ? (
-        // 显示星星加载动画（当消息为空且正在流式加载时）
-        <StarLoadingAnimation size={20} className="py-1" />
+      {!message.isResponse && !displayText ? (
+        // 🚀 基于iChatGPT设计：显示加载状态
+        <div className="flex items-center gap-2">
+          <div className="flex space-x-1">
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }}></div>
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }}></div>
+            <div className="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }}></div>
+          </div>
+          <span className="text-gray-400 text-sm">Loading...</span>
+        </div>
       ) : (
-        // 显示消息内容
+        // 🚀 基于iChatGPT设计：显示消息内容
         <div 
           ref={messageRef}
           className="whitespace-pre-wrap break-words chat-message-content"
@@ -65,9 +75,9 @@ const AIMessageContent: React.FC<{
           onTouchCancel={onTouchCancel}
           onContextMenu={onContextMenu}
         >
-          {normalizedText}
-          {message.isStreaming && message.text && (
-            // 流式输出时在文字后显示光标
+          {displayText}
+          {isStreaming && (
+            // 🚀 流式输出时在文字后显示光标（类似iChatGPT）
             <span className="inline-block w-2 h-4 bg-white ml-1 animate-pulse"></span>
           )}
         </div>

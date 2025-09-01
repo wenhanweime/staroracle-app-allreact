@@ -144,8 +144,10 @@ function App() {
         const messageId = addStreamingAIMessage('');
         let streamingText = '';
         
+        // 🚀 基于iChatGPT设计的流式输出处理
         const onStream = (chunk: string) => {
           streamingText += chunk;
+          // 实时更新流式文本，类似iChatGPT的累积式更新
           updateStreamingMessage(messageId, streamingText);
         };
 

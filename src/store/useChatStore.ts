@@ -82,7 +82,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
       text,
       isUser: false,
       timestamp: new Date(),
-      isStreaming: true
+      isStreaming: true,
+      // 🚀 基于iChatGPT设计的流式输出支持
+      isResponse: false,  // 初始为false，流式完成后设为true
+      streamingText: text,  // 流式文本内容
+      model: 'gpt-3.5-turbo'  // 默认模型
     };
     
     set(state => ({
@@ -96,7 +100,12 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set(state => ({
       messages: state.messages.map(msg => 
         msg.id === id 
-          ? { ...msg, text }
+          ? { 
+              ...msg, 
+              text, 
+              streamingText: text,  // 🚀 更新流式文本
+              isStreaming: true 
+            }
           : msg
       )
     }));
@@ -106,7 +115,11 @@ export const useChatStore = create<ChatStore>((set, get) => ({
     set(state => ({
       messages: state.messages.map(msg => 
         msg.id === id 
-          ? { ...msg, isStreaming: false }
+          ? { 
+              ...msg, 
+              isStreaming: false,
+              isResponse: true  // 🚀 基于iChatGPT设计：标记响应完成
+            }
           : msg
       )
     }));
