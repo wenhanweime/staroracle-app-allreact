@@ -9,6 +9,7 @@ export interface InputDrawerPlugin {
   blur(): Promise<{ success: boolean }>;
   setBottomSpace(options: { space: number }): Promise<{ success: boolean }>;
   setPlaceholder(options: { placeholder: string }): Promise<{ success: boolean }>;
+  isVisible(): Promise<{ visible: boolean }>;
 }
 
 export const InputDrawer = registerPlugin<InputDrawerPlugin>('InputDrawer', {
@@ -44,6 +45,10 @@ export const InputDrawer = registerPlugin<InputDrawerPlugin>('InputDrawer', {
     setPlaceholder: async (options) => {
       console.log('🌐 Web InputDrawer: setPlaceholder', options);
       return { success: true };
+    },
+    isVisible: async () => {
+      console.log('🌐 Web InputDrawer: isVisible');
+      return { visible: true };
     }
   })
 });

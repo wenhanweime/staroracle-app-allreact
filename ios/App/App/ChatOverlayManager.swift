@@ -305,6 +305,49 @@ public class ChatOverlayManager {
         self.isLoading = loading
         // 这里可以更新UI，暂时先简化
     }
+
+    func cancelStreaming() {
+        NSLog("🎯 ChatOverlayManager: 取消流式/回放")
+        DispatchQueue.main.async {
+            self.overlayViewController?.cancelStreaming()
+        }
+    }
+
+    // MARK: - 流式增量接口（供插件调用）
+    func appendAIChunk(delta: String, messageId: String?) {
+        guard !delta.isEmpty else { return }
+        // 找到最后一条AI消息
+        if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
+            var last = messages[lastIndex]
+            let newText = last.text + delta
+            messages[lastIndex] = ChatMessage(id: last.id, text: newText, isUser: last.isUser, timestamp: last.timestamp)
+        } else {
+            // 如果不存在AI消息，占位一条空AI再追加
+            let ts = Date().timeIntervalSince1970 * 1000
+            let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: delta, isUser: false, timestamp: ts)
+            messages.append(new)
+        }
+        // 通知VC增量刷新（count 未变化或 +1，仅最后行）
+        let current = messages
+        DispatchQueue.main.async {
+            self.overlayViewController?.updateMessages(current, oldMessages: current, shouldAnimateNewUserMessage: false, animationIndex: nil)
+        }
+    }
+
+    func updateLastAI(text: String, messageId: String?) {
+        if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
+            var last = messages[lastIndex]
+            messages[lastIndex] = ChatMessage(id: last.id, text: text, isUser: last.isUser, timestamp: last.timestamp)
+        } else {
+            let ts = Date().timeIntervalSince1970 * 1000
+            let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: text, isUser: false, timestamp: ts)
+            messages.append(new)
+        }
+        let current = messages
+        DispatchQueue.main.async {
+            self.overlayViewController?.updateMessages(current, oldMessages: current, shouldAnimateNewUserMessage: false, animationIndex: nil)
+        }
+    }
     
     func setConversationTitle(_ title: String) {
         NSLog("🎯 ChatOverlayManager: 设置对话标题: \(title)")
@@ -428,10 +471,11 @@ public class ChatOverlayManager {
             NSLog("⚠️ 背景视图未设置，跳过3D变换")
             return 
         }
-        
+
         NSLog("🎯 应用背景3D变换，状态: \(state)")
-        
-        if animated {
+        // 若插入动画进行中，避免与发送动画叠加，改为无动画
+        let shouldAnimate = (overlayViewController?.isAnimatingInsert == true) ? false : animated
+        if shouldAnimate {
             // 使用与浮窗相同的春天动效参数，实现协调的过渡效果
             UIView.animate(withDuration: 0.6,
                          delay: 0,
@@ -515,8 +559,16 @@ public class ChatOverlayManager {
     private func updateUI(animated: Bool) {
         guard let overlayViewController = overlayViewController else { return }
         
+        // 若插入动画进行中，避免任何包裹动画的状态切换，直接无动画更新
+        if (overlayViewController.isAnimatingInsert) {
+            NSLog("🧊 冻结窗口：插入动画期间，updateUI无动画执行")
+            overlayViewController.updateForState(self.currentState)
+            overlayViewController.view.layoutIfNeeded()
+            return
+        }
+        
         if animated {
-            // 使用春天动效，营造丝滑的过渡感觉
+            // 使用春天动效，营造丝滑的过渡感觉（仅在未冻结时）
             UIView.animate(withDuration: 0.6,
                          delay: 0,
                          usingSpringWithDamping: 0.8,
@@ -566,6 +618,51 @@ class OverlayViewController: UIViewController {
     private var hasScheduledInsertAnimation: Bool = false
     private var lastAnimatedUserMessageId: String? = nil
     private var lastAnimationTimestamp: CFTimeInterval = 0
+
+    // 自动滚动策略：仅在接近底部时才自动滚动
+    private let autoScrollThreshold: CGFloat = 100 // px
+    private func shouldAutoScrollToBottom() -> Bool {
+        guard let table = messagesList else { return true }
+        let contentHeight = table.contentSize.height
+        if contentHeight <= 0 { return true }
+        let visibleHeight = table.bounds.height
+        let offsetY = table.contentOffset.y
+        let distanceFromBottom = contentHeight - (offsetY + visibleHeight)
+        let isUserInteracting = table.isDragging || table.isTracking || table.isDecelerating || isDragging
+        let nearBottom = distanceFromBottom < autoScrollThreshold
+        NSLog("🧭 AutoScroll 判定: contentH=\(contentHeight), visibleH=\(visibleHeight), offsetY=\(offsetY), dist=\(distanceFromBottom), nearBottom=\(nearBottom), interacting=\(isUserInteracting)")
+        return nearBottom && !isUserInteracting
+    }
+
+    // MARK: - 冻结窗口内的安全UI操作封装
+    private func isFrozen() -> Bool { return isAnimatingInsert }
+
+    private func safeReloadData(reason: String) {
+        if isFrozen() {
+            NSLog("🧊 [冻结] reloadData 被抑制，原因: \(reason)")
+            return
+        }
+        NSLog("🔄 reloadData 执行，原因: \(reason)")
+        messagesList.reloadData()
+    }
+
+    private func safeReloadRows(_ rows: [IndexPath], reason: String, animation: UITableView.RowAnimation = .none) {
+        if isFrozen() {
+            NSLog("🧊 [冻结] reloadRows 被抑制，原因: \(reason), rows=\(rows)")
+            return
+        }
+        NSLog("🔄 reloadRows 执行，原因: \(reason), rows=\(rows)")
+        messagesList.reloadRows(at: rows, with: animation)
+    }
+
+    private func safeScrollToRow(_ indexPath: IndexPath, at position: UITableView.ScrollPosition, animated: Bool, reason: String) {
+        if isFrozen() {
+            NSLog("🧊 [冻结] scrollToRow 被抑制，原因: \(reason), indexPath=\(indexPath.row)")
+            return
+        }
+        NSLog("🧭 scrollToRow 执行，原因: \(reason), indexPath=\(indexPath.row), animated=\(animated)")
+        messagesList.scrollToRow(at: indexPath, at: position, animated: animated)
+    }
     
     // 拖拽相关状态 - 移到OverlayViewController中
     private var isDragging = false
@@ -579,7 +676,7 @@ class OverlayViewController: UIViewController {
     private var pendingAnimationIndex: Int?  // 需要播放动画的消息索引
     
     // 🚨 【动画锁定机制】核心属性
-    private var isAnimatingInsert = false  // 动画期间锁定标记
+    internal var isAnimatingInsert = false  // 动画期间锁定标记（对Manager可见）
     private var pendingAIUpdates: [ChatMessage] = []  // 动画期间暂存的AI更新
     
     // 🚨 【关键修复】流式输出与动画协调机制
@@ -1136,26 +1233,24 @@ class OverlayViewController: UIViewController {
                 // 发送动画期间隐藏尾部AI占位
                 self.visibleMessages = self.filteredVisibleMessagesForAnimation(all: messages)
                 self.messagesList.reloadData()
+                // 布局稳定屏障：确保列表和父视图在开始动画前完成布局
+                self.messagesList.layoutIfNeeded()
+                self.view.layoutIfNeeded()
 
                 self.scrollToBottomAndPlayAnimation(messages: self.visibleMessages) {
-                    // 🚨 【动画锁定】动画完成回调 - 解锁并处理暂存的更新
-                    NSLog("🚨 【动画锁定】动画完成，解锁并处理暂存更新")
+                    // 🚨 【动画锁定】动画完成回调 - 解锁并处理
+                    NSLog("🚨 【动画锁定】动画完成，解锁并呈现当前文本")
                     self.isAnimatingInsert = false
                     self.hasScheduledInsertAnimation = false
-                    // 动画完成：开始回放缓存/目标AI文本
-                    self.beginAIReplayAfterAnimation()
-
-                    // 处理动画期间暂存的AI更新
-                    if !self.pendingAIUpdates.isEmpty {
-                        NSLog("🚨 【动画锁定】处理暂存的\(self.pendingAIUpdates.count)个AI更新")
-                        let latestAIMessage = self.pendingAIUpdates.last!
-                        self.pendingAIUpdates.removeAll()
-                        
-                        // 🔄 重新调用自己，处理暂存的AI消息（此时不会有动画）
-                        guard let manager = self.manager else { return }
-                        let updatedMessages = manager.messages
-                        self.updateMessages(updatedMessages, oldMessages: updatedMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+                    // 动画完成：直接呈现当前文本（不启用原生回放，由JS逐字推进）
+                    self.visibleMessages = self.manager?.messages ?? []
+                    self.safeReloadData(reason: "动画完成呈现当前文本")
+                    if let count = self.manager?.messages.count, count > 0 {
+                        let indexPath = IndexPath(row: count - 1, section: 0)
+                        self.safeScrollToRow(indexPath, at: .bottom, animated: false, reason: "动画完成滚到底")
                     }
+                    // 清空期间缓存（由JS继续逐字）
+                    self.pendingAIUpdates.removeAll()
                 }
                 
             } else if messages.count == oldMessagesCount && messages.count > 0 {
@@ -1173,19 +1268,25 @@ class OverlayViewController: UIViewController {
                         NSLog("🎯 回放中：更新AI目标全文长度为 \(self.aiTargetFullText.count)")
                     } else {
                         lastCell.configure(with: messages[lastMessageIndex])
-                        // 使动态高度立即生效，避免文本更新后高度不变导致看起来不刷新
+                        // 使动态高度立即生效，且不做高度动画
                         lastCell.setNeedsLayout()
                         lastCell.layoutIfNeeded()
-                        self.messagesList.beginUpdates()
-                        self.messagesList.endUpdates()
+                        UIView.performWithoutAnimation {
+                            self.messagesList.beginUpdates()
+                            self.messagesList.endUpdates()
+                        }
                     }
                     
                     // 🚨 【关键修复】检查短窗/动画状态，决定是否滚动
                     let shouldAnimateScroll = !self.shouldSuppressAIAnimatedScroll()
                     NSLog("🚨 【动画抑制】AI更新滚动检查: isAnimatingUserMessage = \(self.isAnimatingUserMessage), suppressUntil = \(self.suppressAIAnimatedScrollUntil), now = \(CACurrentMediaTime()), shouldAnimateScroll = \(shouldAnimateScroll)")
                     
-                    // 确保滚动到底部显示完整内容（根据动画状态决定是否使用动画）
-                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: shouldAnimateScroll)
+                    // 确保滚动到底部显示完整内容（接近底部才滚动；并根据动画状态决定是否使用动画）
+                    if self.shouldAutoScrollToBottom() {
+                        self.safeScrollToRow(indexPath, at: .bottom, animated: shouldAnimateScroll, reason: "AI流式可见cell")
+                    } else {
+                        NSLog("🧭 AutoScroll 取消：不在底部或用户正在交互")
+                    }
                     
                     if shouldAnimateScroll {
                         NSLog("🎯 ✅ AI滚动动画正常执行")
@@ -1204,19 +1305,25 @@ class OverlayViewController: UIViewController {
                         self.messagesList.reloadData()
                     }
                     
-                    // 同样应用动画抑制逻辑到后备方案
+                    // 同样应用自动滚动与动画抑制逻辑到后备方案
                     let shouldAnimateScroll = !self.shouldSuppressAIAnimatedScroll()
-                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: shouldAnimateScroll)
+                    if self.shouldAutoScrollToBottom() {
+                        self.safeScrollToRow(indexPath, at: .bottom, animated: shouldAnimateScroll, reason: "AI流式后备")
+                    } else {
+                        NSLog("🧭 AutoScroll 取消（后备）：不在底部或用户正在交互")
+                    }
                 }
                 
             } else {
                 // 🎯 场景3：其他情况（例如，从历史记录加载），直接重载
                 NSLog("🎯 【场景3】其他更新场景，执行常规重载")
                 self.visibleMessages = messages
-                self.messagesList.reloadData()
+                self.safeReloadData(reason: "场景3常规重载")
                 if messages.count > 0 {
                     let indexPath = IndexPath(row: messages.count - 1, section: 0)
-                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                    if self.shouldAutoScrollToBottom() {
+                        self.safeScrollToRow(indexPath, at: .bottom, animated: false, reason: "场景3滚动到底")
+                    }
                 }
             }
         }
@@ -1240,12 +1347,11 @@ class OverlayViewController: UIViewController {
         DispatchQueue.main.async {
             NSLog("🎯 立即设置动画初始状态")
             self.setAnimationInitialState(messages: messages)
-            // 原延迟窗口，避免与布局/绘制竞争
-            // 缩短延迟，降低AI流式到达打断动画的概率（仍需短窗抑制兜底）
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
-                NSLog("🎯 开始播放动画")
-                self.playUserMessageAnimation(messages: messages, completion: completion)
-            }
+            // 布局稳定屏障：再次确保布局稳定后立刻开始动画
+            self.messagesList.layoutIfNeeded()
+            self.view.layoutIfNeeded()
+            NSLog("🎯 开始播放动画")
+            self.playUserMessageAnimation(messages: messages, completion: completion)
         }
     }
 
@@ -1265,9 +1371,18 @@ class OverlayViewController: UIViewController {
                 var lastVisible = visibleMessages.removeLast()
                 lastVisible = ChatMessage(id: lastVisible.id, text: "", isUser: lastVisible.isUser, timestamp: lastVisible.timestamp)
                 visibleMessages.append(lastVisible)
-                messagesList.reloadData()
+                safeReloadData(reason: "回放开始前呈现空AI行")
                 let indexPath = IndexPath(row: visibleMessages.count - 1, section: 0)
-                messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                safeScrollToRow(indexPath, at: .bottom, animated: false, reason: "回放开始滚到底")
+                // 首次出现淡入：让AI行从0到1的轻淡入
+                if let cell = messagesList.cellForRow(at: indexPath) as? MessageTableViewCell {
+                    cell.alpha = 0.0
+                    cell.transform = CGAffineTransform(translationX: 0, y: 8)
+                    UIView.animate(withDuration: 0.12) {
+                        cell.alpha = 1.0
+                        cell.transform = .identity
+                    }
+                }
             }
             // 启动回放计时器（每30ms追加一小段）
             aiBufferTimer = Timer.scheduledTimer(withTimeInterval: 0.03, repeats: true) { [weak self] t in
@@ -1295,10 +1410,10 @@ class OverlayViewController: UIViewController {
                         cell.configure(with: updated)
                         cell.setNeedsLayout(); cell.layoutIfNeeded()
                     } else {
-                        self.messagesList.reloadRows(at: [indexPath], with: .none)
+                        self.safeReloadRows([indexPath], reason: "回放增量刷新最后一行", animation: .none)
                     }
                     self.messagesList.beginUpdates(); self.messagesList.endUpdates()
-                    self.messagesList.scrollToRow(at: indexPath, at: .bottom, animated: false)
+                    self.safeScrollToRow(indexPath, at: .bottom, animated: false, reason: "回放推进滚到底")
                 }
             }
             RunLoop.main.add(aiBufferTimer!, forMode: .common)
@@ -1307,6 +1422,13 @@ class OverlayViewController: UIViewController {
             visibleMessages = all
             messagesList.reloadData()
         }
+    }
+
+    // 取消当前回放/流式呈现
+    func cancelStreaming() {
+        NSLog("🎯 OverlayViewController: 停止AI回放计时器")
+        aiBufferTimer?.invalidate()
+        aiBufferTimer = nil
     }
     
     // 🚨 【关键修复】处理缓冲的AI流式更新
@@ -1449,6 +1571,8 @@ class OverlayViewController: UIViewController {
                     self.isUserMessageAnimating = false
                     self.animationState = .aiStreaming  // 转换到AI流式状态
                     NSLog("🚨 【状态机】用户消息动画完成，状态转换: userAnimating -> aiStreaming")
+                    // 📣 通知JS：发送插入动画已完成（用于解锁逐字流式泵）
+                    NotificationCenter.default.post(name: Notification.Name("chatOverlaySendAnimationCompleted"), object: nil)
                     
                     // 🔧 动画完成后，继续短暂抑制AI滚动动画，避免紧随的首包造成叠加观感
                     self.suppressAIAnimatedScrollUntil = CACurrentMediaTime() + 0.15

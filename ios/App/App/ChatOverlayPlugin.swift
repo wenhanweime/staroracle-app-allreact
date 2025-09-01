@@ -21,7 +21,11 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setupBackgroundTransform", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isVisible", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "sendMessage", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "receiveAIResponse", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "receiveAIResponse", returnType: CAPPluginReturnPromise),
+        // 新增：流式增量接口
+        CAPPluginMethod(name: "appendAIChunk", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "updateLastAI", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "cancelStreaming", returnType: CAPPluginReturnPromise)
     ]
     
     // 业务逻辑管理器
@@ -32,6 +36,14 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         NSLog("🎯 ChatOverlayPlugin (CAPBridgedPlugin架构) 初始化成功!")
         // 设置状态变化回调
         setupStateChangeCallback()
+        // 监听发送动画完成事件，转发给JS
+        NotificationCenter.default.addObserver(self, selector: #selector(onSendAnimationCompleted), name: Notification.Name("chatOverlaySendAnimationCompleted"), object: nil)
+    }
+
+    @objc func cancelStreaming(_ call: CAPPluginCall) {
+        NSLog("🎯 ChatOverlay cancelStreaming")
+        overlayManager.cancelStreaming()
+        call.resolve(["success": true])
     }
     
     // MARK: - 状态同步
@@ -213,6 +225,28 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
     }
     
     @objc func receiveAIResponse(_ call: CAPPluginCall) {
+        call.resolve(["success": true])
+    }
+
+    @objc private func onSendAnimationCompleted() {
+        NSLog("🎯 [ChatOverlayPlugin] 发送动画完成 -> 通知JS sendAnimationCompleted")
+        self.notifyListeners("sendAnimationCompleted", data: [:])
+    }
+
+    // MARK: - 新增：流式增量接口
+    @objc func appendAIChunk(_ call: CAPPluginCall) {
+        let delta = call.getString("delta") ?? ""
+        let id = call.getString("id") // 可选
+        NSLog("🎯 ChatOverlay appendAIChunk: id=\(id ?? "nil"), len=\(delta.count)")
+        overlayManager.appendAIChunk(delta: delta, messageId: id)
+        call.resolve(["success": true])
+    }
+
+    @objc func updateLastAI(_ call: CAPPluginCall) {
+        let text = call.getString("text") ?? ""
+        let id = call.getString("id")
+        NSLog("🎯 ChatOverlay updateLastAI: id=\(id ?? "nil"), len=\(text.count)")
+        overlayManager.updateLastAI(text: text, messageId: id)
         call.resolve(["success": true])
     }
 }

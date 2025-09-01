@@ -13,6 +13,10 @@ export interface ChatOverlayPlugin {
   setViewportHeight(options: { height: number }): Promise<void>;
   setInitialInput(options: { input: string }): Promise<void>;
   setFollowUpQuestion(options: { question: string }): Promise<void>;
+  // 新增增量接口
+  appendAIChunk(options: { id?: string; delta: string }): Promise<void>;
+  updateLastAI(options: { id?: string; text: string }): Promise<void>;
+  cancelStreaming(): Promise<void>;
 }
 
 export const ChatOverlay = registerPlugin<ChatOverlayPlugin>('ChatOverlay', {

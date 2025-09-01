@@ -41,6 +41,8 @@ function App() {
   
   // ✨ 原生InputDrawer Hook (测试)
   const nativeInputDrawer = useNativeInputDrawer();
+  // 取消流式支持
+  const abortRef = React.useRef<AbortController | null>(null);
   
   // 兼容性：Web端仍使用React状态
   const [webChatOverlayOpen, setWebChatOverlayOpen] = useState(false);
@@ -144,11 +146,33 @@ function App() {
         const messageId = addStreamingAIMessage('');
         let streamingText = '';
         
-        // 🚀 基于iChatGPT设计的流式输出处理
-        const onStream = (chunk: string) => {
-          streamingText += chunk;
-          // 实时更新流式文本，类似iChatGPT的累积式更新
+        // 🚀 逐字输出：将 chunk 拆为字符队列，以固定间隔逐字渲染
+        const charInterval = 12; // ms/字，可按体验调整 10–16ms
+        let charTimer: number | null = null;
+        const charQueue: string[] = [];
+        const pumpStep = () => {
+          if (charQueue.length === 0) { charTimer = null; return; }
+          const nextChar = charQueue.shift()!;
+          streamingText += nextChar;
           updateStreamingMessage(messageId, streamingText);
+          if (isNative) {
+            try { ChatOverlay.appendAIChunk({ id: messageId, delta: nextChar }); } catch {}
+          }
+          charTimer = window.setTimeout(pumpStep, charInterval);
+        };
+        const startCharPump = () => {
+          if (charTimer == null) {
+            charTimer = window.setTimeout(pumpStep, charInterval);
+          }
+        };
+        const stopCharPumpLocal = () => {
+          if (charTimer != null) { clearTimeout(charTimer); charTimer = null; }
+          charQueue.length = 0;
+        };
+        const onStream = (chunk: string) => {
+          const chars = Array.from(chunk);
+          charQueue.push(...chars);
+          startCharPump();
         };
 
         // 获取对话历史（需要获取最新的messages）
@@ -157,15 +181,32 @@ function App() {
           content: msg.text
         }));
 
+        abortRef.current = new AbortController();
         const aiResponse = await generateAIResponse(
           inputText, 
           undefined, 
           onStream,
-          conversationHistory
+          conversationHistory,
+          abortRef.current?.signal,
+          (msg: string) => {
+            console.warn('❌ onError from generateAIResponse:', msg);
+          }
         );
         
+        // 等待逐字队列清空（最多等待一帧）
+        if (charTimer != null && charQueue.length > 0) {
+          await new Promise<void>((resolve) => {
+            const check = () => {
+              if (charQueue.length === 0) resolve(); else setTimeout(check, 16);
+            };
+            check();
+          });
+        }
         if (streamingText !== aiResponse) {
           updateStreamingMessage(messageId, aiResponse);
+        }
+        if (isNative) {
+          try { ChatOverlay.updateLastAI({ id: messageId, text: aiResponse }); } catch {}
         }
         
         finalizeStreamingMessage(messageId);
@@ -177,7 +218,14 @@ function App() {
         
       } catch (error) {
         console.error('❌ AI回复失败:', error);
+        // 呈现错误消息（仅最后一条）
+        const errorText = '抱歉，生成过程中出现问题，请稍后重试。';
+        updateStreamingMessage(messageId, errorText);
+        if (isNative) {
+          try { ChatOverlay.updateLastAI({ id: messageId, text: errorText }); } catch {}
+        }
       } finally {
+        stopCharPumpLocal();
         setLoading(false);
         // 🔧 移除可能导致动画冲突的原生setLoading调用
         // 原生端会通过消息同步机制自动更新loading状态，无需额外调用
@@ -211,12 +259,29 @@ function App() {
     }
   };
 
+  // 取消当前流式
+  const handleCancelStreaming = async () => {
+    try {
+      abortRef.current?.abort();
+      abortRef.current = null;
+      if (isNative) {
+        try { await ChatOverlay.cancelStreaming(); } catch {}
+      }
+    } catch (e) {
+      console.warn('Cancel streaming failed', e);
+    }
+  };
+
   // 添加原生平台效果（只在原生环境下执行）
   useEffect(() => {
     const setupNative = async () => {
       if (Capacitor.isNativePlatform()) {
         // 设置状态栏为暗色模式，文字为亮色
-        await StatusBar.setStyle({ style: Style.Dark });
+        try {
+          await StatusBar.setStyle({ style: Style.Dark });
+        } catch (e) {
+          console.warn('StatusBar.setStyle failed', e);
+        }
         
         // 标记应用准备就绪
         setAppReady(true);
@@ -229,24 +294,59 @@ function App() {
         }, 500);
 
         // 🎯 设置原生InputDrawer事件监听
-        const messageSubmittedListener = await InputDrawer.addListener('messageSubmitted', (data: any) => {
-          console.log('🎯 收到原生InputDrawer消息提交事件:', data.text);
-          handleSendMessage(data.text);
-        });
+        let messageSubmittedListener: any;
+        let textChangedListener: any;
+        try {
+          console.log('🎯 尝试注册 InputDrawer messageSubmitted 监听');
+          messageSubmittedListener = await InputDrawer.addListener('messageSubmitted', (data: any) => {
+            console.log('🎯 收到原生InputDrawer消息提交事件:', data.text);
+            handleSendMessage(data.text);
+          });
+          console.log('✅ InputDrawer messageSubmitted 监听注册成功');
+        } catch (e) {
+          console.error('❌ 注册 InputDrawer messageSubmitted 监听失败:', e);
+        }
+        try {
+          console.log('🎯 尝试注册 InputDrawer textChanged 监听');
+          textChangedListener = await InputDrawer.addListener('textChanged', (data: any) => {
+            console.log('🎯 原生InputDrawer文本变化:', data.text);
+          });
+          console.log('✅ InputDrawer textChanged 监听注册成功');
+        } catch (e) {
+          console.error('❌ 注册 InputDrawer textChanged 监听失败:', e);
+        }
 
-        const textChangedListener = await InputDrawer.addListener('textChanged', (data: any) => {
-          console.log('🎯 原生InputDrawer文本变化:', data.text);
-          // 可以在这里处理文本变化逻辑，比如实时预览等
+        // 🎯 监听发送动画完成事件：用于解锁逐字流式泵
+        const sendAnimCompletedListener = ChatOverlay.addListener('sendAnimationCompleted', () => {
+          console.log('📣 原生通知：发送动画完成，解锁逐字渲染');
+          // 逐字泵在动画窗口外会自动推进，无需额外操作
         });
 
         // 🎯 自动显示输入框
-        console.log('🎯 自动显示原生InputDrawer');
-        await InputDrawer.show();
+        try {
+          console.log('🎯 准备显示原生InputDrawer');
+          const res = await InputDrawer.show({ animated: true });
+          console.log('✅ InputDrawer.show 返回:', res);
+        } catch (e) {
+          console.error('❌ InputDrawer.show 调用失败:', e);
+        }
+        // 健康检查：若不可见则重试一次
+        try {
+          const vis = await InputDrawer.isVisible();
+          console.log('👀 InputDrawer 可见性:', vis);
+          if (!vis.visible) {
+            console.warn('⚠️ InputDrawer 不可见，进行一次重试显示');
+            await InputDrawer.show({ animated: false });
+          }
+        } catch (e) {
+          console.warn('InputDrawer.isVisible 检查失败:', e);
+        }
 
         // 清理函数
         return () => {
-          messageSubmittedListener.remove();
-          textChangedListener.remove();
+          try { messageSubmittedListener?.remove?.(); } catch {}
+          try { textChangedListener?.remove?.(); } catch {}
+          try { (sendAnimCompletedListener as any)?.then?.((l: any) => l.remove()); } catch {}
         };
       } else {
         // Web环境立即设置为准备就绪
@@ -256,6 +356,25 @@ function App() {
     
     setupNative();
   }, []);
+
+  // 🔒 保障：每次原生浮窗开合后，确保原生 InputDrawer 处于可见状态
+  useEffect(() => {
+    if (!isNative) return;
+    const ensureVisible = async () => {
+      try {
+        const vis = await InputDrawer.isVisible();
+        if (!vis.visible) {
+          console.warn('🔁 ChatOverlay状态变化后，InputDrawer 不可见，尝试强制显示');
+          await InputDrawer.show({ animated: false });
+        }
+      } catch (e) {
+        console.warn('ensureVisible 检查失败:', e);
+      }
+    };
+    // 略微延迟，避开原生动画事务
+    const t = setTimeout(ensureVisible, 80);
+    return () => clearTimeout(t);
+  }, [isNative, nativeChatOverlay.isOpen]);
 
   // 检查API配置（静默模式 - 只在控制台提示）
   useEffect(() => {
@@ -481,6 +600,15 @@ function App() {
       {/* ✨ 3. 使用 Portal 将 UI 组件渲染到 body 顶层，完全避免 transform 影响 */}
       {ReactDOM.createPortal(
         <>
+          {/* Streaming control: Stop button (native/web) */}
+          {isSending && (
+            <button
+              onClick={handleCancelStreaming}
+              className="fixed bottom-24 right-4 z-50 px-3 py-2 rounded-md bg-red-600 text-white text-sm shadow-lg hover:bg-red-500 active:bg-red-700 transition"
+            >
+              停止生成
+            </button>
+          )}
           {/* 🚫 临时屏蔽Web版ConversationDrawer - 专注调试原生InputDrawer
           <ConversationDrawer 
             isOpen={true} 
@@ -508,5 +636,4 @@ function App() {
     </div>
   );
 }
-
 export default App;

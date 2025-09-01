@@ -536,7 +536,9 @@ export const generateAIResponse = async (
   question: string,
   config?: AITaggingConfig,
   onStream?: (chunk: string) => void,
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  signal?: AbortSignal,
+  onError?: (message: string) => void
 ): Promise<string> => {
   console.log('===== Starting AI answer generation =====');
   console.log('Question:', question);
@@ -553,7 +555,7 @@ export const generateAIResponse = async (
         model: config.model,
         hasApiKey: !!config.apiKey
       });
-      const aiResponse = await callAIForResponse(question, config, onStream, conversationHistory);
+      const aiResponse = await callAIForResponse(question, config, onStream, conversationHistory, signal, onError);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
@@ -572,7 +574,7 @@ export const generateAIResponse = async (
       console.log(`Using default ${defaultConfig.provider || 'openai'} config to generate answer`);
       // Print config info (hide API key)
       console.log(`Config info: provider=${defaultConfig.provider}, endpoint=${defaultConfig.endpoint}, model=${defaultConfig.model}`);
-      const aiResponse = await callAIForResponse(question, defaultConfig, onStream, conversationHistory);
+      const aiResponse = await callAIForResponse(question, defaultConfig, onStream, conversationHistory, signal, onError);
       console.log('AI generated answer:', aiResponse);
       return aiResponse;
     }
@@ -591,13 +593,11 @@ export const generateAIResponse = async (
     return mockResponse;
   } catch (error) {
     console.warn('AI answer generation failed, using fallback:', error);
-    const fallbackResponse = generateMockResponse(question);
-    
     if (onStream) {
-      // Simulate streaming for fallback too
-      await simulateStreamingText(fallbackResponse, onStream);
+      if (onError) onError('AI response failed');
+      throw error;
     }
-    
+    const fallbackResponse = generateMockResponse(question);
     console.log('Fallback answer:', fallbackResponse);
     return fallbackResponse;
   }
@@ -701,7 +701,9 @@ const callAIForResponse = async (
   question: string,
   config: AITaggingConfig,
   onStream?: (chunk: string) => void,
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>
+  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>,
+  signal?: AbortSignal,
+  onError?: (message: string) => void
 ): Promise<string> => {
   if (!config.provider) {
     config.provider = 'openai'; // 默认使用OpenAI格式
@@ -783,6 +785,7 @@ const callAIForResponse = async (
         'Authorization': `Bearer ${cleanApiKey}`,
       },
       body: JSON.stringify(requestBody),
+      signal,
     });
 
     console.log(`📨 Response status: ${response.status} ${response.statusText}`);
@@ -791,6 +794,16 @@ const callAIForResponse = async (
     if (!response.ok) {
       const errorText = await response.text();
       console.error(`API response error (${response.status}): ${errorText}`);
+      const status = response.status;
+      const mapStatus = (s: number) => {
+        if (s === 401) return '认证失败（401），请检查 API Key';
+        if (s === 403) return '无权限（403），请检查账号或额度';
+        if (s === 429) return '请求过多（429），稍后重试';
+        if (s === 408) return '请求超时（408），请重试';
+        if (s >= 500) return '服务端异常，请稍后重试';
+        return `请求失败（${s}）`;
+      };
+      if (onError) onError(mapStatus(status));
       throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
@@ -803,7 +816,7 @@ const callAIForResponse = async (
     // Handle streaming response
     if (isStreaming && response.body) {
       console.log('📡 Processing streaming response...');
-      return await processStreamingResponse(response, onStream);
+      return await processStreamingResponse(response, onStream, onError);
     }
     
     // Check if stream was requested but not properly handled
@@ -867,7 +880,8 @@ const callAIForResponse = async (
 // Process streaming response from API
 const processStreamingResponse = async (
   response: Response,
-  onStream: (chunk: string) => void
+  onStream: (chunk: string) => void,
+  onError?: (message: string) => void
 ): Promise<string> => {
   const reader = response.body!.getReader();
   const decoder = new TextDecoder();
@@ -923,6 +937,7 @@ const processStreamingResponse = async (
     
   } catch (error) {
     console.error('❌ Streaming error:', error);
+    if (onError) onError('Streaming error');
     throw error;
   } finally {
     reader.releaseLock();

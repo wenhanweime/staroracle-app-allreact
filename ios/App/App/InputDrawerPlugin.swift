@@ -15,7 +15,8 @@ public class InputDrawerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "focus", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "blur", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setBottomSpace", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setPlaceholder", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setPlaceholder", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "isVisible", returnType: CAPPluginReturnPromise)
     ]
     
     // 业务逻辑管理器
@@ -119,6 +120,12 @@ public class InputDrawerPlugin: CAPPlugin, CAPBridgedPlugin {
             self.drawerManager.setPlaceholder(placeholder)
             call.resolve(["success": true])
         }
+    }
+
+    @objc func isVisible(_ call: CAPPluginCall) {
+        NSLog("🎯 InputDrawer isVisible方法被调用!")
+        let visible = drawerManager.getVisibility()
+        call.resolve(["visible": visible])
     }
 }
 
