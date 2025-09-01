@@ -91,16 +91,6 @@ public class ChatOverlayManager {
     
     // 🚨 【关键修复】基于状态机的消息去重机制
     private var lastMessagesHash: String = ""
-    private var animationState: AnimationState = .idle
-    private var pendingUserMessageId: String? = nil
-    
-    // 动画状态枚举
-    private enum AnimationState {
-        case idle           // 空闲状态
-        case userAnimating  // 用户消息动画中
-        case aiStreaming    // AI流式输出中
-        case completed      // 完成状态
-    }
     
     // MARK: - Public API
     
@@ -271,19 +261,19 @@ public class ChatOverlayManager {
         // 状态机逻辑：只有在idle状态且发现新用户消息时才触发动画
         if let userMessage = latestUserMessage,
            !animatedMessageIDs.contains(userMessage.id),
-           animationState == .idle {
+           overlayViewController?.animationState == .idle {
             
             // 🎯 发现新用户消息，准备进入动画状态
             shouldAnimate = true
-            animationState = .userAnimating
-            pendingUserMessageId = userMessage.id
+            overlayViewController?.animationState = .userAnimating
+            overlayViewController?.pendingUserMessageId = userMessage.id
             animatedMessageIDs.insert(userMessage.id)
             animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
             
-            NSLog("🎯 ✅ [状态机] 发现新用户消息！ID: \(userMessage.id), 状态: \(animationState), 索引: \(animationIndex ?? -1)")
+            NSLog("🎯 ✅ [状态机] 发现新用户消息！ID: \(userMessage.id), 状态: \(overlayViewController?.animationState ?? .idle), 索引: \(animationIndex ?? -1)")
         } else {
             // 根据当前状态决定处理方式
-            switch animationState {
+            switch overlayViewController?.animationState ?? .idle {
             case .idle:
                 NSLog("🎯 ☑️ [状态机] 空闲状态，无新用户消息")
             case .userAnimating:
@@ -292,7 +282,7 @@ public class ChatOverlayManager {
                 NSLog("🎯 ☑️ [状态机] AI流式输出中，跳过新动画")
             case .completed:
                 NSLog("🎯 ☑️ [状态机] 完成状态，重置为空闲")
-                animationState = .idle
+                overlayViewController?.animationState = .idle
             }
         }
         
@@ -549,6 +539,14 @@ public class ChatOverlayManager {
 
 // MARK: - OverlayViewController - 处理双状态UI显示
 class OverlayViewController: UIViewController {
+    
+    // 🚨 【关键修复】动画状态枚举
+    enum AnimationState {
+        case idle           // 空闲状态
+        case userAnimating  // 用户消息动画中
+        case aiStreaming    // AI流式输出中
+        case completed      // 完成状态
+    }
     private weak var manager: ChatOverlayManager?
     internal var containerView: UIView!  // 改为internal让PassthroughWindow可以访问
     private var collapsedView: UIView!
@@ -588,6 +586,10 @@ class OverlayViewController: UIViewController {
     private var isUserMessageAnimating = false  // 用户消息动画进行中
     private var aiStreamingBuffer: [String] = []  // AI流式内容缓冲
     private var lastAIStreamingTime: TimeInterval = 0  // 上次AI流式更新时间
+    
+    // 🚨 【关键修复】状态机属性
+    var animationState: AnimationState = .idle
+    var pendingUserMessageId: String? = nil
     
     // 🚨 【新增】专门用于抑制AI滚动动画的状态
     private var isAnimatingUserMessage = false  // 用户消息飞入动画期间的标记
@@ -1347,7 +1349,7 @@ class OverlayViewController: UIViewController {
             NSLog("🚨 【流式协调】AI流式更新处理完成，内容长度: \(latestAIContent.count)")
             
             // 🚨 【关键修复】状态机转换：AI流式完成 -> 完成状态
-            animationState = .completed
+            self.animationState = .completed
             NSLog("🚨 【状态机】AI流式更新完成，状态转换: aiStreaming -> completed")
         }
     }
