@@ -84,6 +84,9 @@ export const useNativeChatOverlay = () => {
   // 🚨 【关键修复】添加消息同步节流和去重机制
   const lastSyncMessagesRef = useRef<string>('');
   const syncThrottleRef = useRef<NodeJS.Timeout | null>(null);
+  // 🚀 针对AI流式：改为节拍式推送，避免被去抖合并成一次性
+  const streamingLoopRef = useRef<NodeJS.Timeout | null>(null);
+  const latestNativeMessagesRef = useRef<any[]>([]);
   
   // 🔧 优化同步：监听store中的消息变化并同步到原生ChatOverlay
   useEffect(() => {
@@ -101,6 +104,8 @@ export const useNativeChatOverlay = () => {
       isUser: msg.isUser,
       timestamp: msg.timestamp.getTime() // 转换Date为毫秒时间戳
     }));
+    // 更新最新消息引用（供流式循环使用）
+    latestNativeMessagesRef.current = nativeMessages;
 
     // 🚨 【关键修复】消息内容去重：生成消息内容的哈希值
     const messagesHash = JSON.stringify(nativeMessages.map(msg => ({
@@ -118,35 +123,64 @@ export const useNativeChatOverlay = () => {
     lastSyncMessagesRef.current = messagesHash;
 
     // 🚨 【关键修复】基于内容变化的智能同步策略
-    if (syncThrottleRef.current) {
-      clearTimeout(syncThrottleRef.current);
-    }
-    
     // 分析消息变化类型
     const lastMessage = nativeMessages[nativeMessages.length - 1];
     const isUserMessage = lastMessage?.isUser;
     const isNewMessage = nativeMessages.length !== (lastSyncMessagesRef.current ? JSON.parse(lastSyncMessagesRef.current).length : 0);
-    const isStreamingUpdate = lastMessage && !lastMessage.isUser && lastMessage.text.length > 0;
-    
-    // 智能同步策略：
-    // 1. 新用户消息：立即同步（需要动画）
-    // 2. 新AI消息：短延迟同步（避免与用户动画冲突）
-    // 3. AI流式更新：较长延迟（避免频繁更新）
-    // 4. 其他情况：中等延迟
-    let throttleDelay = 100; // 默认延迟
-    
-    if (isUserMessage && isNewMessage) {
-      throttleDelay = 0; // 用户消息立即同步
-    } else if (!isUserMessage && isNewMessage) {
-      throttleDelay = 50; // 新AI消息短延迟
-    } else if (isStreamingUpdate) {
-      throttleDelay = 150; // AI流式更新较长延迟
+    // 直接基于store消息的标志判断是否处于流式
+    const lastStoreMsg = storeMessages[storeMessages.length - 1];
+    const isStreamingActive = !!(lastStoreMsg && !lastStoreMsg.isUser && lastStoreMsg.isStreaming);
+
+    // 流式期间：采用“节拍式”推送，固定节奏发送最新内容（避免被去抖合并）
+    if (isStreamingActive) {
+      if (!streamingLoopRef.current) {
+        const beat = 80; // ms/次，可调 60–120ms
+        console.log('🚀 [流式] 启动原生同步节拍循环:', beat, 'ms');
+        const tick = async () => {
+          streamingLoopRef.current = setTimeout(async () => {
+            try {
+              await ChatOverlay.updateMessages({ messages: latestNativeMessagesRef.current });
+              console.log('✅ [流式节拍] 已同步最新增量');
+            } catch (e) {
+              console.warn('⚠️ [流式节拍] 同步失败:', e);
+            } finally {
+              // 持续循环，直到流式结束
+              const currentMessages = useChatStore.getState().messages;
+              const currentLast = currentMessages[currentMessages.length - 1];
+              const stillStreaming = !!(currentLast && !currentLast.isUser && (currentLast as any).isStreaming);
+              if (stillStreaming) {
+                tick();
+              } else {
+                console.log('🛑 [流式] 结束，清理节拍循环');
+                if (streamingLoopRef.current) {
+                  clearTimeout(streamingLoopRef.current);
+                  streamingLoopRef.current = null;
+                }
+                // 流式刚结束：做一次最终同步
+                try {
+                  await ChatOverlay.updateMessages({ messages: latestNativeMessagesRef.current });
+                  console.log('✅ [流式结束] 最终同步完成');
+                } catch (e2) {
+                  console.warn('⚠️ [流式结束] 最终同步失败:', e2);
+                }
+              }
+            }
+          }, beat);
+        };
+        tick();
+      }
+      return; // 流式下不再走去抖逻辑
     }
-    
+
+    // 非流式：使用轻量去抖，避免多余刷新
+    if (syncThrottleRef.current) {
+      clearTimeout(syncThrottleRef.current);
+    }
+    const throttleDelay = isUserMessage && isNewMessage ? 0 : (!isUserMessage && isNewMessage ? 50 : 100);
     syncThrottleRef.current = setTimeout(async () => {
       try {
-        await ChatOverlay.updateMessages({ messages: nativeMessages });
-        console.log(`✅ [智能同步] 消息同步成功，类型: ${isUserMessage ? '用户消息' : (isStreamingUpdate ? 'AI流式' : '其他')}, 延迟: ${throttleDelay}ms`);
+        await ChatOverlay.updateMessages({ messages: latestNativeMessagesRef.current });
+        console.log(`✅ [智能同步] 消息同步成功，类型: ${isUserMessage ? '用户消息' : '其他'}, 延迟: ${throttleDelay}ms`);
       } catch (error) {
         console.error('❌ [智能同步] 消息同步失败:', error);
       }

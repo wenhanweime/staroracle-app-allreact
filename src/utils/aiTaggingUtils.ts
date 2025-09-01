@@ -861,6 +861,25 @@ const callAIForResponse = async (
       throw new Error('Invalid API response structure');
     }
     
+    // 如果请求了流式但后端不是SSE，执行前端降级：逐字回放
+    if (onStream && answer) {
+      try {
+        console.log('🔁 非SSE响应，执行前端降级逐字回放');
+        const chars = Array.from(answer);
+        const interval = 12; // ms/字，可根据体验微调
+        for (let i = 0; i < chars.length; i++) {
+          // 支持取消
+          if (signal?.aborted) break;
+          onStream(chars[i]);
+          // 轻量延时，避免阻塞主线程
+          // eslint-disable-next-line no-await-in-loop
+          await new Promise(resolve => setTimeout(resolve, interval));
+        }
+      } catch (e) {
+        console.warn('⚠️ 降级逐字回放失败，直接返回完整文本', e);
+      }
+    }
+
     // Validate if answer is empty
     if (!answer || answer.trim() === '') {
       console.warn('⚠️ API returned empty answer, response details:');

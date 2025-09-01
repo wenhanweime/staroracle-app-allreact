@@ -150,13 +150,24 @@ function App() {
         const charInterval = 12; // ms/字，可按体验调整 10–16ms
         let charTimer: number | null = null;
         const charQueue: string[] = [];
+        let lastNativeUpdateTs = 0;
+        const nativeUpdateInterval = 40; // ms，避免过于频繁的原生调用
         const pumpStep = () => {
           if (charQueue.length === 0) { charTimer = null; return; }
           const nextChar = charQueue.shift()!;
           streamingText += nextChar;
           updateStreamingMessage(messageId, streamingText);
           if (isNative) {
-            try { ChatOverlay.appendAIChunk({ id: messageId, delta: nextChar }); } catch {}
+            try {
+              // 优先尝试增量追加
+              ChatOverlay.appendAIChunk({ id: messageId, delta: nextChar });
+            } catch {}
+            // 若原生未实现 appendAIChunk，则按固定节奏回退为整体更新
+            const now = Date.now();
+            if (now - lastNativeUpdateTs >= nativeUpdateInterval || charQueue.length === 0) {
+              lastNativeUpdateTs = now;
+              try { ChatOverlay.updateLastAI({ id: messageId, text: streamingText }); } catch {}
+            }
           }
           charTimer = window.setTimeout(pumpStep, charInterval);
         };
