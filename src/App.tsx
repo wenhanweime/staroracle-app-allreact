@@ -129,130 +129,49 @@ function App() {
 
     try {
       if (isNative) {
-      // 原生模式：直接使用ChatStore处理消息，然后同步到原生浮窗
-      console.log('📱 原生模式，使用ChatStore处理消息');
-      
-      // 🚨 【关键修复】移除竞态条件 - 每次都无条件调用showOverlay，让原生层自己判断
-      console.log('📱 🚨 【架构加固】每次都调用showOverlay，消除JS状态依赖');
-      await nativeChatOverlay.showOverlay(true); // 原生层会通过状态守卫忽略重复请求
-      console.log('📱 showOverlay调用完成，继续处理消息');
-      
-      // 添加用户消息到store
-      addUserMessage(inputText);
-      setLoading(true);
-      
-      try {
-        // 调用AI API
-        const messageId = addStreamingAIMessage('');
-        let streamingText = '';
-        
-        // 🚀 逐字输出：将 chunk 拆为字符队列，以固定间隔逐字渲染
-        const charInterval = 12; // ms/字，可按体验调整 10–16ms
-        let charTimer: number | null = null;
-        const charQueue: string[] = [];
-        let lastNativeUpdateTs = 0;
-        const nativeUpdateInterval = 40; // ms，避免过于频繁的原生调用
-        const pumpStep = () => {
-          if (charQueue.length === 0) { charTimer = null; return; }
-          const nextChar = charQueue.shift()!;
-          streamingText += nextChar;
-          updateStreamingMessage(messageId, streamingText);
-          if (isNative) {
-            try {
-              // 优先尝试增量追加
-              ChatOverlay.appendAIChunk({ id: messageId, delta: nextChar });
-            } catch {}
-            // 若原生未实现 appendAIChunk，则按固定节奏回退为整体更新
-            const now = Date.now();
-            if (now - lastNativeUpdateTs >= nativeUpdateInterval || charQueue.length === 0) {
-              lastNativeUpdateTs = now;
-              try { ChatOverlay.updateLastAI({ id: messageId, text: streamingText }); } catch {}
-            }
-          }
-          charTimer = window.setTimeout(pumpStep, charInterval);
-        };
-        const startCharPump = () => {
-          if (charTimer == null) {
-            charTimer = window.setTimeout(pumpStep, charInterval);
-          }
-        };
-        const stopCharPumpLocal = () => {
-          if (charTimer != null) { clearTimeout(charTimer); charTimer = null; }
-          charQueue.length = 0;
-        };
-        const onStream = (chunk: string) => {
-          const chars = Array.from(chunk);
-          charQueue.push(...chars);
-          startCharPump();
-        };
+        // 原生模式：交给原生StreamingClient管理流式
+        console.log('📱 原生模式，交给原生StreamingClient发起流式');
+        // 打开原生浮窗
+        await nativeChatOverlay.showOverlay(true);
 
-        // 获取对话历史（需要获取最新的messages）
-        const conversationHistory = messages.map(msg => ({
-          role: msg.isUser ? 'user' as const : 'assistant' as const,
-          content: msg.text
-        }));
+        // 先把用户消息写入我们本地store，保持Web端可见（原生端持有自身消息源）
+        addUserMessage(inputText);
+        setLoading(true);
 
-        abortRef.current = new AbortController();
-        const aiResponse = await generateAIResponse(
-          inputText, 
-          undefined, 
-          onStream,
-          conversationHistory,
-          abortRef.current?.signal,
-          (msg: string) => {
-            console.warn('❌ onError from generateAIResponse:', msg);
-          }
-        );
-        
-        // 等待逐字队列清空（最多等待一帧）
-        if (charTimer != null && charQueue.length > 0) {
-          await new Promise<void>((resolve) => {
-            const check = () => {
-              if (charQueue.length === 0) resolve(); else setTimeout(check, 16);
-            };
-            check();
+        try {
+          // 读取AI配置
+          const cfg = (await import('./utils/aiTaggingUtils')).getAIConfig();
+          const endpoint = cfg.endpoint || '';
+          const apiKey = cfg.apiKey || '';
+          const model = cfg.model || 'gpt-3.5-turbo';
+          // 转换对话历史（包含新用户这一条）
+          const conversation = [...messages, { id: 'temp', text: inputText, isUser: true, timestamp: new Date() }].map(m => ({
+            role: m.isUser ? 'user' as const : 'assistant' as const,
+            content: m.text
+          }));
+          // 通过原生插件发起流式
+          await (ChatOverlay as any).startNativeStream({
+            endpoint,
+            apiKey,
+            model,
+            messages: conversation,
+            temperature: 0.7
           });
+        } catch (e) {
+          console.error('❌ 原生流式启动失败:', e);
+        } finally {
+          setLoading(false);
         }
-        if (streamingText !== aiResponse) {
-          updateStreamingMessage(messageId, aiResponse);
-        }
-        if (isNative) {
-          try { ChatOverlay.updateLastAI({ id: messageId, text: aiResponse }); } catch {}
-        }
-        
-        finalizeStreamingMessage(messageId);
-        
-        // 在第一次AI回复后，尝试生成对话标题
-        setTimeout(() => {
-          generateConversationTitle();
-        }, 1000);
-        
-      } catch (error) {
-        console.error('❌ AI回复失败:', error);
-        // 呈现错误消息（仅最后一条）
-        const errorText = '抱歉，生成过程中出现问题，请稍后重试。';
-        updateStreamingMessage(messageId, errorText);
-        if (isNative) {
-          try { ChatOverlay.updateLastAI({ id: messageId, text: errorText }); } catch {}
-        }
-      } finally {
-        stopCharPumpLocal();
-        setLoading(false);
-        // 🔧 移除可能导致动画冲突的原生setLoading调用
-        // 原生端会通过消息同步机制自动更新loading状态，无需额外调用
-        // await nativeChatOverlay.setLoading(false);
-        console.log('📱 已跳过原生setLoading调用，避免动画冲突');
-      }
-    } else {
-      // Web模式：使用React ChatOverlay
-      console.log('🌐 Web模式，使用React ChatOverlay');
-      if (webChatOverlayOpen) {
-        setPendingFollowUpQuestion(inputText);
       } else {
-        setInitialChatInput(inputText);
-        setWebChatOverlayOpen(true);
+        // Web模式：使用React ChatOverlay
+        console.log('🌐 Web模式，使用React ChatOverlay');
+        if (webChatOverlayOpen) {
+          setPendingFollowUpQuestion(inputText);
+        } else {
+          setInitialChatInput(inputText);
+          setWebChatOverlayOpen(true);
+        }
       }
-    }
     } finally {
       // 🚨 【关键修复】确保发送状态被重置
       setIsSending(false);

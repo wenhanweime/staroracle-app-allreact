@@ -12,6 +12,8 @@ export interface ChatMessage {
 }
 
 export const useNativeChatOverlay = () => {
+  // 原生端统一接管消息与流式时，关闭JS侧心跳同步
+  const NATIVE_STREAM_ENABLED = true;
   const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
@@ -91,6 +93,11 @@ export const useNativeChatOverlay = () => {
   // 🔧 优化同步：监听store中的消息变化并同步到原生ChatOverlay
   useEffect(() => {
     if (!Capacitor.isNativePlatform() || storeMessages.length === 0) {
+      return;
+    }
+
+    // 原生流式启用时，不再由JS整表心跳驱动消息同步
+    if (NATIVE_STREAM_ENABLED) {
       return;
     }
 

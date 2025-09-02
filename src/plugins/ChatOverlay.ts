@@ -17,6 +17,15 @@ export interface ChatOverlayPlugin {
   appendAIChunk(options: { id?: string; delta: string }): Promise<void>;
   updateLastAI(options: { id?: string; text: string }): Promise<void>;
   cancelStreaming(): Promise<void>;
+  // 原生发起流式：使用原生StreamingClient进行SSE
+  startNativeStream(options: {
+    endpoint: string;
+    apiKey: string;
+    model: string;
+    messages: Array<{ role: 'user' | 'assistant' | 'system'; content: string }>;
+    temperature?: number;
+    maxTokens?: number;
+  }): Promise<void>;
 }
 
 export const ChatOverlay = registerPlugin<ChatOverlayPlugin>('ChatOverlay', {
