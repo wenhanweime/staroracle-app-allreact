@@ -85,10 +85,6 @@ public class ChatOverlayManager {
     
     // 背景视图变换 - 用于3D缩放效果
     private weak var backgroundView: UIView?
-    // 布局过渡动画中（展开/收缩）的标记，用于避免与首条发送动画竞争
-    private var isLayoutAnimating: Bool = false
-    // 布局动画期间排队的“待播放的用户消息动画”的消息ID
-    private var queuedUserMessageId: String? = nil
     
     // 动画触发跟踪 - 🎯 【关键新增】用Set管理已播放动画的消息ID
     internal var animatedMessageIDs = Set<String>()  // 改为internal，让OverlayViewController能访问
@@ -255,20 +251,14 @@ public class ChatOverlayManager {
         let currentAnimState = overlayViewController?.animationState ?? OverlayViewController.AnimationState.idle
         if let userMessage = latestUserMessage,
            !animatedMessageIDs.contains(userMessage.id),
-           currentAnimState != .userAnimating {
-            // 若当前处在布局过渡动画中（首次展开/切换），先排队，待过渡完成后再触发插入动画
-            if isLayoutAnimating {
-                NSLog("🚧 [排队] 布局动画进行中，排队用户消息动画: \(userMessage.id)")
-                queuedUserMessageId = userMessage.id
-            } else {
-                // 🎯 发现新用户消息，准备进入动画状态
-                shouldAnimate = true
-                overlayViewController?.animationState = .userAnimating
-                overlayViewController?.pendingUserMessageId = userMessage.id
-                animatedMessageIDs.insert(userMessage.id)
-                animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
-                NSLog("🎯 ✅ [状态机] 发现新用户消息！ID: \(userMessage.id), 状态: \(overlayViewController?.animationState ?? .idle), 索引: \(animationIndex ?? -1)")
-            }
+           currentAnimState == .idle {
+            // 🎯 发现新用户消息（仅在空闲态触发），准备进入动画状态
+            shouldAnimate = true
+            overlayViewController?.animationState = .userAnimating
+            overlayViewController?.pendingUserMessageId = userMessage.id
+            animatedMessageIDs.insert(userMessage.id)
+            animationIndex = messages.firstIndex(where: { $0.id == userMessage.id })
+            NSLog("🎯 ✅ [状态机] 发现新用户消息！ID: \(userMessage.id), 状态: \(overlayViewController?.animationState ?? .idle), 索引: \(animationIndex ?? -1)")
         } else {
             // 根据当前状态决定处理方式
             switch overlayViewController?.animationState ?? .idle {
@@ -613,30 +603,14 @@ public class ChatOverlayManager {
         }
         
         if animated {
-            // 🎯 与背景一致：无弹簧的 ease-out 过渡，避免“先放大后缩小”的感知
-            isLayoutAnimating = true
+            // 🎯 与背景一致：无弹簧的 ease-out 过渡（保留3D修复），但不引入布局过渡闸门
             UIView.animate(withDuration: 0.26,
                            delay: 0,
                            options: [.allowUserInteraction, .curveEaseOut],
                            animations: {
                 overlayViewController.updateForState(self.currentState)
                 overlayViewController.view.layoutIfNeeded()
-            }, completion: { _ in
-                self.isLayoutAnimating = false
-                // 若有排队的用户插入动画，且当前为展开态，则在布局动画完成后触发一次
-                if let pendingId = self.queuedUserMessageId,
-                   self.currentState == .expanded,
-                   !self.animatedMessageIDs.contains(pendingId) {
-                    if let idx = self.messages.firstIndex(where: { $0.id == pendingId }) {
-                        NSLog("🚀 [排队释放] 布局动画完成，触发用户消息动画: \(pendingId) @ index \(idx)")
-                        self.overlayViewController?.animationState = .userAnimating
-                        self.overlayViewController?.pendingUserMessageId = pendingId
-                        self.animatedMessageIDs.insert(pendingId)
-                        self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: idx)
-                    }
-                }
-                self.queuedUserMessageId = nil
-            })
+            }, completion: nil)
         } else {
             overlayViewController.updateForState(self.currentState)
         }
