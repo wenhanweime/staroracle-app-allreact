@@ -347,17 +347,25 @@ public class ChatOverlayManager {
         self.lastMessages = old
         self.messages = messages
 
-        // 找到最后一条用户消息作为插入动画目标
-        if let lastUserIdx = messages.lastIndex(where: { $0.isUser }) {
+        // 找到最后一条用户消息作为插入动画目标（仅在空闲态，且确实新增了user消息时触发）
+        if let vc = self.overlayViewController,
+           vc.animationState == .idle,
+           self.messages.count > self.lastMessages.count,
+           let lastUserIdx = messages.lastIndex(where: { $0.isUser }) {
             let userMsg = messages[lastUserIdx]
             if !animatedMessageIDs.contains(userMsg.id) {
                 DispatchQueue.main.async {
-                    self.overlayViewController?.animationState = .userAnimating
-                    self.overlayViewController?.pendingUserMessageId = userMsg.id
+                    NSLog("🎯 [NativeStream] 触发用户插入动画: id=\(userMsg.id) idx=\(lastUserIdx)")
+                    vc.animationState = .userAnimating
+                    vc.pendingUserMessageId = userMsg.id
                     self.animatedMessageIDs.insert(userMsg.id)
-                    self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: lastUserIdx)
+                    vc.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: lastUserIdx)
                 }
+            } else {
+                NSLog("☑️ [NativeStream] 消息已动画过，跳过: id=\(userMsg.id)")
             }
+        } else {
+            NSLog("ℹ️ [NativeStream] 未触发插入动画（state=\(self.overlayViewController?.animationState ?? .idle), old=\(old.count), new=\(self.messages.count))")
         }
 
         // 2) 启动原生流式（SSE），在插入动画期间由VC缓存增量，动画完成后回放
