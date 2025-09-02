@@ -251,11 +251,11 @@ public class ChatOverlayManager {
         var shouldAnimate = false
         var animationIndex: Int? = nil
         
-        // 状态机逻辑：只有在idle状态且发现新用户消息时才触发动画
+        // 状态机逻辑：只要不处于用户插入动画中即可触发（idle/aiStreaming/completed 均可）
+        let currentAnimState = overlayViewController?.animationState ?? OverlayViewController.AnimationState.idle
         if let userMessage = latestUserMessage,
            !animatedMessageIDs.contains(userMessage.id),
-           // 允许在 idle / aiStreaming / completed 三种状态下触发用户插入动画
-           ([AnimationState.idle, AnimationState.aiStreaming, AnimationState.completed].contains(overlayViewController?.animationState ?? .idle)) {
+           currentAnimState != .userAnimating {
             // 若当前处在布局过渡动画中（首次展开/切换），先排队，待过渡完成后再触发插入动画
             if isLayoutAnimating {
                 NSLog("🚧 [排队] 布局动画进行中，排队用户消息动画: \(userMessage.id)")
