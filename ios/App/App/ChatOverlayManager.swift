@@ -816,6 +816,8 @@ class OverlayViewController: UIViewController {
         // 设置只有顶部两个角为圆角，营造从屏幕底部延伸上来的效果
         containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
         containerView.translatesAutoresizingMaskIntoConstraints = false
+        // 🚨 【残影修复】初始化时隐藏容器，避免创建时显示空白形状
+        containerView.alpha = 0
         view.addSubview(containerView)
         
         // 设置约束
@@ -849,6 +851,8 @@ class OverlayViewController: UIViewController {
     private func setupCollapsedView() {
         collapsedView = UIView()
         collapsedView.translatesAutoresizingMaskIntoConstraints = false
+        // 🚨 【残影修复】初始化时就隐藏collapsedView，避免创建时短暂显示
+        collapsedView.alpha = 0
         containerView.addSubview(collapsedView)
         
         // 创建收缩状态的控制栏
@@ -1068,6 +1072,8 @@ class OverlayViewController: UIViewController {
             containerLeadingConstraint.constant = 0
             containerTrailingConstraint.constant = 0
             
+            NSLog("🔥 [残影修复] 设置UI元素可见性 - containerView: 显示, collapsedView: 隐藏, expandedView: 显示")
+            containerView.alpha = 1  // 🚨 【残影修复】展开状态时显示容器
             collapsedView.alpha = 0
             expandedView.alpha = 1
             backgroundMaskView.alpha = 1
