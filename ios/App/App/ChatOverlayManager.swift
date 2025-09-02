@@ -365,7 +365,11 @@ public class ChatOverlayManager {
                 NSLog("☑️ [NativeStream] 消息已动画过，跳过: id=\(userMsg.id)")
             }
         } else {
-            NSLog("ℹ️ [NativeStream] 未触发插入动画（state=\(self.overlayViewController?.animationState ?? .idle), old=\(old.count), new=\(self.messages.count))")
+            NSLog("ℹ️ [NativeStream] 未触发插入动画（state=\(self.overlayViewController?.animationState ?? .idle), old=\(old.count), new=\(self.messages.count)) — 执行无动画刷新以确保可见")
+            // 无动画情况下，仍需刷新列表以确保用户消息可见
+            DispatchQueue.main.async {
+                self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+            }
         }
 
         // 2) 启动原生流式（SSE），在插入动画期间由VC缓存增量，动画完成后回放
