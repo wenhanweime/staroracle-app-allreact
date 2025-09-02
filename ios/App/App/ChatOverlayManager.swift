@@ -75,6 +75,9 @@ public class ChatOverlayManager {
     private var followUpQuestion = ""
     private var overlayViewController: OverlayViewController?
     
+    // 原生流式客户端（可选使用）
+    private let streamingClient = StreamingClient()
+    
     // 状态变化回调
     private var onStateChange: ((OverlayState) -> Void)?
     
@@ -311,6 +314,7 @@ public class ChatOverlayManager {
         DispatchQueue.main.async {
             self.overlayViewController?.cancelStreaming()
         }
+        streamingClient.cancel()
     }
 
     // MARK: - 流式增量接口（供插件调用）
@@ -330,7 +334,7 @@ public class ChatOverlayManager {
         // 通知VC增量刷新（count 未变化或 +1，仅最后行）
         let current = messages
         DispatchQueue.main.async {
-            self.overlayViewController?.updateMessages(current, oldMessages: current, shouldAnimateNewUserMessage: false, animationIndex: nil)
+            self.overlayViewController?.updateMessages(current, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
         }
     }
 
@@ -345,8 +349,37 @@ public class ChatOverlayManager {
         }
         let current = messages
         DispatchQueue.main.async {
-            self.overlayViewController?.updateMessages(current, oldMessages: current, shouldAnimateNewUserMessage: false, animationIndex: nil)
+            self.overlayViewController?.updateMessages(current, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
         }
+    }
+
+    // MARK: - 可选：直接在原生侧发起流式请求（OpenAI 兼容）
+    // 说明：当前项目主要由 JS 发起请求并通过 appendAIChunk/updateLastAI 增量更新。
+    // 若需要从原生直接请求，可调用此方法。
+    func startNativeStreaming(endpoint: String, apiKey: String, model: String, messages: [ChatMessage], temperature: Double? = nil, maxTokens: Int? = nil) {
+        let reqMessages = messages.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) }
+        var started = false
+        var lastId = messages.last(where: { !$0.isUser })?.id
+        streamingClient.startChatCompletionStream(
+            endpoint: endpoint,
+            apiKey: apiKey,
+            model: model,
+            messages: reqMessages,
+            temperature: temperature,
+            maxTokens: maxTokens,
+            onChunk: { [weak self] (delta: String) in
+                guard let self = self else { return }
+                if !started { started = true }
+                self.appendAIChunk(delta: delta, messageId: lastId)
+            },
+            onComplete: { [weak self] (full: String?, error: Error?) in
+                guard let self = self else { return }
+                if let text = full, !text.isEmpty {
+                    self.updateLastAI(text: text, messageId: lastId)
+                }
+                if let error = error { NSLog("❌ [NativeStream] 错误: \(error.localizedDescription)") }
+            }
+        )
     }
     
     func setConversationTitle(_ title: String) {
@@ -680,7 +713,7 @@ class OverlayViewController: UIViewController {
     private var pendingAIUpdates: [ChatMessage] = []  // 动画期间暂存的AI更新
     
     // 🚨 【关键修复】流式输出与动画协调机制
-    private var isUserMessageAnimating = false  // 用户消息动画进行中
+    internal var isUserMessageAnimating = false  // 用户消息动画进行中（对Manager可见）
     private var aiStreamingBuffer: [String] = []  // AI流式内容缓冲
     private var lastAIStreamingTime: TimeInterval = 0  // 上次AI流式更新时间
     

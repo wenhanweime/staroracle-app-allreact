@@ -26,6 +26,9 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "appendAIChunk", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "updateLastAI", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "cancelStreaming", returnType: CAPPluginReturnPromise)
+        ,
+        // 可选：直接在原生侧发起流式请求
+        CAPPluginMethod(name: "startNativeStream", returnType: CAPPluginReturnPromise)
     ]
     
     // 业务逻辑管理器
@@ -247,6 +250,31 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         let id = call.getString("id")
         NSLog("🎯 ChatOverlay updateLastAI: id=\(id ?? "nil"), len=\(text.count)")
         overlayManager.updateLastAI(text: text, messageId: id)
+        call.resolve(["success": true])
+    }
+
+    // MARK: - 可选：在原生发起流式（OpenAI 兼容）
+    @objc func startNativeStream(_ call: CAPPluginCall) {
+        guard let endpoint = call.getString("endpoint"),
+              let apiKey = call.getString("apiKey"),
+              let model = call.getString("model") else {
+            call.reject("缺少必要参数 endpoint/apiKey/model")
+            return
+        }
+        let temperature = call.getDouble("temperature")
+        let maxTokens = call.getInt("maxTokens")
+
+        var messages: [ChatMessage] = []
+        if let msgs = call.getArray("messages", Any.self) as? [[String: Any]] {
+            messages = msgs.compactMap { m in
+                guard let role = m["role"] as? String, let content = m["content"] as? String else { return nil }
+                let isUser = (role == "user")
+                return ChatMessage(id: UUID().uuidString, text: content, isUser: isUser, timestamp: Date().timeIntervalSince1970 * 1000)
+            }
+        }
+
+        NSLog("🎯 [NativeStream] 开始: model=\(model), messages=\(messages.count)")
+        overlayManager.startNativeStreaming(endpoint: endpoint, apiKey: apiKey, model: model, messages: messages, temperature: temperature, maxTokens: maxTokens)
         call.resolve(["success": true])
     }
 }
