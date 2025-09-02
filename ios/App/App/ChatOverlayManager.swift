@@ -1280,8 +1280,8 @@ class OverlayViewController: UIViewController {
             NSLog("🎯 动画索引: \(index)")
         }
         
-        // 记录旧消息数量，用于判断更新场景
-        let oldMessagesCount = manager.messages.count
+        // 记录旧消息数量，用于判断更新场景（使用传入的oldMessages而非当前manager.messages）
+        let oldMessagesCount = oldMessages.count
         
         // 先更新manager的消息列表，并同步到渲染层（非动画期）
         manager.messages = messages
