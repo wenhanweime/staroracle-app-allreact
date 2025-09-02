@@ -342,6 +342,25 @@ public class ChatOverlayManager {
     // 说明：当前项目主要由 JS 发起请求并通过 appendAIChunk/updateLastAI 增量更新。
     // 若需要从原生直接请求，可调用此方法。
     func startNativeStreaming(endpoint: String, apiKey: String, model: String, messages: [ChatMessage], temperature: Double? = nil, maxTokens: Int? = nil) {
+        // 1) 先更新本地消息源，并触发“用户插入动画”
+        let old = self.messages
+        self.lastMessages = old
+        self.messages = messages
+
+        // 找到最后一条用户消息作为插入动画目标
+        if let lastUserIdx = messages.lastIndex(where: { $0.isUser }) {
+            let userMsg = messages[lastUserIdx]
+            if !animatedMessageIDs.contains(userMsg.id) {
+                DispatchQueue.main.async {
+                    self.overlayViewController?.animationState = .userAnimating
+                    self.overlayViewController?.pendingUserMessageId = userMsg.id
+                    self.animatedMessageIDs.insert(userMsg.id)
+                    self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: lastUserIdx)
+                }
+            }
+        }
+
+        // 2) 启动原生流式（SSE），在插入动画期间由VC缓存增量，动画完成后回放
         let reqMessages = messages.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) }
         var started = false
         var lastId = messages.last(where: { !$0.isUser })?.id
