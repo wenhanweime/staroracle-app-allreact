@@ -304,6 +304,10 @@ export const useNativeChatOverlay = () => {
   
   const updateMessagesNative = async (messages: ChatMessage[]) => {
     if (Capacitor.isNativePlatform()) {
+      if (NATIVE_STREAM_ENABLED) {
+        // 原生统一流式启用时，禁用JS侧整表同步，避免与原生状态机竞争
+        return;
+      }
       await ChatOverlay.updateMessages({ messages });
     }
   };
