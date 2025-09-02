@@ -88,11 +88,16 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         NSLog("🎯 显示浮窗参数 - animated: \(animated), expanded: \(isOpen)")
         
         DispatchQueue.main.async {
-            // 自动设置背景视图（如果尚未设置）
-            if let webView = self.bridge?.webView,
-               let containerView = webView.superview {
-                NSLog("🎯 自动设置WebView容器为背景视图")
+            // 自动设置背景视图（如果尚未设置）：优先使用根VC视图，更稳定
+            if let rootView = self.bridge?.viewController?.view {
+                NSLog("🎯 自动设置根视图为背景视图")
+                self.overlayManager.setBackgroundView(rootView)
+            } else if let webView = self.bridge?.webView,
+                      let containerView = webView.superview {
+                NSLog("🎯 回退：设置WebView容器为背景视图")
                 self.overlayManager.setBackgroundView(containerView)
+            } else {
+                NSLog("⚠️ 未找到合适的背景视图容器")
             }
             
             self.overlayManager.show(animated: animated, expanded: isOpen) { success in
@@ -203,12 +208,16 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         NSLog("🎯 ChatOverlay setupBackgroundTransform方法被调用!")
         
         DispatchQueue.main.async {
-            // 获取当前的WebView容器作为背景视图
-            if let webView = self.bridge?.webView,
-               let containerView = webView.superview {
-                NSLog("🎯 找到WebView容器，设置为背景视图")
+            // 优先根视图，其次webView.superview
+            if let rootView = self.bridge?.viewController?.view {
+                NSLog("🎯 设置根视图为背景视图")
+                self.overlayManager.setBackgroundView(rootView)
+                call.resolve(["success": true, "message": "背景视图已设置为根视图"])
+            } else if let webView = self.bridge?.webView,
+                      let containerView = webView.superview {
+                NSLog("🎯 回退：设置WebView容器为背景视图")
                 self.overlayManager.setBackgroundView(containerView)
-                call.resolve(["success": true, "message": "背景视图已设置"])
+                call.resolve(["success": true, "message": "背景视图已设置为WebView容器"])
             } else {
                 NSLog("⚠️ 未找到合适的背景视图")
                 call.resolve(["success": false, "message": "未找到背景视图"])

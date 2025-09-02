@@ -544,14 +544,13 @@ function App() {
     // ✨ 2. 添加根容器 div，创建稳定的布局基础
     <div className="w-screen h-screen overflow-hidden bg-black text-gray-100">
       <div 
-        className="min-h-screen cosmic-bg overflow-hidden relative transition-all duration-500 ease-out"
+        className="min-h-screen cosmic-bg overflow-hidden relative"
         style={{
-          transformStyle: 'preserve-3d',
-          perspective: '1000px',
-          transform: isChatOverlayOpen
-            ? 'scale(0.92) translateY(-15px) rotateX(4deg)' 
-            : 'scale(1) translateY(0px) rotateX(0deg)',
-          filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
+          // 🚨 【动画冲突修复】禁用React端3D动画，由Native端统一控制
+          // transformStyle: 'preserve-3d',
+          // perspective: '1000px', 
+          // transform: isChatOverlayOpen ? 'scale(0.92) translateY(-15px) rotateX(4deg)' : 'scale(1) translateY(0px) rotateX(0deg)',
+          // filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
         }}
       >
         {/* Background with stars - 已屏蔽 */}

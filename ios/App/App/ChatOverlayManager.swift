@@ -74,6 +74,8 @@ public class ChatOverlayManager {
     private var initialInput = ""
     private var followUpQuestion = ""
     private var overlayViewController: OverlayViewController?
+    // 协调延迟任务：收缩态更新可能的延迟任务（用于在展开前取消以避免竞态）
+    private var pendingCollapsedWork: DispatchWorkItem?
     
     // 原生流式客户端（可选使用）
     private let streamingClient = StreamingClient()
@@ -107,42 +109,26 @@ public class ChatOverlayManager {
                 self.overlayWindow?.alpha = 1  // 🔧 修复：恢复alpha值
                 self.isVisible = true
                 
-                // 根据参数设置初始状态
-                if expanded {
-                    self.currentState = .expanded
-                    self.applyBackgroundTransform(for: .expanded, animated: animated)
-                    // 发送状态通知
-                    NotificationCenter.default.post(
-                        name: .chatOverlayStateChanged,
-                        object: nil,
-                        userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100]
-                    )
-                } else {
-                    self.currentState = .collapsed
-                    self.applyBackgroundTransform(for: .collapsed, animated: animated)
-                    // 发送状态通知，让InputDrawer先调整位置
-                    NotificationCenter.default.post(
-                        name: .chatOverlayStateChanged,
-                        object: nil,
-                        userInfo: ["state": "collapsed", "height": 65]
-                    )
-                }
+                // 🚨 【3D动画修复】设置状态并一次性完成所有动画
+                self.currentState = expanded ? .expanded : .collapsed
+                NSLog("🎯 设置状态为: \(self.currentState)")
                 
-                // 稍微延迟更新UI，确保InputDrawer已经调整位置
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                    self.updateUI(animated: animated)
-                }
-                
-                // 🔧 只发送状态通知，移除冗余的可见性通知
+                // 发送状态通知，让InputDrawer先调整位置
                 NotificationCenter.default.post(
                     name: .chatOverlayStateChanged,
                     object: nil,
                     userInfo: [
                         "state": expanded ? "expanded" : "collapsed", 
-                        "height": expanded ? UIScreen.main.bounds.height - 100 : 65,
-                        "visible": true  // 🔧 在状态通知中包含可见性信息
+                        "height": expanded ? UIScreen.main.bounds.height - 100 : 65
                     ]
                 )
+                
+                // 稍微延迟更新UI，确保InputDrawer已经调整位置
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
+                    // 🚨 【3D动画修复】同步更新UI与背景3D变换，保证首帧与过渡一致
+                    self.updateUI(animated: animated)
+                    self.applyBackgroundTransform(for: self.currentState, animated: animated)
+                }
                 
                 completion(true)
                 return
@@ -161,8 +147,8 @@ public class ChatOverlayManager {
                 } completion: { _ in
                     self.isVisible = true
                     
-                    // 初始显示时立即更新UI
-                    self.updateUI(animated: false)
+                    // 🚨 【3D动画修复】初始显示时一次性更新UI和背景变换
+                    self.updateUI(animated: true)
                     self.applyBackgroundTransform(for: self.currentState, animated: true)
                     
                     // 发送通知让InputDrawer调整位置
@@ -178,8 +164,8 @@ public class ChatOverlayManager {
                 }
             } else {
                 self.isVisible = true
+                // 🚨 【3D动画修复】无动画模式一次性更新UI和背景变换
                 self.updateUI(animated: false)
-                self.applyBackgroundTransform(for: self.currentState, animated: false)
                 
                 // 发送通知让InputDrawer调整位置
                 if self.currentState == .collapsed {
@@ -426,22 +412,22 @@ public class ChatOverlayManager {
     func switchToCollapsed() {
         NSLog("🎯 ChatOverlayManager: 切换到收缩状态")
         currentState = .collapsed
-        
+
         // 先发送状态变化通知，让InputDrawer调整位置
         NotificationCenter.default.post(
             name: .chatOverlayStateChanged,
             object: nil,
             userInfo: ["state": "collapsed", "height": 65]
         )
-        
-        // 延迟更新UI，等待InputDrawer完成位置调整（从0.0改为0.2秒）
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-            self.updateUI(animated: true)
-        }
-        
+        // 取消任何挂起的延迟任务，避免与后续展开竞态
+        pendingCollapsedWork?.cancel()
+        pendingCollapsedWork = nil
+
+        // 立即同步更新UI与背景，避免与展开路径发生竞态覆盖
+        updateUI(animated: true)
         applyBackgroundTransform(for: .collapsed, animated: true)
         onStateChange?(.collapsed)
-        
+
         // 注意：浮窗位置会在延迟后更新，确保基于正确的InputDrawer位置
     }
     
@@ -457,7 +443,7 @@ public class ChatOverlayManager {
             userInfo: ["state": "collapsed", "height": 65]
         )
         
-        // 立即更新UI和背景，创造流畅的拖拽体验
+        // 🚨 【动画冲突修复】同时触发UI和背景动画，避免时序冲突
         updateUI(animated: true)
         applyBackgroundTransform(for: .collapsed, animated: true)
         onStateChange?(.collapsed)
@@ -467,7 +453,11 @@ public class ChatOverlayManager {
     
     func switchToExpanded() {
         NSLog("🎯 ChatOverlayManager: 切换到展开状态")
+        // 展开前取消任何挂起的收缩态延迟任务，避免覆盖展开动画
+        pendingCollapsedWork?.cancel()
+        pendingCollapsedWork = nil
         currentState = .expanded
+        // 🚨 【动画冲突修复】同时触发UI和背景动画，避免时序冲突
         updateUI(animated: true)
         applyBackgroundTransform(for: .expanded, animated: true)
         onStateChange?(.expanded)
@@ -482,7 +472,11 @@ public class ChatOverlayManager {
     
     func toggleState() {
         NSLog("🎯 ChatOverlayManager: 切换状态")
+        // 切换前先取消可能存在的收缩延迟任务
+        pendingCollapsedWork?.cancel()
+        pendingCollapsedWork = nil
         currentState = (currentState == .collapsed) ? .expanded : .collapsed
+        // 🚨 【动画冲突修复】同时触发UI和背景动画，避免时序冲突
         updateUI(animated: true)
         applyBackgroundTransform(for: currentState, animated: true)
         onStateChange?(currentState)
@@ -508,14 +502,23 @@ public class ChatOverlayManager {
         NSLog("🎯 应用背景3D变换，状态: \(state)")
         // 若插入动画进行中，避免与发送动画叠加，改为无动画
         let shouldAnimate = (overlayViewController?.isAnimatingInsert == true) ? false : animated
+
+        // 🎯 基线校准：展开动画起点强制为 scale=1（避免任何>1的起跳错觉）
+        if state == .expanded {
+            CATransaction.begin()
+            CATransaction.setDisableActions(true)
+            backgroundView.layer.removeAllAnimations()
+            backgroundView.layer.transform = CATransform3DIdentity
+            backgroundView.alpha = 1.0
+            CATransaction.commit()
+            NSLog("🧭 基线校准：已无动画重置为 scale=1.0, alpha=1.0")
+        }
         if shouldAnimate {
-            // 使用与浮窗相同的春天动效参数，实现协调的过渡效果
-            UIView.animate(withDuration: 0.6,
-                         delay: 0,
-                         usingSpringWithDamping: 0.8,
-                         initialSpringVelocity: 0.5,
-                         options: [.allowUserInteraction, .curveEaseInOut],
-                         animations: {
+            // 🎯 改为无弹簧的单调 ease-out 动画，避免任何反向/反弹
+            UIView.animate(withDuration: 0.26,
+                           delay: 0,
+                           options: [.allowUserInteraction, .curveEaseOut],
+                           animations: {
                 switch state {
                 case .expanded:
                     // 展开状态：缩放0.92，向上移动15px，绕X轴旋转4度，降低亮度
@@ -601,13 +604,11 @@ public class ChatOverlayManager {
         }
         
         if animated {
-            // 使用春天动效，营造丝滑的过渡感觉（仅在未冻结时）
-            UIView.animate(withDuration: 0.6,
-                         delay: 0,
-                         usingSpringWithDamping: 0.8,
-                         initialSpringVelocity: 0.5,
-                         options: [.allowUserInteraction, .curveEaseInOut],
-                         animations: {
+            // 🎯 与背景一致：无弹簧的 ease-out 过渡，避免“先放大后缩小”的感知
+            UIView.animate(withDuration: 0.26,
+                           delay: 0,
+                           options: [.allowUserInteraction, .curveEaseOut],
+                           animations: {
                 overlayViewController.updateForState(self.currentState)
                 overlayViewController.view.layoutIfNeeded()
             }, completion: nil)
