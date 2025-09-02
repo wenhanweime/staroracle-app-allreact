@@ -150,7 +150,7 @@ function App() {
             content: m.text
           }));
           // 通过原生插件发起流式
-          await (ChatOverlay as any).startNativeStream({
+          await ChatOverlay.startNativeStream({
             endpoint,
             apiKey,
             model,
@@ -159,6 +159,28 @@ function App() {
           });
         } catch (e) {
           console.error('❌ 原生流式启动失败:', e);
+          // 回退方案：使用JS流式+直接推送到原生
+          try {
+            console.log('🌐 回退到JS流式 + 原生增量接口');
+            // 构造原生消息格式并推送（用户行 + 空AI占位）
+            const nativeMessages = [...messages, { id: `user-${Date.now()}`, text: inputText, isUser: true, timestamp: new Date() }, { id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: new Date() }]
+              .map(m => ({ id: (m as any).id, text: m.text, isUser: (m as any).isUser, timestamp: (m as any).timestamp instanceof Date ? (m as any).timestamp.getTime() : Date.now() }));
+            await (ChatOverlay as any).updateMessages({ messages: nativeMessages });
+
+            // 启动JS流式
+            const messageId = addStreamingAIMessage('');
+            const onStream = async (chunk: string) => {
+              updateStreamingMessage(messageId, (useChatStore.getState().messages.find(m => m.id === messageId)?.streamingText || '') + chunk);
+              try { await (ChatOverlay as any).appendAIChunk({ id: messageId, delta: chunk }); } catch {}
+            };
+            const history = messages.map(msg => ({ role: msg.isUser ? 'user' as const : 'assistant' as const, content: msg.text }));
+            const full = await generateAIResponse(inputText, undefined, onStream, history);
+            updateStreamingMessage(messageId, full);
+            finalizeStreamingMessage(messageId);
+            try { await (ChatOverlay as any).updateLastAI({ id: messageId, text: full }); } catch {}
+          } catch (fallbackErr) {
+            console.error('❌ JS回退流式失败:', fallbackErr);
+          }
         } finally {
           setLoading(false);
         }
