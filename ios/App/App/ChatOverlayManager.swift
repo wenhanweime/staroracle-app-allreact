@@ -390,6 +390,17 @@ public class ChatOverlayManager {
                     self.updateLastAI(text: text, messageId: lastId)
                 }
                 if let error = error { NSLog("❌ [NativeStream] 错误: \(error.localizedDescription)") }
+                // 将状态从 aiStreaming 过渡到 completed，再回到 idle，确保下一次发送可触发插入动画
+                DispatchQueue.main.async {
+                    if let vc = self.overlayViewController {
+                        vc.animationState = .completed
+                        NSLog("🎯 [NativeStream] 流式完成，状态=completed → idle 复位")
+                        // 轻微延迟，确保最后一轮UI更新完成
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 0.05) {
+                            vc.animationState = .idle
+                        }
+                    }
+                }
             }
         )
     }
