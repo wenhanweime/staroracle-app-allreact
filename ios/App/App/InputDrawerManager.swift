@@ -508,6 +508,8 @@ class InputViewController: UIViewController {
             self.view.layoutIfNeeded()
         } completion: { _ in
             NSLog("🎯 InputDrawer: 位置更新完成（动画），bottomSpace: \(space)")
+            // 通知ChatOverlay输入框的新位置
+            self.notifyInputDrawerActualPosition()
         }
     }
     
@@ -604,17 +606,14 @@ class InputViewController: UIViewController {
         
         NSLog("🎯 InputDrawer实际位置 - 容器底部Y: \(containerBottom), 屏幕高度: \(screenHeight), 实际底部距离: \(actualBottomSpaceFromScreen)")
         
-        // 🚨 【关键修复】注释掉这个反馈通知，防止任何可能的循环触发
-        // 即使ChatOverlay当前没有监听，也要预防未来可能形成的反馈循环
-        /*
+        // 向ChatOverlay广播输入框的实际底部距离，便于其在收缩态精准对齐
         NotificationCenter.default.post(
             name: Notification.Name("inputDrawerActualPositionChanged"),
             object: nil,
             userInfo: ["actualBottomSpace": actualBottomSpaceFromScreen]
         )
-        */
         
-        NSLog("🎯 InputDrawer: 实际位置计算完成，已阻止反馈通知发送")
+        NSLog("🎯 InputDrawer: 已广播实际位置 actualBottomSpace=\(actualBottomSpaceFromScreen)")
     }
 }
 

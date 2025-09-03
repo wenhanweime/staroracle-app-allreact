@@ -853,9 +853,35 @@ class OverlayViewController: UIViewController {
     }
     
     private func setupInputDrawerObservers() {
-        // 注意：浮窗位置固定，不需要监听输入框位置变化
-        // 只有InputDrawer会根据浮窗状态调整自己的位置
-        NSLog("🎯 ChatOverlay: 浮窗使用固定位置，无需监听InputDrawer位置变化")
+        // 监听输入框实际位置变化，在收缩态下对齐到输入框下方（带过渡）
+        NotificationCenter.default.addObserver(
+            forName: Notification.Name("inputDrawerActualPositionChanged"),
+            object: nil,
+            queue: .main
+        ) { [weak self] note in
+            guard let self = self else { return }
+            guard let manager = self.manager else { return }
+            guard manager.currentState == .collapsed else { return }
+            guard let value = note.userInfo?["actualBottomSpace"] as? CGFloat else { return }
+
+            let screenHeight = UIScreen.main.bounds.height
+            let safeAreaTop = self.view.safeAreaInsets.top
+            let gap: CGFloat = 10
+            // 浮窗顶部 = 输入框底部 + gap
+            let floatingTop = screenHeight - value + gap
+            let relativeTopFromSafeArea = floatingTop - safeAreaTop
+
+            self.containerTopConstraint.constant = relativeTopFromSafeArea
+            UIView.animate(
+                withDuration: 0.22,
+                delay: 0,
+                options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
+            ) {
+                self.view.layoutIfNeeded()
+            } completion: { _ in
+                NSLog("🎯 ChatOverlay: 收缩态已对齐到输入框下方，actualBottom=\(value), top=\(relativeTopFromSafeArea)")
+            }
+        }
     }
     
     deinit {

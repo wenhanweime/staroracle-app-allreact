@@ -1,2 +1,6 @@
 /Users/pot/Documents/staroracle-app_v1/ios/App/App/ChatOverlayManager.swift:338:13 Cannot find 'ConversationStore' in scope
-git
+git 依然又出现了第一次浮窗缩小无法顶起对话框的情况。
+
+好像是偶发的，我不确定。
+
+但是我刚刚确实看到了这个bug。 
