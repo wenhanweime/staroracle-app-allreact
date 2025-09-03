@@ -866,9 +866,10 @@ class OverlayViewController: UIViewController {
 
             let screenHeight = UIScreen.main.bounds.height
             let safeAreaTop = self.view.safeAreaInsets.top
+            let floatingHeight: CGFloat = 65
             let gap: CGFloat = 10
-            // 浮窗顶部 = 输入框底部 + gap
-            let floatingTop = screenHeight - value + gap
+            // 正确：浮窗顶部 = 输入框底部 - gap - 浮窗高度（浮窗在输入框“上方”）
+            let floatingTop = screenHeight - value - gap - floatingHeight
             let relativeTopFromSafeArea = floatingTop - safeAreaTop
 
             self.containerTopConstraint.constant = relativeTopFromSafeArea
@@ -1140,20 +1141,18 @@ class OverlayViewController: UIViewController {
         
         switch state {
         case .collapsed:
-            // 收缩状态：浮窗顶部与收缩状态下输入框底部-10px对齐
+            // 收缩状态：浮窗应位于输入框“上方”10px（推起输入框的视觉），而非下方
             let floatingHeight: CGFloat = 65
-            let gap: CGFloat = 10  // 浮窗顶部与输入框底部的间隙
+            let gap: CGFloat = 10  // 浮窗与输入框之间的间隙
             
-            // InputDrawer在collapsed状态下的bottomSpace是40px（降低整体高度50px）
+            // InputDrawer 在 collapsed 状态下的 bottomSpace 目标值
             let inputBottomSpaceCollapsed: CGFloat = 40
             
-            // 计算输入框在collapsed状态下的底部位置
             // 输入框底部 = 屏幕高度 - 安全区底部 - bottomSpace
             let inputDrawerBottomCollapsed = screenHeight - safeAreaBottom - inputBottomSpaceCollapsed
             
-            // 浮窗顶部 = 输入框底部 + 间隙
-            // 浮窗在输入框下方10px
-            let floatingTop = inputDrawerBottomCollapsed + gap
+            // 正确：浮窗顶部 = 输入框底部 - gap - 浮窗高度（浮窗在输入框“上方”）
+            let floatingTop = inputDrawerBottomCollapsed - gap - floatingHeight
             
             // 转换为相对于安全区顶部的坐标
             let relativeTopFromSafeArea = floatingTop - safeAreaTop
@@ -1175,7 +1174,7 @@ class OverlayViewController: UIViewController {
             // 重置滚动收起标记，允许下次触发
             hasTriggeredScrollCollapse = false
             
-            NSLog("🎯 收缩状态 - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
+            NSLog("🎯 收缩状态(推起) - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
             
         case .expanded:
             // 展开状态：覆盖整个屏幕高度，营造从屏幕外延伸的效果
