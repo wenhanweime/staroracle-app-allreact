@@ -306,18 +306,21 @@ public class ChatOverlayManager {
     // MARK: - 流式增量接口（供插件调用）
     func appendAIChunk(delta: String, messageId: String?) {
         guard !delta.isEmpty else { return }
-        // 找到最后一条AI消息
-        if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
-            var last = messages[lastIndex]
+        // 优先根据 messageId 精确更新本轮 AI 占位
+        if let mid = messageId, let idx = messages.firstIndex(where: { !$0.isUser && $0.id == mid }) {
+            let last = messages[idx]
+            let newText = last.text + delta
+            messages[idx] = ChatMessage(id: last.id, text: newText, isUser: last.isUser, timestamp: last.timestamp)
+        } else if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
+            // 退回到更新最后一条AI
+            let last = messages[lastIndex]
             let newText = last.text + delta
             messages[lastIndex] = ChatMessage(id: last.id, text: newText, isUser: last.isUser, timestamp: last.timestamp)
-            ConversationStore.shared.replaceLastAssistantText(newText)
         } else {
             // 如果不存在AI消息，占位一条空AI再追加
             let ts = Date().timeIntervalSince1970 * 1000
             let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: delta, isUser: false, timestamp: ts)
             messages.append(new)
-            ConversationStore.shared.append(new)
         }
         // 通知VC增量刷新（count 未变化或 +1，仅最后行）
         let current = messages
@@ -327,15 +330,16 @@ public class ChatOverlayManager {
     }
 
     func updateLastAI(text: String, messageId: String?) {
-        if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
-            var last = messages[lastIndex]
+        if let mid = messageId, let idx = messages.firstIndex(where: { !$0.isUser && $0.id == mid }) {
+            let last = messages[idx]
+            messages[idx] = ChatMessage(id: last.id, text: text, isUser: last.isUser, timestamp: last.timestamp)
+        } else if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
+            let last = messages[lastIndex]
             messages[lastIndex] = ChatMessage(id: last.id, text: text, isUser: last.isUser, timestamp: last.timestamp)
-            ConversationStore.shared.replaceLastAssistantText(text)
         } else {
             let ts = Date().timeIntervalSince1970 * 1000
             let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: text, isUser: false, timestamp: ts)
             messages.append(new)
-            ConversationStore.shared.append(new)
         }
         let current = messages
         DispatchQueue.main.async {
@@ -354,21 +358,23 @@ public class ChatOverlayManager {
 
         // 从外部参数获取最新的用户消息内容
         if let paramLastUser = messages.last(where: { $0.isUser }) {
-            // 追加到原生消息源
+            // 追加到原生消息源（用户行 + 立即追加AI空占位，保证首次也有spinner）
             let newUser = ChatMessage(id: UUID().uuidString, text: paramLastUser.text, isUser: true, timestamp: Date().timeIntervalSince1970 * 1000)
             self.messages.append(newUser)
+            let aiPlaceholder = ChatMessage(id: UUID().uuidString, text: "", isUser: false, timestamp: Date().timeIntervalSince1970 * 1000)
+            self.messages.append(aiPlaceholder)
 
-            // 触发插入动画（仅在空闲态）
-            if let vc = self.overlayViewController, vc.animationState == .idle {
+            // 触发插入动画（允许在非 userAnimating 状态下触发：idle/aiStreaming/completed）
+            if let vc = self.overlayViewController, vc.animationState != .userAnimating {
                 DispatchQueue.main.async {
                     NSLog("🎯 [NativeStream] 触发用户插入动画: id=\(newUser.id)")
                     vc.animationState = .userAnimating
                     vc.pendingUserMessageId = newUser.id
                     self.animatedMessageIDs.insert(newUser.id)
-                    vc.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: self.messages.count - 1)
+                    vc.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: self.messages.firstIndex(where: { $0.id == newUser.id }) ?? (self.messages.count - 2))
                 }
             } else {
-                NSLog("ℹ️ [NativeStream] 非空闲态，无动画刷新以确保可见")
+                NSLog("ℹ️ [NativeStream] 动画进行中/其他状态，无动画刷新以确保可见")
                 DispatchQueue.main.async {
                     self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
                 }
@@ -391,14 +397,7 @@ public class ChatOverlayManager {
         }
         reqMessages.append(contentsOf: ctx.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) })
         var started = false
-        // 确保有AI占位：若未追加则追加
-        if self.messages.last?.isUser ?? true {
-            let aiPlaceholder = ChatMessage(id: UUID().uuidString, text: "", isUser: false, timestamp: Date().timeIntervalSince1970 * 1000)
-            self.messages.append(aiPlaceholder)
-            DispatchQueue.main.async {
-                self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
-            }
-        }
+        // 已在追加用户行时同步追加AI占位，这里不再重复
         var lastId = self.messages.last(where: { !$0.isUser })?.id
         streamingClient.startChatCompletionStream(
             endpoint: endpoint,
@@ -724,6 +723,7 @@ class OverlayViewController: UIViewController {
     private var backgroundMaskView: UIView!
     private var messagesList: UITableView!
     private var dragIndicator: UIView!
+    // 去除渐变，改为与输入框一致的风格（纯色+浅色描边）
     
     // 渲染层可见消息（与数据层解耦）：用于发送动画期间隐藏AI占位
     fileprivate var visibleMessages: [ChatMessage] = []
@@ -816,10 +816,7 @@ class OverlayViewController: UIViewController {
 
     // 过滤函数：发送动画期间隐藏尾部的AI占位（空文本）
     private func filteredVisibleMessagesForAnimation(all: [ChatMessage]) -> [ChatMessage] {
-        guard let last = all.last else { return all }
-        if !last.isUser && last.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            return Array(all.dropLast())
-        }
+        // 不再隐藏尾部AI空占位，保证首次发送也能看到加载动画
         return all
     }
     
@@ -889,17 +886,23 @@ class OverlayViewController: UIViewController {
         
         // 创建背景遮罩（仅在展开时显示）
         backgroundMaskView = UIView()
-        backgroundMaskView.backgroundColor = UIColor.black.withAlphaComponent(0.4)
+        // 稍微变浅的遮罩，避免整体过暗
+        backgroundMaskView.backgroundColor = UIColor.black.withAlphaComponent(0.25)
         backgroundMaskView.alpha = 0
         backgroundMaskView.translatesAutoresizingMaskIntoConstraints = false
         view.addSubview(backgroundMaskView)
         
         // 创建主容器
         containerView = UIView()
-        containerView.backgroundColor = UIColor.systemGray6
+        // 与输入框一致风格：深色纯色 + 浅色描边
+        containerView.backgroundColor = UIColor(red: 17/255.0, green: 24/255.0, blue: 39/255.0, alpha: 0.96) // bg-gray-900 近似
         containerView.layer.cornerRadius = 12
         // 设置只有顶部两个角为圆角，营造从屏幕底部延伸上来的效果
         containerView.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
+        containerView.layer.masksToBounds = true
+        containerView.layer.borderWidth = 1
+        containerView.layer.borderColor = UIColor(red: 31/255.0, green: 41/255.0, blue: 55/255.0, alpha: 1.0).cgColor // border-gray-800 近似
+        containerView.layer.masksToBounds = true
         containerView.translatesAutoresizingMaskIntoConstraints = false
         // 🚨 【残影修复】初始化时隐藏容器，避免创建时显示空白形状
         containerView.alpha = 0
@@ -927,11 +930,29 @@ class OverlayViewController: UIViewController {
         
         setupCollapsedView()
         setupExpandedView()
+
+        // 添加渐变背景（径向渐变 #1B2735 -> #090A0F）
+        let grad = CAGradientLayer()
+        if #available(iOS 12.0, *) {
+            grad.type = .radial
+        }
+        grad.colors = [
+            UIColor(red: 0x1B/255.0, green: 0x27/255.0, blue: 0x35/255.0, alpha: 1.0).cgColor,
+            UIColor(red: 0x09/255.0, green: 0x0A/255.0, blue: 0x0F/255.0, alpha: 1.0).cgColor
+        ]
+        grad.locations = [0.0, 1.0]
+        grad.startPoint = CGPoint(x: 0.5, y: 0.3)
+        grad.endPoint = CGPoint(x: 0.5, y: 1.0)
+        grad.cornerRadius = 12
+        containerView.layer.insertSublayer(grad, at: 0)
+        containerGradient = grad
         
         // 只添加拖拽手势到整个容器，移除点击手势避免误触
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
         containerView.addGestureRecognizer(panGesture)
     }
+
+    // 移除误放置在类外的布局方法（已移动到OverlayViewController内部）
     
     private func setupCollapsedView() {
         collapsedView = UIView()
@@ -1799,7 +1820,7 @@ class MessageTableViewCell: UITableViewCell {
     private let messageContainerView = UIView()
     private let messageLabel = UILabel()
     private let timeLabel = UILabel()
-    private let activity = UIActivityIndicatorView(style: .medium)
+    private let activity = StarRayActivityView()
     
     private var leadingConstraint: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
@@ -1843,8 +1864,7 @@ class MessageTableViewCell: UITableViewCell {
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(timeLabel)
         
-        // 加载指示器（用于AI空文本时显示加载中）
-        activity.hidesWhenStopped = true
+        // 自定义加载指示器（八芒星旋转）
         activity.translatesAutoresizingMaskIntoConstraints = false
         messageContainerView.addSubview(activity)
         
@@ -1860,18 +1880,30 @@ class MessageTableViewCell: UITableViewCell {
             
             activity.centerYAnchor.constraint(equalTo: messageContainerView.centerYAnchor),
             activity.leadingAnchor.constraint(equalTo: messageLabel.leadingAnchor),
+            activity.widthAnchor.constraint(equalToConstant: 20),
+            activity.heightAnchor.constraint(equalToConstant: 20),
             
             timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ])
     }
     
     func configure(with message: ChatMessage) {
+        // 回退：使用普通文本渲染，避免富文本带来的替换/渲染问题
+        messageLabel.attributedText = nil
         messageLabel.text = message.text
         // AI空文本 -> 显示loading指示器
-        if !message.isUser && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-            activity.startAnimating()
+        let isLoadingAI = (!message.isUser && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        if isLoadingAI {
+            // 仅显示Star加载，不显示橄榄球样式的气泡/时间
+            activity.isHidden = false
+            activity.tintColor = UIColor.systemPurple
+            activity.start()
+            timeLabel.isHidden = true
+            messageContainerView.backgroundColor = .clear
         } else {
-            activity.stopAnimating()
+            activity.stop()
+            activity.isHidden = true
+            timeLabel.isHidden = false
         }
         
         // 重置之前的约束
@@ -1889,10 +1921,13 @@ class MessageTableViewCell: UITableViewCell {
             leadingConstraint = messageContainerView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 80)
             trailingConstraint = messageContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
             timeLabelConstraint = timeLabel.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
-            
+        
         } else {
             // AI消息 - 左侧灰色气泡
-            messageContainerView.backgroundColor = UIColor.systemGray5
+            // 加载中已设置为透明；有内容时显示灰色气泡
+            if !isLoadingAI {
+                messageContainerView.backgroundColor = UIColor.systemGray5
+            }
             messageLabel.textColor = .label
             
             // 设置约束 - 左对齐
@@ -1916,6 +1951,77 @@ class MessageTableViewCell: UITableViewCell {
 
 
 // MARK: - ChatPassthroughView - 处理ChatOverlay触摸事件透传的自定义View
+// 自定义旋转八芒星加载视图
+class StarRayActivityView: UIView {
+    private let rayCount = 8
+    private let rayLength: CGFloat = 10
+    private let rayWidth: CGFloat = 2
+    private var rays: [CAShapeLayer] = []
+    private var isAnimating = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        isOpaque = false
+        setup()
+    }
+
+    private func setup() {
+        // 创建8条射线
+        for _ in 0..<rayCount {
+            let layer = CAShapeLayer()
+            layer.lineCap = .round
+            layer.lineWidth = rayWidth
+            layer.strokeColor = (tintColor ?? UIColor.systemPurple).cgColor
+            layer.fillColor = UIColor.clear.cgColor
+            self.layer.addSublayer(layer)
+            rays.append(layer)
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let radius: CGFloat = max(8, min(bounds.width, bounds.height) * 0.35)
+        for (index, ray) in rays.enumerated() {
+            let angle = CGFloat(index) * (2 * .pi / CGFloat(rayCount))
+            let start = CGPoint(x: center.x + cos(angle) * (radius - rayLength),
+                                y: center.y + sin(angle) * (radius - rayLength))
+            let end = CGPoint(x: center.x + cos(angle) * (radius),
+                              y: center.y + sin(angle) * (radius))
+            let path = UIBezierPath()
+            path.move(to: start)
+            path.addLine(to: end)
+            ray.path = path.cgPath
+            ray.strokeColor = (tintColor ?? UIColor.systemPurple).cgColor
+        }
+    }
+
+    func start() {
+        guard !isAnimating else { return }
+        isAnimating = true
+        let anim = CABasicAnimation(keyPath: "transform.rotation.z")
+        anim.fromValue = 0
+        anim.toValue = 2 * Double.pi
+        anim.duration = 1.0
+        anim.repeatCount = .infinity
+        anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+        layer.add(anim, forKey: "star-rotate")
+        isHidden = false
+    }
+
+    func stop() {
+        guard isAnimating else { return }
+        isAnimating = false
+        layer.removeAnimation(forKey: "star-rotate")
+    }
+}
+
 class ChatPassthroughView: UIView {
     weak var manager: ChatOverlayManager?
     weak var containerView: UIView?
@@ -1954,3 +2060,4 @@ class ChatPassthroughView: UIView {
         return isInside
     }
 }
+    // removed misplaced viewDidLayoutSubviews (now correctly inside OverlayViewController)
