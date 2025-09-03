@@ -310,11 +310,13 @@ public class ChatOverlayManager {
             var last = messages[lastIndex]
             let newText = last.text + delta
             messages[lastIndex] = ChatMessage(id: last.id, text: newText, isUser: last.isUser, timestamp: last.timestamp)
+            ConversationStore.shared.replaceLastAssistantText(newText)
         } else {
             // 如果不存在AI消息，占位一条空AI再追加
             let ts = Date().timeIntervalSince1970 * 1000
             let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: delta, isUser: false, timestamp: ts)
             messages.append(new)
+            ConversationStore.shared.append(new)
         }
         // 通知VC增量刷新（count 未变化或 +1，仅最后行）
         let current = messages
@@ -327,10 +329,12 @@ public class ChatOverlayManager {
         if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
             var last = messages[lastIndex]
             messages[lastIndex] = ChatMessage(id: last.id, text: text, isUser: last.isUser, timestamp: last.timestamp)
+            ConversationStore.shared.replaceLastAssistantText(text)
         } else {
             let ts = Date().timeIntervalSince1970 * 1000
             let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: text, isUser: false, timestamp: ts)
             messages.append(new)
+            ConversationStore.shared.append(new)
         }
         let current = messages
         DispatchQueue.main.async {
@@ -376,7 +380,15 @@ public class ChatOverlayManager {
         }
 
         // 2) 启动原生流式（SSE），在插入动画期间由VC缓存增量，动画完成后回放
-        let reqMessages = messages.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) }
+        // 基于原生消息源构建上下文窗口 + system prompt
+        let window = 20
+        var ctx = Array(self.messages.suffix(window))
+        var reqMessages: [StreamingClient.Message] = []
+        let sys = ConversationStore.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !sys.isEmpty {
+            reqMessages.append(StreamingClient.Message(role: "system", content: sys))
+        }
+        reqMessages.append(contentsOf: ctx.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) })
         var started = false
         // 确保有AI占位：若未追加则追加
         if self.messages.last?.isUser ?? true {

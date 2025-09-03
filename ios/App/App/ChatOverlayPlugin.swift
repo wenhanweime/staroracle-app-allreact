@@ -28,7 +28,11 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "cancelStreaming", returnType: CAPPluginReturnPromise)
         ,
         // 可选：直接在原生侧发起流式请求
-        CAPPluginMethod(name: "startNativeStream", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "startNativeStream", returnType: CAPPluginReturnPromise),
+        // 会话/上下文管理
+        CAPPluginMethod(name: "setSystemPrompt", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "loadHistory", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "clearConversation", returnType: CAPPluginReturnPromise)
     ]
     
     // 业务逻辑管理器
@@ -264,12 +268,11 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
 
     // MARK: - 可选：在原生发起流式（OpenAI 兼容）
     @objc func startNativeStream(_ call: CAPPluginCall) {
-        guard let endpoint = call.getString("endpoint"),
-              let apiKey = call.getString("apiKey"),
-              let model = call.getString("model") else {
-            call.reject("缺少必要参数 endpoint/apiKey/model")
+        guard let endpoint = call.getString("endpoint"), let model = call.getString("model") else {
+            call.reject("缺少必要参数 endpoint/model")
             return
         }
+        let apiKey = call.getString("apiKey") ?? ""
         let temperature = call.getDouble("temperature")
         let maxTokens = call.getInt("maxTokens")
 
@@ -282,8 +285,31 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
-        NSLog("🎯 [NativeStream] 开始: model=\(model), messages=\(messages.count)")
+        NSLog("🎯 [NativeStream] 开始: endpoint=\(endpoint), model=\(model), messages=\(messages.count)")
         overlayManager.startNativeStreaming(endpoint: endpoint, apiKey: apiKey, model: model, messages: messages, temperature: temperature, maxTokens: maxTokens)
+        call.resolve(["success": true])
+    }
+
+    // MARK: - 会话/上下文管理
+    @objc func setSystemPrompt(_ call: CAPPluginCall) {
+        let text = call.getString("text") ?? ""
+        NSLog("🎯 setSystemPrompt: len=\(text.count)")
+        ConversationStore.shared.setSystemPrompt(text)
+        call.resolve(["success": true])
+    }
+
+    @objc func loadHistory(_ call: CAPPluginCall) {
+        let list = ConversationStore.shared
+        let msgs = list.messages
+        NSLog("🎯 loadHistory: count=\(msgs.count)")
+        overlayManager.updateMessages(msgs)
+        call.resolve(["success": true, "count": msgs.count])
+    }
+
+    @objc func clearConversation(_ call: CAPPluginCall) {
+        NSLog("🎯 clearConversation")
+        ConversationStore.shared.clear()
+        overlayManager.updateMessages([])
         call.resolve(["success": true])
     }
 }

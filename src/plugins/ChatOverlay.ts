@@ -26,6 +26,10 @@ export interface ChatOverlayPlugin {
     temperature?: number;
     maxTokens?: number;
   }): Promise<void>;
+  // 会话/上下文管理
+  setSystemPrompt(options: { text: string }): Promise<void>;
+  loadHistory(options?: { sessionId?: string }): Promise<{ count: number }>;
+  clearConversation(options?: { sessionId?: string }): Promise<void>;
 }
 
 export const ChatOverlay = registerPlugin<ChatOverlayPlugin>('ChatOverlay', {
