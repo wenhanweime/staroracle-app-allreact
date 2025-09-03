@@ -494,6 +494,16 @@ public class ChatOverlayManager {
             applyBackgroundTransform(for: .collapsed, animated: true)
             onStateChange?(.collapsed)
             // 不立即调用 updateUI 动画，由对齐通知来驱动首次位置动画
+            // 兜底：若短时间内未收到对齐通知，则按既有路径执行一次定位，避免悬置
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { [weak self] in
+                guard let self = self else { return }
+                if let vc = self.overlayViewController, vc.awaitingFirstCollapseAlign && !vc.didFirstCollapseAlign {
+                    NSLog("🎯 ChatOverlay: 首次对齐未及时收到位置广播，执行兜底定位")
+                    self.updateUI(animated: true)
+                    vc.awaitingFirstCollapseAlign = false
+                    vc.didFirstCollapseAlign = true
+                }
+            }
         } else {
             // 非首次：按既有路径动画
             updateUI(animated: true)

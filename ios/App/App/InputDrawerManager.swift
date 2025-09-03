@@ -489,6 +489,8 @@ class InputViewController: UIViewController {
             NSLog("🎯 InputDrawer: 键盘可见，保持键盘位置，跳过覆盖 bottomSpace -> -\(currentKeyboardActualHeight) - 16")
             containerBottomConstraint.constant = -currentKeyboardActualHeight - 16
             self.view.layoutIfNeeded()
+            // 首轮联动所需：广播当前实际位置，供浮窗对齐（不改变既有布局，仅发送事件）
+            self.notifyInputDrawerActualPosition()
             return
         }
 
