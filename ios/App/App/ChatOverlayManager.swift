@@ -486,11 +486,20 @@ public class ChatOverlayManager {
         // 取消任何挂起的延迟任务，避免与后续展开竞态
         pendingCollapsedWork?.cancel()
         pendingCollapsedWork = nil
-
-        // 立即同步更新UI与背景，避免与展开路径发生竞态覆盖
-        updateUI(animated: true)
-        applyBackgroundTransform(for: .collapsed, animated: true)
-        onStateChange?(.collapsed)
+        
+        // 首次收缩：让 InputDrawer 先到位，再由VC监听实际位置进行一次性对齐动画
+        if let vc = overlayViewController, !vc.didFirstCollapseAlign {
+            vc.awaitingFirstCollapseAlign = true
+            // 背景可以先动，窗口位置等对齐通知后再动，避免首帧不一致
+            applyBackgroundTransform(for: .collapsed, animated: true)
+            onStateChange?(.collapsed)
+            // 不立即调用 updateUI 动画，由对齐通知来驱动首次位置动画
+        } else {
+            // 非首次：按既有路径动画
+            updateUI(animated: true)
+            applyBackgroundTransform(for: .collapsed, animated: true)
+            onStateChange?(.collapsed)
+        }
 
         // 注意：浮窗位置会在延迟后更新，确保基于正确的InputDrawer位置
     }
@@ -739,6 +748,10 @@ class OverlayViewController: UIViewController {
     private var lastAnimatedUserMessageId: String? = nil
     private var lastAnimationTimestamp: CFTimeInterval = 0
 
+    // 首次收缩对齐控制
+    internal var awaitingFirstCollapseAlign: Bool = false
+    internal var didFirstCollapseAlign: Bool = false
+
     // 自动滚动策略：仅在接近底部时才自动滚动
     private let autoScrollThreshold: CGFloat = 100 // px
     private func shouldAutoScrollToBottom() -> Bool {
@@ -853,7 +866,7 @@ class OverlayViewController: UIViewController {
     }
     
     private func setupInputDrawerObservers() {
-        // 监听输入框实际位置变化，在收缩态下对齐到输入框下方（带过渡）
+        // 监听输入框实际位置变化：仅用于首次收缩的精确对齐（之后不再依赖）
         NotificationCenter.default.addObserver(
             forName: Notification.Name("inputDrawerActualPositionChanged"),
             object: nil,
@@ -871,15 +884,21 @@ class OverlayViewController: UIViewController {
             let floatingTop = screenHeight - value + gap
             let relativeTopFromSafeArea = floatingTop - safeAreaTop
 
-            self.containerTopConstraint.constant = relativeTopFromSafeArea
-            UIView.animate(
-                withDuration: 0.22,
-                delay: 0,
-                options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
-            ) {
-                self.view.layoutIfNeeded()
-            } completion: { _ in
-                NSLog("🎯 ChatOverlay: 收缩态已对齐到输入框下方，actualBottom=\(value), top=\(relativeTopFromSafeArea)")
+            if self.awaitingFirstCollapseAlign && !self.didFirstCollapseAlign {
+                self.containerTopConstraint.constant = relativeTopFromSafeArea
+                UIView.animate(
+                    withDuration: 0.26,
+                    delay: 0,
+                    options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
+                ) {
+                    self.view.layoutIfNeeded()
+                } completion: { _ in
+                    self.didFirstCollapseAlign = true
+                    self.awaitingFirstCollapseAlign = false
+                    NSLog("🎯 ChatOverlay: 首次收缩对齐完成 actualBottom=\(value), top=\(relativeTopFromSafeArea)")
+                }
+            } else {
+                // 非首次：不强制调整，由既有逻辑（updateUI）控制，避免双重动画
             }
         }
     }
