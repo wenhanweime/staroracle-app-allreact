@@ -342,31 +342,34 @@ public class ChatOverlayManager {
     // 说明：当前项目主要由 JS 发起请求并通过 appendAIChunk/updateLastAI 增量更新。
     // 若需要从原生直接请求，可调用此方法。
     func startNativeStreaming(endpoint: String, apiKey: String, model: String, messages: [ChatMessage], temperature: Double? = nil, maxTokens: Int? = nil) {
-        // 1) 先更新本地消息源，并触发“用户插入动画”
+        // 1) UI侧仅基于原生已有消息源进行追加，不用外部messages重置UI，避免上一轮AI被覆盖
+        //    外部messages仅用于LLM上下文（reqMessages）
         let old = self.messages
         self.lastMessages = old
-        self.messages = messages
 
-        // 找到最后一条用户消息作为插入动画目标（仅在空闲态，且确实新增了user消息时触发）
-        if let vc = self.overlayViewController,
-           vc.animationState == .idle,
-           self.messages.count > self.lastMessages.count,
-           let lastUserIdx = messages.lastIndex(where: { $0.isUser }) {
-            let userMsg = messages[lastUserIdx]
-            if !animatedMessageIDs.contains(userMsg.id) {
+        // 从外部参数获取最新的用户消息内容
+        if let paramLastUser = messages.last(where: { $0.isUser }) {
+            // 追加到原生消息源
+            let newUser = ChatMessage(id: UUID().uuidString, text: paramLastUser.text, isUser: true, timestamp: Date().timeIntervalSince1970 * 1000)
+            self.messages.append(newUser)
+
+            // 触发插入动画（仅在空闲态）
+            if let vc = self.overlayViewController, vc.animationState == .idle {
                 DispatchQueue.main.async {
-                    NSLog("🎯 [NativeStream] 触发用户插入动画: id=\(userMsg.id) idx=\(lastUserIdx)")
+                    NSLog("🎯 [NativeStream] 触发用户插入动画: id=\(newUser.id)")
                     vc.animationState = .userAnimating
-                    vc.pendingUserMessageId = userMsg.id
-                    self.animatedMessageIDs.insert(userMsg.id)
-                    vc.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: lastUserIdx)
+                    vc.pendingUserMessageId = newUser.id
+                    self.animatedMessageIDs.insert(newUser.id)
+                    vc.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: true, animationIndex: self.messages.count - 1)
                 }
             } else {
-                NSLog("☑️ [NativeStream] 消息已动画过，跳过: id=\(userMsg.id)")
+                NSLog("ℹ️ [NativeStream] 非空闲态，无动画刷新以确保可见")
+                DispatchQueue.main.async {
+                    self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+                }
             }
         } else {
-            NSLog("ℹ️ [NativeStream] 未触发插入动画（state=\(self.overlayViewController?.animationState ?? .idle), old=\(old.count), new=\(self.messages.count)) — 执行无动画刷新以确保可见")
-            // 无动画情况下，仍需刷新列表以确保用户消息可见
+            NSLog("⚠️ [NativeStream] 外部参数未提供用户消息，跳过追加")
             DispatchQueue.main.async {
                 self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
             }
@@ -375,7 +378,7 @@ public class ChatOverlayManager {
         // 2) 启动原生流式（SSE），在插入动画期间由VC缓存增量，动画完成后回放
         let reqMessages = messages.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) }
         var started = false
-        var lastId = messages.last(where: { !$0.isUser })?.id
+        var lastId = self.messages.last(where: { !$0.isUser })?.id
         streamingClient.startChatCompletionStream(
             endpoint: endpoint,
             apiKey: apiKey,
@@ -1663,8 +1666,8 @@ class OverlayViewController: UIViewController {
                         self.lastAnimationTimestamp = CACurrentMediaTime()
                     }
                     
-                    // 🚨 【关键修复】处理缓冲的AI流式更新
-                    self.processBufferedAIUpdates()
+                    // 🚨 【关键修复】动画完成后开启回放计时器（逐字流逝）
+                    self.beginAIReplayAfterAnimation()
                     
                     // 🚨 【关键】调用完成回调，通知动画锁定机制解锁
                     completion()
@@ -1755,6 +1758,7 @@ class MessageTableViewCell: UITableViewCell {
     private let messageContainerView = UIView()
     private let messageLabel = UILabel()
     private let timeLabel = UILabel()
+    private let activity = UIActivityIndicatorView(style: .medium)
     
     private var leadingConstraint: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
@@ -1798,6 +1802,11 @@ class MessageTableViewCell: UITableViewCell {
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(timeLabel)
         
+        // 加载指示器（用于AI空文本时显示加载中）
+        activity.hidesWhenStopped = true
+        activity.translatesAutoresizingMaskIntoConstraints = false
+        messageContainerView.addSubview(activity)
+        
         // 设置固定的约束
         NSLayoutConstraint.activate([
             messageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
@@ -1808,12 +1817,21 @@ class MessageTableViewCell: UITableViewCell {
             messageLabel.trailingAnchor.constraint(equalTo: messageContainerView.trailingAnchor, constant: -16),
             messageLabel.bottomAnchor.constraint(equalTo: messageContainerView.bottomAnchor, constant: -12),
             
+            activity.centerYAnchor.constraint(equalTo: messageContainerView.centerYAnchor),
+            activity.leadingAnchor.constraint(equalTo: messageLabel.leadingAnchor),
+            
             timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ])
     }
     
     func configure(with message: ChatMessage) {
         messageLabel.text = message.text
+        // AI空文本 -> 显示loading指示器
+        if !message.isUser && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            activity.startAnimating()
+        } else {
+            activity.stopAnimating()
+        }
         
         // 重置之前的约束
         leadingConstraint?.isActive = false
