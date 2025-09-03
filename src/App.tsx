@@ -24,6 +24,7 @@ import { useStarStore } from './store/useStarStore';
 import { useChatStore } from './store/useChatStore';
 import { ConstellationTemplate } from './types';
 import { checkApiConfiguration, generateAIResponse } from './utils/aiTaggingUtils';
+import { defaultSystemPrompt } from '@/utils/systemPrompt';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
 import { useNativeInputDrawer } from './hooks/useNativeInputDrawer';
@@ -315,6 +316,21 @@ function App() {
     
     setupNative();
   }, []);
+
+  // 原生环境：设置系统提示到原生插件，确保有完整prompt
+  useEffect(() => {
+    const applySystemPrompt = async () => {
+      if (!isNative) return;
+      try {
+        const { setSystemPrompt } = await import('@/utils/conversationBridge');
+        await setSystemPrompt(defaultSystemPrompt);
+        console.log('✅ 已将系统提示注入原生ChatOverlay');
+      } catch (e) {
+        console.warn('⚠️ 注入系统提示失败（原生）:', e);
+      }
+    };
+    applySystemPrompt();
+  }, [isNative]);
 
   // 🔒 保障：每次原生浮窗开合后，确保原生 InputDrawer 处于可见状态
   useEffect(() => {
