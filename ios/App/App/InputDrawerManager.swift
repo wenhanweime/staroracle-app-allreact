@@ -230,6 +230,9 @@ class InputViewController: UIViewController {
     
     // 添加属性来保存键盘出现前的位置
     private var bottomSpaceBeforeKeyboard: CGFloat = 20
+    // 新增：键盘可见状态与（已扣安全区的）当前键盘高度
+    private var isKeyboardVisible: Bool = false
+    private var currentKeyboardActualHeight: CGFloat = 0
     
     init(manager: InputDrawerManager) {
         self.manager = manager
@@ -477,36 +480,28 @@ class InputViewController: UIViewController {
     }
     
     func updateBottomSpace(_ space: CGFloat) {
-        // 检查是否真的需要更新
+        // 更新管理器中的bottomSpace值（键盘隐藏时会按此值恢复）
         let oldSpace = manager?.bottomSpace ?? 20
+        manager?.bottomSpace = space
+
+        // 若键盘可见：保持由键盘驱动的位置，避免覆盖（首个收缩场景关键修复）
+        if isKeyboardVisible {
+            NSLog("🎯 InputDrawer: 键盘可见，保持键盘位置，跳过覆盖 bottomSpace -> -\(currentKeyboardActualHeight) - 16")
+            containerBottomConstraint.constant = -currentKeyboardActualHeight - 16
+            self.view.layoutIfNeeded()
+            return
+        }
+
+        // 键盘未显示：仅当变动显著时才更新
         if abs(oldSpace - space) < 1 {
             NSLog("🎯 InputDrawer: 位置未发生显著变化，跳过更新")
             return
         }
-        
-        // 更新管理器中的bottomSpace值
-        manager?.bottomSpace = space
-        
-        // 🚨 【关键修复】移除InputDrawer的自动动画，改为瞬间移动
-        // 这避免了与ChatOverlay动画的冲突
+
+        // 无动画立即更新，避免与浮窗动画冲突
         containerBottomConstraint.constant = -space
-        // 不再执行动画，而是让布局立即生效
         self.view.layoutIfNeeded()
-        
         NSLog("🎯 InputDrawer: 位置更新完成（无动画），bottomSpace: \(space)")
-        
-        // 🚨 【关键修复】注释掉反馈通知，打破 InputDrawer -> ChatOverlay 的恶性循环
-        // 这个通知会导致ChatOverlay再次更新状态，形成无限循环触发双重动画
-        /*
-        NotificationCenter.default.post(
-            name: Notification.Name("inputDrawerPositionChanged"),
-            object: nil,
-            userInfo: ["bottomSpace": space]
-        )
-        NSLog("🎯 InputDrawer: 发送逻辑位置变化通知，bottomSpace: \(space)")
-        */
-        
-        NSLog("🎯 InputDrawer: 位置更新完成，bottomSpace: \(space)，已阻止反馈循环")
     }
     
     func focusInput() {
@@ -562,6 +557,8 @@ class InputViewController: UIViewController {
         // 计算输入框应该在键盘上方的位置
         // 键盘高度包含了安全区，所以要减去安全区高度避免重复计算
         let actualKeyboardHeight = keyboardHeight - safeAreaBottom
+        currentKeyboardActualHeight = actualKeyboardHeight
+        isKeyboardVisible = true
         containerBottomConstraint.constant = -actualKeyboardHeight - 16
         
         NSLog("🎯 键盘高度: \(keyboardHeight), 安全区: \(safeAreaBottom), 实际键盘高度: \(actualKeyboardHeight)")
@@ -576,6 +573,7 @@ class InputViewController: UIViewController {
     
     @objc private func keyboardWillHide(_ notification: Notification) {
         // 恢复到键盘出现前的位置
+        isKeyboardVisible = false
         containerBottomConstraint.constant = -bottomSpaceBeforeKeyboard
         NSLog("🎯 键盘即将隐藏，恢复到位置: \(bottomSpaceBeforeKeyboard)")
         

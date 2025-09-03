@@ -930,22 +930,6 @@ class OverlayViewController: UIViewController {
         
         setupCollapsedView()
         setupExpandedView()
-
-        // 添加渐变背景（径向渐变 #1B2735 -> #090A0F）
-        let grad = CAGradientLayer()
-        if #available(iOS 12.0, *) {
-            grad.type = .radial
-        }
-        grad.colors = [
-            UIColor(red: 0x1B/255.0, green: 0x27/255.0, blue: 0x35/255.0, alpha: 1.0).cgColor,
-            UIColor(red: 0x09/255.0, green: 0x0A/255.0, blue: 0x0F/255.0, alpha: 1.0).cgColor
-        ]
-        grad.locations = [0.0, 1.0]
-        grad.startPoint = CGPoint(x: 0.5, y: 0.3)
-        grad.endPoint = CGPoint(x: 0.5, y: 1.0)
-        grad.cornerRadius = 12
-        containerView.layer.insertSublayer(grad, at: 0)
-        containerGradient = grad
         
         // 只添加拖拽手势到整个容器，移除点击手势避免误触
         let panGesture = UIPanGestureRecognizer(target: self, action: #selector(handlePan(_:)))
