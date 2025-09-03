@@ -354,6 +354,20 @@ function App() {
     return () => clearTimeout(timer);
   }, []);
 
+  // 原生环境：加载历史以填充原生浮窗（调用插件），仅一次
+  useEffect(() => {
+    const boot = async () => {
+      if (!isNative) return;
+      try {
+        const res = await (await import('@/utils/conversationBridge')).loadHistory();
+        console.log('📜 已加载历史到原生浮窗，数量:', res.count);
+      } catch (e) {
+        console.warn('loadHistory failed', e);
+      }
+    };
+    boot();
+  }, [isNative]);
+
   // 🔧 移除重复的消息同步 - 已在useNativeChatOverlay.ts中处理
   // useEffect(() => {
   //   if (isNative && messages.length > 0) {

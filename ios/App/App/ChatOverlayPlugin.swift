@@ -285,6 +285,14 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
+        if endpoint.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            call.reject("endpoint 为空")
+            return
+        }
+        if model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            call.reject("model 为空")
+            return
+        }
         NSLog("🎯 [NativeStream] 开始: endpoint=\(endpoint), model=\(model), messages=\(messages.count)")
         overlayManager.startNativeStreaming(endpoint: endpoint, apiKey: apiKey, model: model, messages: messages, temperature: temperature, maxTokens: maxTokens)
         call.resolve(["success": true])

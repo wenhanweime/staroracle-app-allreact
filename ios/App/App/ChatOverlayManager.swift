@@ -1267,6 +1267,7 @@ class OverlayViewController: UIViewController {
     
     func updateMessages(_ messages: [ChatMessage], oldMessages: [ChatMessage], shouldAnimateNewUserMessage: Bool, animationIndex: Int? = nil) {
         NSLog("🎯 OverlayViewController: updateMessages被调用，消息数量: \(messages.count)")
+        NSLog("🎯 状态快照: animationState=\(animationState), isAnimatingInsert=\(isAnimatingInsert), isUserMessageAnimating=\(isUserMessageAnimating), visibleMessages=\(visibleMessages.count)")
         guard let manager = manager else { 
             NSLog("⚠️ OverlayViewController: manager为nil")
             return 
