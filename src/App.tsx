@@ -139,6 +139,10 @@ function App() {
         setLoading(true);
 
         try {
+          // 预渲染：在原生流式启动前先把用户消息+空AI行推给原生，确保列表可见
+          const nativeBootstrap = [...messages, { id: `user-${Date.now()}`, text: inputText, isUser: true, timestamp: new Date() }, { id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: new Date() }]
+            .map(m => ({ id: (m as any).id, text: m.text, isUser: (m as any).isUser, timestamp: (m as any).timestamp instanceof Date ? (m as any).timestamp.getTime() : Date.now() }));
+          try { await (ChatOverlay as any).updateMessages({ messages: nativeBootstrap }); } catch {}
           // 读取AI配置
           const cfg = (await import('./utils/aiTaggingUtils')).getAIConfig();
           const endpoint = cfg.endpoint || '';
