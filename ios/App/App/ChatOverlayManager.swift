@@ -378,6 +378,14 @@ public class ChatOverlayManager {
         // 2) 启动原生流式（SSE），在插入动画期间由VC缓存增量，动画完成后回放
         let reqMessages = messages.map { StreamingClient.Message(role: $0.isUser ? "user" : "assistant", content: $0.text) }
         var started = false
+        // 确保有AI占位：若未追加则追加
+        if self.messages.last?.isUser ?? true {
+            let aiPlaceholder = ChatMessage(id: UUID().uuidString, text: "", isUser: false, timestamp: Date().timeIntervalSince1970 * 1000)
+            self.messages.append(aiPlaceholder)
+            DispatchQueue.main.async {
+                self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+            }
+        }
         var lastId = self.messages.last(where: { !$0.isUser })?.id
         streamingClient.startChatCompletionStream(
             endpoint: endpoint,

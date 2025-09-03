@@ -28,7 +28,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
 import { useNativeInputDrawer } from './hooks/useNativeInputDrawer';
 import { InputDrawer } from './plugins/InputDrawer';
-import { ChatOverlay as ChatOverlayPlugin } from './plugins/ChatOverlay';
+import { ChatOverlay } from './plugins/ChatOverlay';
 
 function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
@@ -155,7 +155,7 @@ function App() {
             content: m.text
           }));
           // 通过原生插件发起流式
-          await ChatOverlayPlugin.startNativeStream({
+          await ChatOverlay.startNativeStream({
             endpoint,
             apiKey,
             model,
@@ -172,19 +172,19 @@ function App() {
             const nativeMessages = latest
               .map(m => ({ id: m.id, text: m.text, isUser: m.isUser, timestamp: m.timestamp.getTime() }))
               .concat([{ id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: Date.now() }]);
-            await (ChatOverlayPlugin as any).updateMessages({ messages: nativeMessages });
+            await ChatOverlay.updateMessages({ messages: nativeMessages });
 
             // 启动JS流式
             const messageId = addStreamingAIMessage('');
             const onStream = async (chunk: string) => {
               updateStreamingMessage(messageId, (useChatStore.getState().messages.find(m => m.id === messageId)?.streamingText || '') + chunk);
-              try { await (ChatOverlayPlugin as any).appendAIChunk({ id: messageId, delta: chunk }); } catch {}
+              try { await ChatOverlay.appendAIChunk({ id: messageId, delta: chunk }); } catch {}
             };
             const history = latest.map(msg => ({ role: msg.isUser ? 'user' as const : 'assistant' as const, content: msg.text }));
             const full = await generateAIResponse(inputText, undefined, onStream, history);
             updateStreamingMessage(messageId, full);
             finalizeStreamingMessage(messageId);
-            try { await (ChatOverlayPlugin as any).updateLastAI({ id: messageId, text: full }); } catch {}
+            try { await ChatOverlay.updateLastAI({ id: messageId, text: full }); } catch {}
           } catch (fallbackErr) {
             console.error('❌ JS回退流式失败:', fallbackErr);
           }
@@ -224,7 +224,7 @@ function App() {
       abortRef.current?.abort();
       abortRef.current = null;
       if (isNative) {
-        try { await ChatOverlayPlugin.cancelStreaming(); } catch {}
+        try { await ChatOverlay.cancelStreaming(); } catch {}
       }
     } catch (e) {
       console.warn('Cancel streaming failed', e);
@@ -276,7 +276,7 @@ function App() {
         }
 
         // 🎯 监听发送动画完成事件：用于解锁逐字流式泵
-        const sendAnimCompletedListener = ChatOverlayPlugin.addListener('sendAnimationCompleted', () => {
+    const sendAnimCompletedListener = ChatOverlay.addListener('sendAnimationCompleted', () => {
           console.log('📣 原生通知：发送动画完成，解锁逐字渲染');
           // 逐字泵在动画窗口外会自动推进，无需额外操作
         });
