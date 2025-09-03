@@ -1,11 +1,9 @@
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 
 const StellOracleHome = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
   const [stars, setStars] = useState([]);
-  const [inputBottomSpace, setInputBottomSpace] = useState(0);
-  const chatInputRef = useRef<HTMLDivElement>(null);
 
   // 创建星空背景
   useEffect(() => {
@@ -23,16 +21,6 @@ const StellOracleHome = () => {
       setStars(starArray);
     };
     createStars();
-  }, []);
-
-  // 测量输入框位置
-  useLayoutEffect(() => {
-    if (chatInputRef.current) {
-      const rect = chatInputRef.current.getBoundingClientRect();
-      const bottomSpace = window.innerHeight - rect.bottom;
-      setInputBottomSpace(bottomSpace);
-      console.log(`Measured input bottom space: ${bottomSpace}`);
-    }
   }, []);
 
   const toggleMenu = () => {
@@ -227,7 +215,7 @@ const StellOracleHome = () => {
           </div>
 
           {/* 底部对话抽屉 */}
-          <div ref={chatInputRef} className="bg-black/60 backdrop-blur-xl rounded-t-2xl px-5 pt-4 pb-8">
+          <div className="bg-black/60 backdrop-blur-xl rounded-t-2xl px-5 pt-4 pb-8">
             <div className="w-9 h-1 bg-white/30 rounded-full mx-auto mb-4" />
             <div className="text-[13px] text-white/60 mb-2 font-medium">与星谕对话</div>
             <div className="flex items-center gap-3">
