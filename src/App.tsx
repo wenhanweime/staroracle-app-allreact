@@ -246,12 +246,12 @@ function App() {
         // 标记应用准备就绪
         setAppReady(true);
         
-        // 延迟隐藏启动屏，让应用完全加载
-        setTimeout(async () => {
-          await SplashScreen.hide({
-            fadeOutDuration: 300
-          });
-        }, 500);
+        // 尽快隐藏启动屏，避免遮挡首交互（改为立即隐藏或极短过渡）
+        try {
+          await SplashScreen.hide({ fadeOutDuration: 120 });
+        } catch (e) {
+          console.warn('SplashScreen.hide failed', e);
+        }
 
         // 🎯 设置原生InputDrawer事件监听
         let messageSubmittedListener: any;
