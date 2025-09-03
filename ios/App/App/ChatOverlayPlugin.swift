@@ -302,22 +302,19 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func setSystemPrompt(_ call: CAPPluginCall) {
         let text = call.getString("text") ?? ""
         NSLog("🎯 setSystemPrompt: len=\(text.count)")
-        ConversationStore.shared.setSystemPrompt(text)
+        overlayManager.setSystemPrompt(text)
         call.resolve(["success": true])
     }
 
     @objc func loadHistory(_ call: CAPPluginCall) {
-        let list = ConversationStore.shared
-        let msgs = list.messages
-        NSLog("🎯 loadHistory: count=\(msgs.count)")
-        overlayManager.updateMessages(msgs)
-        call.resolve(["success": true, "count": msgs.count])
+        let count = overlayManager.loadHistory()
+        NSLog("🎯 loadHistory: count=\(count)")
+        call.resolve(["success": true, "count": count])
     }
 
     @objc func clearConversation(_ call: CAPPluginCall) {
         NSLog("🎯 clearConversation")
-        ConversationStore.shared.clear()
-        overlayManager.updateMessages([])
+        overlayManager.clearAll()
         call.resolve(["success": true])
     }
 }

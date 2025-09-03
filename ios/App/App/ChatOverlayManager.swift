@@ -82,6 +82,7 @@ public class ChatOverlayManager {
     
     // 状态变化回调
     private var onStateChange: ((OverlayState) -> Void)?
+    private var systemPromptText: String = ""
     
     // 背景视图变换 - 用于3D缩放效果
     private weak var backgroundView: UIView?
@@ -384,7 +385,7 @@ public class ChatOverlayManager {
         let window = 20
         var ctx = Array(self.messages.suffix(window))
         var reqMessages: [StreamingClient.Message] = []
-        let sys = ConversationStore.shared.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let sys = systemPromptText.trimmingCharacters(in: .whitespacesAndNewlines)
         if !sys.isEmpty {
             reqMessages.append(StreamingClient.Message(role: "system", content: sys))
         }
@@ -548,6 +549,25 @@ public class ChatOverlayManager {
     
     func setOnStateChange(_ callback: @escaping (OverlayState) -> Void) {
         self.onStateChange = callback
+    }
+
+    // 会话/上下文管理（简易版本，不依赖外部文件）
+    func setSystemPrompt(_ text: String) {
+        self.systemPromptText = text
+    }
+    func loadHistory() -> Int {
+        // 目前 messages 已作为唯一消息源，直接刷新VC
+        DispatchQueue.main.async {
+            self.overlayViewController?.updateMessages(self.messages, oldMessages: [], shouldAnimateNewUserMessage: false, animationIndex: nil)
+        }
+        return self.messages.count
+    }
+    func clearAll() {
+        self.lastMessages = self.messages
+        self.messages = []
+        DispatchQueue.main.async {
+            self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+        }
     }
     
     // MARK: - 背景3D效果方法
