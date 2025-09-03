@@ -233,6 +233,8 @@ class InputViewController: UIViewController {
     // 新增：键盘可见状态与（已扣安全区的）当前键盘高度
     private var isKeyboardVisible: Bool = false
     private var currentKeyboardActualHeight: CGFloat = 0
+    // 仅首轮：在 ChatOverlay 第一次收缩时，键盘可见情况下也要为浮窗预留空间
+    private var didAdjustForFirstCollapse: Bool = false
     
     init(manager: InputDrawerManager) {
         self.manager = manager
@@ -414,10 +416,27 @@ class InputViewController: UIViewController {
         switch state {
         case "collapsed":
             if visible {
-                // ChatOverlay收缩状态且可见：浮窗在输入框下方，输入框需要往上移动为浮窗留出空间
-                let newBottomSpace: CGFloat = 40
-                updateBottomSpace(newBottomSpace)
-                NSLog("🎯 InputDrawer: 移动到collapsed位置，bottomSpace: \(newBottomSpace)")
+                // ChatOverlay收缩状态且可见：为浮窗预留空间
+                let overlayReserve: CGFloat = 40
+                if isKeyboardVisible && !didAdjustForFirstCollapse {
+                    // 仅第一次：键盘可见时也在键盘之上额外预留 overlayReserve 空间
+                    let target = -(currentKeyboardActualHeight + 16 + overlayReserve)
+                    if abs(containerBottomConstraint.constant - target) > 0.5 {
+                        containerBottomConstraint.constant = target
+                        UIView.animate(withDuration: 0.26, delay: 0, options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]) {
+                            self.view.layoutIfNeeded()
+                        } completion: { _ in
+                            self.didAdjustForFirstCollapse = true
+                            NSLog("🎯 InputDrawer: 首次收缩(键盘可见) 预留浮窗空间完成 bottom=\(target)")
+                            self.notifyInputDrawerActualPosition()
+                        }
+                    }
+                } else {
+                    // 后续或键盘不可见：按原逻辑更新到 40
+                    let newBottomSpace: CGFloat = overlayReserve
+                    updateBottomSpace(newBottomSpace)
+                    NSLog("🎯 InputDrawer: 移动到collapsed位置，bottomSpace: \(newBottomSpace)")
+                }
             }
             
         case "expanded":
