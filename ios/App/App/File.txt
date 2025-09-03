@@ -1,0 +1,1 @@
+/Users/pot/Documents/staroracle-app_v1/ios/App/App/ChatOverlayManager.swift:338:13 Cannot find 'ConversationStore' in scope
