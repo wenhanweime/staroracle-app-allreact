@@ -687,10 +687,12 @@ public class ChatOverlayManager {
         }
         
         if animated {
-            // 🎯 与背景一致：无弹簧的 ease-out 过渡（保留3D修复），但不引入布局过渡闸门
-            UIView.animate(withDuration: 0.26,
+            // 🎯 使用轻微弹性过渡，营造柔和“推上/落下”手感
+            UIView.animate(withDuration: 0.28,
                            delay: 0,
-                           options: [.allowUserInteraction, .curveEaseOut],
+                           usingSpringWithDamping: 0.9,
+                           initialSpringVelocity: 0.3,
+                           options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState],
                            animations: {
                 overlayViewController.updateForState(self.currentState)
                 overlayViewController.view.layoutIfNeeded()

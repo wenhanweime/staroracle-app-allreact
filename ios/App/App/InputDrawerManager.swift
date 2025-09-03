@@ -498,10 +498,17 @@ class InputViewController: UIViewController {
             return
         }
 
-        // 无动画立即更新，避免与浮窗动画冲突
+        // 使用与浮窗一致的轻量动画，营造柔和的推上推下效果
         containerBottomConstraint.constant = -space
-        self.view.layoutIfNeeded()
-        NSLog("🎯 InputDrawer: 位置更新完成（无动画），bottomSpace: \(space)")
+        UIView.animate(
+            withDuration: 0.26,
+            delay: 0,
+            options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
+        ) {
+            self.view.layoutIfNeeded()
+        } completion: { _ in
+            NSLog("🎯 InputDrawer: 位置更新完成（动画），bottomSpace: \(space)")
+        }
     }
     
     func focusInput() {
