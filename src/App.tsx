@@ -136,20 +136,23 @@ function App() {
 
         // 先把用户消息写入我们本地store，保持Web端可见（原生端持有自身消息源）
         addUserMessage(inputText);
+        // 关键：立刻读取最新的消息列表，避免使用当前渲染周期的旧 messages 变量
+        const updated = useChatStore.getState().messages;
         setLoading(true);
 
         try {
           // 预渲染：在原生流式启动前先把用户消息+空AI行推给原生，确保列表可见
-          const nativeBootstrap = [...messages, { id: `user-${Date.now()}`, text: inputText, isUser: true, timestamp: new Date() }, { id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: new Date() }]
-            .map(m => ({ id: (m as any).id, text: m.text, isUser: (m as any).isUser, timestamp: (m as any).timestamp instanceof Date ? (m as any).timestamp.getTime() : Date.now() }));
+          const nativeBootstrap = updated
+            .map(m => ({ id: m.id, text: m.text, isUser: m.isUser, timestamp: m.timestamp.getTime() }))
+            .concat([{ id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: Date.now() }]);
           try { await (ChatOverlay as any).updateMessages({ messages: nativeBootstrap }); } catch {}
           // 读取AI配置
           const cfg = (await import('./utils/aiTaggingUtils')).getAIConfig();
           const endpoint = cfg.endpoint || '';
           const apiKey = cfg.apiKey || '';
           const model = cfg.model || 'gpt-3.5-turbo';
-          // 转换对话历史（包含新用户这一条）
-          const conversation = [...messages, { id: 'temp', text: inputText, isUser: true, timestamp: new Date() }].map(m => ({
+          // 转换对话历史（使用最新列表）
+          const conversation = updated.map(m => ({
             role: m.isUser ? 'user' as const : 'assistant' as const,
             content: m.text
           }));
@@ -166,9 +169,11 @@ function App() {
           // 回退方案：使用JS流式+直接推送到原生
           try {
             console.log('🌐 回退到JS流式 + 原生增量接口');
-            // 构造原生消息格式并推送（用户行 + 空AI占位）
-            const nativeMessages = [...messages, { id: `user-${Date.now()}`, text: inputText, isUser: true, timestamp: new Date() }, { id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: new Date() }]
-              .map(m => ({ id: (m as any).id, text: m.text, isUser: (m as any).isUser, timestamp: (m as any).timestamp instanceof Date ? (m as any).timestamp.getTime() : Date.now() }));
+            // 构造原生消息格式并推送（使用最新列表 + 空AI占位）
+            const latest = useChatStore.getState().messages;
+            const nativeMessages = latest
+              .map(m => ({ id: m.id, text: m.text, isUser: m.isUser, timestamp: m.timestamp.getTime() }))
+              .concat([{ id: `ai-${Date.now()}`, text: '', isUser: false, timestamp: Date.now() }]);
             await (ChatOverlay as any).updateMessages({ messages: nativeMessages });
 
             // 启动JS流式
@@ -177,7 +182,7 @@ function App() {
               updateStreamingMessage(messageId, (useChatStore.getState().messages.find(m => m.id === messageId)?.streamingText || '') + chunk);
               try { await (ChatOverlay as any).appendAIChunk({ id: messageId, delta: chunk }); } catch {}
             };
-            const history = messages.map(msg => ({ role: msg.isUser ? 'user' as const : 'assistant' as const, content: msg.text }));
+            const history = latest.map(msg => ({ role: msg.isUser ? 'user' as const : 'assistant' as const, content: msg.text }));
             const full = await generateAIResponse(inputText, undefined, onStream, history);
             updateStreamingMessage(messageId, full);
             finalizeStreamingMessage(messageId);
