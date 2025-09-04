@@ -49,7 +49,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
         } else {
           // 关闭菜单后恢复（仅在之前可见时）
           try {
-            if (prevInputVisible) await InputDrawer.show({ animated: true });
+            await InputDrawer.show({ animated: true });
           } catch {}
           try {
             if (prevOverlayVisible) await ChatOverlay.show({ isOpen: true });
