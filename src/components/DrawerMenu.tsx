@@ -180,7 +180,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                 paddingBottom: '0.5rem' // 8px - 与Header完全一致
               }}
             >
-              <div className="flex items-center gap-[30px]">
+              <div className="flex items-center gap-[50px]">
                 <div className="flex-1 min-w-0">
                   <input
                     type="text"

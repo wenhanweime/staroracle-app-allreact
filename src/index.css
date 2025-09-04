@@ -935,7 +935,7 @@ button {
 
 /* Sidebar search input – force rounded corners on iOS (override resets) */
 input.sidebar-search-input {
-  border-radius: 9999px !important; /* ensure rounded-full wins over global reset */
+  border-radius: 12px !important; /* smaller rounded corners override */
   -webkit-appearance: none !important;
   appearance: none !important;
 }
