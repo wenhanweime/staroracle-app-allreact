@@ -187,7 +187,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="搜索对话…"
-                    className="w-full px-3 py-2 rounded-full bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60 border border-white/15"
+                    className="sidebar-search-input w-full px-3 py-2 rounded-full bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60 border border-white/15"
                   />
                 </div>
                 <button

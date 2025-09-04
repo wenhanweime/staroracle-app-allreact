@@ -932,3 +932,10 @@ button {
   -webkit-overflow-scrolling: touch;
   overflow: -moz-scrollbars-none;
 }
+
+/* Sidebar search input – force rounded corners on iOS (override resets) */
+input.sidebar-search-input {
+  border-radius: 9999px !important; /* ensure rounded-full wins over global reset */
+  -webkit-appearance: none !important;
+  appearance: none !important;
+}
