@@ -16,7 +16,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
           paddingLeft: `calc(1rem + var(--safe-area-inset-left, 0px))`,
           paddingRight: `calc(1rem + var(--safe-area-inset-right, 0px))`,
           // 使用与DrawerMenu相同的简单padding策略，但增加一个标题高度的距离
-          paddingTop: '3rem', // 48px，在原来24px基础上增加24px，避免被灵动岛遮挡
+          paddingTop: 'calc(3rem + 20px)', // 48px，在原来24px基础上增加24px，避免被灵动岛遮挡
           paddingBottom: '0.5rem', // 8px底部间距
           // 添加背景，让其延伸到屏幕最顶端实现沉浸效果
           background: 'rgba(0, 0, 0, 0.1)',

@@ -176,7 +176,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               style={{
                 paddingLeft: `calc(1.25rem + var(--safe-area-inset-left, 0px))`, // 20px + 安全区域
                 paddingRight: `calc(1.25rem + var(--safe-area-inset-right, 0px))`, // 20px + 安全区域
-                paddingTop: '3rem', // 48px - 与Header完全一致
+                paddingTop: 'calc(3rem + 20px)', // 48px - 与Header完全一致
                 paddingBottom: '0.5rem' // 8px - 与Header完全一致
               }}
             >
