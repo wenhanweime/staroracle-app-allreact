@@ -163,7 +163,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
   return (
     <AnimatePresence>
       {isOpen && (
-        <div className="fixed inset-0 z-50 flex">
+        <div className="fixed inset-0 z-[2147483648] flex">
           {/* 抽屉内容 */}
           <motion.div
             initial={{ x: -320 }}
