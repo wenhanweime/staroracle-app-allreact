@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Pencil,
+  SquarePen,
   ChevronRight 
 } from 'lucide-react';
 import { listSessions as listNativeSessions, switchSession as switchNativeSession, newSession as newNativeSession, renameSession as renameNativeSession, onSessionsChanged, getSessionSummaryContext } from '@/utils/conversationBridge';
@@ -180,22 +180,23 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                 paddingBottom: '0.5rem' // 8px - 与Header完全一致
               }}
             >
-              <div className="flex items-center justify-between">
-                <div className="flex-1 pr-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex-1 mr-2 min-w-0">
                   <input
                     type="text"
                     value={query}
                     onChange={(e) => setQuery(e.target.value)}
                     placeholder="搜索对话…"
-                    className="w-full px-3 py-2 rounded-md bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                    className="w-full px-3 py-2 rounded-full bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60 border border-white/15"
                   />
                 </div>
                 <button
                   onClick={handleNew}
-                  className="p-2 rounded-full dialog-transparent-button transition-colors duration-200 hover:bg-white/10"
+                  className="p-2 rounded-full dialog-transparent-button transition-colors duration-200 hover:bg-white/10 border border-white/10"
                   title="新建对话"
+                  aria-label="新建对话"
                 >
-                  <Pencil className="w-5 h-5 text-white" />
+                  <SquarePen className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
