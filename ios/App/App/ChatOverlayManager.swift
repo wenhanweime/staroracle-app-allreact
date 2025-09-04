@@ -76,6 +76,9 @@ public class ChatOverlayManager {
     private var overlayViewController: OverlayViewController?
     // 协调延迟任务：收缩态更新可能的延迟任务（用于在展开前取消以避免竞态）
     private var pendingCollapsedWork: DispatchWorkItem?
+    // NOTE: Removed stray non-code line accidentally inserted during docs; no functional change.
+    // 关闭后下次输入强制新会话
+    private var startNewOnNextInput: Bool = false
     
     // 原生流式客户端（可选使用）
     private let streamingClient = StreamingClient()
@@ -210,6 +213,10 @@ public class ChatOverlayManager {
                     "visible": false  // 🔧 在状态通知中包含可见性信息
                 ]
             )
+
+            // 将当前消息落盘为当前会话历史，并置位“下次输入新会话”
+            ConversationStore.shared.setMessages(self.messages)
+            self.startNewOnNextInput = true
             
             if animated {
                 UIView.animate(withDuration: 0.3) {
@@ -311,16 +318,19 @@ public class ChatOverlayManager {
             let last = messages[idx]
             let newText = last.text + delta
             messages[idx] = ChatMessage(id: last.id, text: newText, isUser: last.isUser, timestamp: last.timestamp)
+            ConversationStore.shared.replaceLastAssistantText(newText)
         } else if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
             // 退回到更新最后一条AI
             let last = messages[lastIndex]
             let newText = last.text + delta
             messages[lastIndex] = ChatMessage(id: last.id, text: newText, isUser: last.isUser, timestamp: last.timestamp)
+            ConversationStore.shared.replaceLastAssistantText(newText)
         } else {
             // 如果不存在AI消息，占位一条空AI再追加
             let ts = Date().timeIntervalSince1970 * 1000
             let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: delta, isUser: false, timestamp: ts)
             messages.append(new)
+            ConversationStore.shared.append(new)
         }
         // 通知VC增量刷新（count 未变化或 +1，仅最后行）
         let current = messages
@@ -333,13 +343,16 @@ public class ChatOverlayManager {
         if let mid = messageId, let idx = messages.firstIndex(where: { !$0.isUser && $0.id == mid }) {
             let last = messages[idx]
             messages[idx] = ChatMessage(id: last.id, text: text, isUser: last.isUser, timestamp: last.timestamp)
+            ConversationStore.shared.replaceLastAssistantText(text)
         } else if let lastIndex = messages.lastIndex(where: { !$0.isUser }) {
             let last = messages[lastIndex]
             messages[lastIndex] = ChatMessage(id: last.id, text: text, isUser: last.isUser, timestamp: last.timestamp)
+            ConversationStore.shared.replaceLastAssistantText(text)
         } else {
             let ts = Date().timeIntervalSince1970 * 1000
             let new = ChatMessage(id: messageId ?? "ai-\(Int(ts))", text: text, isUser: false, timestamp: ts)
             messages.append(new)
+            ConversationStore.shared.append(new)
         }
         let current = messages
         DispatchQueue.main.async {
@@ -353,6 +366,16 @@ public class ChatOverlayManager {
     func startNativeStreaming(endpoint: String, apiKey: String, model: String, messages: [ChatMessage], temperature: Double? = nil, maxTokens: Int? = nil) {
         // 1) UI侧仅基于原生已有消息源进行追加，不用外部messages重置UI，避免上一轮AI被覆盖
         //    外部messages仅用于LLM上下文（reqMessages）
+        // 若被标记为“下次输入新会话”，先创建并切换
+        if startNewOnNextInput {
+            _ = ConversationStore.shared.createSession(title: "新会话")
+            startNewOnNextInput = false
+            self.lastMessages = self.messages
+            self.messages = []
+            DispatchQueue.main.async {
+                self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
+            }
+        }
         let old = self.messages
         self.lastMessages = old
 
@@ -363,6 +386,9 @@ public class ChatOverlayManager {
             self.messages.append(newUser)
             let aiPlaceholder = ChatMessage(id: UUID().uuidString, text: "", isUser: false, timestamp: Date().timeIntervalSince1970 * 1000)
             self.messages.append(aiPlaceholder)
+            // 同步到持久层
+            ConversationStore.shared.append(newUser)
+            ConversationStore.shared.append(aiPlaceholder)
 
             // 触发插入动画（允许在非 userAnimating 状态下触发：idle/aiStreaming/completed）
             if let vc = self.overlayViewController, vc.animationState != .userAnimating {
@@ -572,11 +598,15 @@ public class ChatOverlayManager {
     // 会话/上下文管理（简易版本，不依赖外部文件）
     func setSystemPrompt(_ text: String) {
         self.systemPromptText = text
+        ConversationStore.shared.setSystemPrompt(text)
     }
     func loadHistory() -> Int {
-        // 目前 messages 已作为唯一消息源，直接刷新VC
+        // 从会话存储加载为真源
+        let list = ConversationStore.shared.messages
+        self.lastMessages = self.messages
+        self.messages = list
         DispatchQueue.main.async {
-            self.overlayViewController?.updateMessages(self.messages, oldMessages: [], shouldAnimateNewUserMessage: false, animationIndex: nil)
+            self.overlayViewController?.updateMessages(self.messages, oldMessages: self.lastMessages, shouldAnimateNewUserMessage: false, animationIndex: nil)
         }
         return self.messages.count
     }

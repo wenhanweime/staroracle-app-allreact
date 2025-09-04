@@ -30,6 +30,13 @@ export interface ChatOverlayPlugin {
   setSystemPrompt(options: { text: string }): Promise<void>;
   loadHistory(options?: { sessionId?: string }): Promise<{ count: number }>;
   clearConversation(options?: { sessionId?: string }): Promise<void>;
+  // 会话列表与管理
+  listSessions(): Promise<{ success: boolean; sessions: Array<{ id: string; title?: string; displayTitle?: string; rawTitle?: string; hasCustomTitle?: boolean; createdAt: number; updatedAt: number; messagesCount?: number }> }>;
+  switchSession(options: { id: string }): Promise<{ success: boolean; count: number }>;
+  newSession(options?: { title?: string }): Promise<{ success: boolean; id: string; count: number }>;
+  renameSession(options: { id: string; title: string }): Promise<{ success: boolean }>;
+  deleteSession(options: { id: string }): Promise<{ success: boolean; count: number }>;
+  getSessionSummaryContext(options: { id: string; limit?: number }): Promise<{ success: boolean; count: number; messages: Array<{ role: 'user' | 'assistant'; content: string }> }>;
 }
 
 export const ChatOverlay = registerPlugin<ChatOverlayPlugin>('ChatOverlay', {

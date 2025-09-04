@@ -32,7 +32,15 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         // 会话/上下文管理
         CAPPluginMethod(name: "setSystemPrompt", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "loadHistory", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "clearConversation", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "clearConversation", returnType: CAPPluginReturnPromise),
+        // 会话列表与管理
+        CAPPluginMethod(name: "listSessions", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "switchSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "newSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "renameSession", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "deleteSession", returnType: CAPPluginReturnPromise),
+        // 会话摘要上下文（供JS侧AI总结标题使用）
+        CAPPluginMethod(name: "getSessionSummaryContext", returnType: CAPPluginReturnPromise)
     ]
     
     // 业务逻辑管理器
@@ -45,6 +53,55 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         setupStateChangeCallback()
         // 监听发送动画完成事件，转发给JS
         NotificationCenter.default.addObserver(self, selector: #selector(onSendAnimationCompleted), name: Notification.Name("chatOverlaySendAnimationCompleted"), object: nil)
+        // 监听会话存储变更，转发最新会话列表（用于触发前端AI总结与刷新）
+        NotificationCenter.default.addObserver(forName: .conversationStoreChanged, object: nil, queue: .main) { [weak self] _ in
+            self?.emitSessionsChanged()
+        }
+    }
+
+    private func emitSessionsChanged() {
+        let sessions = ConversationStore.shared.listSessions().map { s in
+            return [
+                "id": s.id,
+                "title": self.displayTitle(for: s),
+                "displayTitle": self.displayTitle(for: s),
+                "rawTitle": s.title,
+                "hasCustomTitle": self.isCustomTitle(s.title),
+                "messagesCount": s.messages.count,
+                "createdAt": s.createdAt,
+                "updatedAt": s.updatedAt
+            ] as [String: Any]
+        }
+        self.notifyListeners("sessionsChanged", data: [
+            "sessions": sessions
+        ])
+    }
+
+    // MARK: - Title summarization for sidebar display
+    private func displayTitle(for s: ConversationStore.Session) -> String {
+        // 优先使用非默认的持久化标题（包括用户改名或AI总结后改名）
+        let raw = s.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isCustomTitle(raw) { return raw }
+        // 简易兜底（在AI总结持久化之前的过渡展示）：取前几条文本，清理并裁剪
+        let sourceTexts: [String] = s.messages.prefix(6).map { $0.text }
+        let firstMeaningful = sourceTexts.first { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty } ?? ""
+        let cleaned = firstMeaningful
+            .replacingOccurrences(of: "\n", with: " ")
+            .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+            .replacingOccurrences(of: "[\u{1F300}-\u{1FAFF}]", with: "", options: .regularExpression) // remove emojis
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        if cleaned.isEmpty { return "未命名会话" }
+        let maxLen = 10
+        var title = String(cleaned.prefix(maxLen))
+        let punct = CharacterSet(charactersIn: "，。！？,.!?~、;； ：: …")
+        while let last = title.unicodeScalars.last, punct.contains(last) { title.removeLast() }
+        return title.isEmpty ? "未命名会话" : title
+    }
+
+    private func isCustomTitle(_ raw: String) -> Bool {
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        let defaults: Set<String> = ["", "新会话", "默认会话", "迁移会话", "未命名会话", "闲聊对话"]
+        return !trimmed.isEmpty && !defaults.contains(trimmed)
     }
 
     @objc func cancelStreaming(_ call: CAPPluginCall) {
@@ -316,5 +373,75 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         NSLog("🎯 clearConversation")
         overlayManager.clearAll()
         call.resolve(["success": true])
+    }
+
+    // MARK: - 会话列表与管理
+    @objc func listSessions(_ call: CAPPluginCall) {
+        let sessions = ConversationStore.shared.listSessions().map { s in
+            return [
+                "id": s.id,
+                "title": self.displayTitle(for: s),
+                "displayTitle": self.displayTitle(for: s),
+                "rawTitle": s.title,
+                "hasCustomTitle": self.isCustomTitle(s.title),
+                "messagesCount": s.messages.count,
+                "createdAt": s.createdAt,
+                "updatedAt": s.updatedAt
+            ] as [String: Any]
+        }
+        call.resolve(["success": true, "sessions": sessions])
+    }
+
+    // MARK: - Summary context provider for JS AI summarization
+    @objc func getSessionSummaryContext(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else { call.reject("缺少参数 id"); return }
+        let limit = call.getInt("limit") ?? 6
+        let sessions = ConversationStore.shared.listSessions()
+        guard let session = sessions.first(where: { $0.id == id }) else {
+            call.reject("未找到会话")
+            return
+        }
+        let msgs = Array(session.messages.prefix(limit)).map { m in
+            return [
+                "role": (m.isUser ? "user" : "assistant"),
+                "content": m.text
+            ]
+        }
+        call.resolve(["success": true, "count": session.messages.count, "messages": msgs])
+    }
+
+    @objc func switchSession(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else {
+            call.reject("缺少参数 id")
+            return
+        }
+        ConversationStore.shared.switchSession(id)
+        let count = overlayManager.loadHistory()
+        emitSessionsChanged()
+        call.resolve(["success": true, "count": count])
+    }
+
+    @objc func newSession(_ call: CAPPluginCall) {
+        let title = call.getString("title") ?? "新会话"
+        let id = ConversationStore.shared.createSession(title: title)
+        let count = overlayManager.loadHistory()
+        emitSessionsChanged()
+        call.resolve(["success": true, "id": id, "count": count])
+    }
+
+    @objc func renameSession(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else { call.reject("缺少参数 id"); return }
+        let title = call.getString("title") ?? ""
+        ConversationStore.shared.renameSession(id, title: title)
+        emitSessionsChanged()
+        call.resolve(["success": true])
+    }
+
+    @objc func deleteSession(_ call: CAPPluginCall) {
+        guard let id = call.getString("id") else { call.reject("缺少参数 id"); return }
+        ConversationStore.shared.deleteSession(id)
+        let count = overlayManager.loadHistory()
+        emitSessionsChanged()
+        call.resolve(["success": true, "count": count])
     }
 }

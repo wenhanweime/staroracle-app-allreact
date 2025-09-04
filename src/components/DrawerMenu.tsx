@@ -1,9 +1,11 @@
-import React from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   X, 
   ChevronRight 
 } from 'lucide-react';
+import { listSessions as listNativeSessions, switchSession as switchNativeSession, newSession as newNativeSession, renameSession as renameNativeSession, onSessionsChanged, getSessionSummaryContext } from '@/utils/conversationBridge';
+import { ChatOverlay } from '@/plugins/ChatOverlay';
 
 interface DrawerMenuProps {
   isOpen: boolean;
@@ -13,6 +15,116 @@ interface DrawerMenuProps {
 }
 
 const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings, onOpenTemplateSelector }) => {
+  const [sessions, setSessions] = useState<Array<{ id: string; title?: string; displayTitle?: string; rawTitle?: string; hasCustomTitle?: boolean; createdAt: number; updatedAt: number; messagesCount?: number }>>([]);
+  const [loadingSessions, setLoadingSessions] = useState(false);
+  const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
+
+  // 订阅原生侧会话变化
+  useEffect(() => {
+    if (!isOpen) return;
+    const sub = onSessionsChanged((data: any) => {
+      if (Array.isArray(data?.sessions)) {
+        // 按 updatedAt 倒序
+        const sorted = [...data.sessions].sort((a, b) => b.updatedAt - a.updatedAt);
+        setSessions(sorted);
+        triggerSummaries(sorted);
+      }
+    });
+    return () => { try { (sub as any)?.remove?.(); } catch {} };
+  }, [isOpen]);
+
+  // 打开时加载会话列表
+  useEffect(() => {
+    const load = async () => {
+      if (!isOpen) return;
+      setLoadingSessions(true);
+      try {
+        const res = await listNativeSessions();
+        const items = (res?.sessions ?? []) as Array<{ id: string; title?: string; displayTitle?: string; rawTitle?: string; hasCustomTitle?: boolean; createdAt: number; updatedAt: number; messagesCount?: number }>;
+        const sorted = items.sort((a, b) => b.updatedAt - a.updatedAt);
+        setSessions(sorted);
+        // 触发需要的标题总结
+        triggerSummaries(sorted);
+      } catch (e) {
+        console.warn('listSessions failed', e);
+        setSessions([]);
+      } finally {
+        setLoadingSessions(false);
+      }
+    };
+    load();
+  }, [isOpen]);
+
+  // 判断是否为默认/占位标题
+  const isPlaceholderTitle = (rawTitle?: string, hasCustom?: boolean) => {
+    if (hasCustom) return false;
+    const title = (rawTitle || '').trim();
+    const defaults = new Set(['', '新会话', '默认会话', '迁移会话', '未命名会话', '闲聊对话']);
+    return title.length === 0 || defaults.has(title);
+  };
+
+  // 调用AI生成标题（使用“弹幕型链路” generateAIResponse）
+  const summarizeTitle = async (id: string) => {
+    if (summarizing[id]) return; // 去重
+    setSummarizing(prev => ({ ...prev, [id]: true }));
+    try {
+      const ctx = await getSessionSummaryContext(id, 8);
+      const count = ctx?.count || 0;
+      const messages = (ctx?.messages || []) as Array<{ role: 'user' | 'assistant'; content: string }>;
+      if (!messages.length || count === 0) return;
+      const conversation = messages.map(m => `${m.role === 'user' ? '用户' : 'AI'}：${m.content}`).join('\n');
+      const prompt = `请为以下对话生成一个简洁的标题（不超过10个字）：\n\n${conversation}\n\n要求：\n- 标题要准确反映对话的核心主题\n- 使用中文\n- 不超过10个字\n- 不要包含标点符号\n- 直接返回标题，不要其他内容`;
+      const { generateAIResponse } = await import('@/utils/aiTaggingUtils');
+      // 使用弹幕型链路（启用stream）获取标题
+      const title = await generateAIResponse(prompt, undefined, () => {});
+      const cleanTitle = (title || '')
+        .replace(/["'“”‘’]/g, '')
+        .replace(/[。！？，、；：]/g, '')
+        .replace(/[.!?,;:]/g, '')
+        .trim()
+        .substring(0, 10) || '未命名会话';
+      await renameNativeSession(id, cleanTitle);
+    } catch (e) {
+      console.warn('summarizeTitle failed', e);
+    } finally {
+      setSummarizing(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
+  // 遍历触发总结
+  const triggerSummaries = (items: Array<{ id: string; rawTitle?: string; hasCustomTitle?: boolean; messagesCount?: number }>) => {
+    for (const s of items) {
+      const count = s.messagesCount ?? 0;
+      if (count === 0) continue;
+      if (!isPlaceholderTitle(s.rawTitle, s.hasCustomTitle)) continue;
+      void summarizeTitle(s.id);
+    }
+  };
+
+  const handleSwitch = async (id: string) => {
+    try {
+      await switchNativeSession(id);
+      try { await ChatOverlay.show({ isOpen: true }); } catch {}
+      onClose();
+    } catch (e) {
+      console.warn('switchSession failed', e);
+    }
+  };
+
+  const handleNew = async () => {
+    try {
+      const title = prompt('新会话标题（可留空自动生成）', '');
+      const res = await newNativeSession(title ? { title } : {});
+      // 选中新建会话
+      if (res?.id) await switchNativeSession(res.id);
+      onClose();
+    } catch (e) {
+      console.warn('newSession failed', e);
+    }
+  };
+
+  // 根据评审：历史会话项点击即切换，不提供重命名/删除入口
+
   // 菜单项配置（基于demo的设计）
   const menuItems = [
     { label: '所有项目', active: true },
@@ -80,6 +192,36 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
 
             {/* 菜单项列表 */}
             <div className="flex-1 overflow-y-auto">
+              {/* 历史对话 */}
+              <div className="px-5 py-3 text-xs text-white/40 font-medium tracking-wide uppercase">历史对话</div>
+              <div className="px-3 pb-2">
+                <button
+                  onClick={handleNew}
+                  className="w-full px-3 py-2 rounded-md bg-white/5 text-white/80 hover:bg-white/10 hover:text-white text-sm transition-colors"
+                >新建会话</button>
+              </div>
+              {loadingSessions && (
+                <div className="px-5 py-2 text-white/40 text-sm">加载中…</div>
+              )}
+              {!loadingSessions && sessions.length === 0 && (
+                <div className="px-5 py-2 text-white/40 text-sm">暂无历史会话</div>
+              )}
+              {!loadingSessions && sessions.map(s => (
+                <div
+                  key={s.id}
+                  className="group flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-white/5 transition-colors"
+                  onClick={() => handleSwitch(s.id)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <div className="stellar-body text-white truncate">
+                      {(s.displayTitle || s.title || '未命名会话')}
+                      {summarizing[s.id] ? <span className="ml-2 text-xs text-white/40">（生成标题中…）</span> : null}
+                    </div>
+                    <div className="text-xs text-white/40">{new Date(s.updatedAt).toLocaleString()}</div>
+                  </div>
+                </div>
+              ))}
+
               {menuItems.map((item, index) => {
                 return (
                   <div key={index}>

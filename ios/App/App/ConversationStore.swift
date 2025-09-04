@@ -1,5 +1,10 @@
 import Foundation
 
+// 会话存储变更通知（供插件转发 sessionsChanged）
+extension Notification.Name {
+    static let conversationStoreChanged = Notification.Name("conversationStoreChanged")
+}
+
 // 会话存储（单例）——多会话管理、系统提示与持久化
 final class ConversationStore {
     static let shared = ConversationStore()
@@ -60,6 +65,39 @@ final class ConversationStore {
         guard model.sessions.contains(where: { $0.id == id }) else { return }
         model.currentSessionId = id
         save()
+    }
+
+    func renameSession(_ id: String, title: String) {
+        queue.async {
+            if let idx = self.model.sessions.firstIndex(where: { $0.id == id }) {
+                self.model.sessions[idx].title = title
+                self.model.sessions[idx].updatedAt = Date().timeIntervalSince1970 * 1000
+                self.save()
+            }
+        }
+    }
+
+    func deleteSession(_ id: String) {
+        queue.async {
+            if let idx = self.model.sessions.firstIndex(where: { $0.id == id }) {
+                let deletingCurrent = (self.model.currentSessionId == id)
+                self.model.sessions.remove(at: idx)
+                if deletingCurrent {
+                    // 选择新的 current：优先第一个
+                    if let first = self.model.sessions.first {
+                        self.model.currentSessionId = first.id
+                    } else {
+                        // 没有会话了，创建一个空会话
+                        let now = Date().timeIntervalSince1970 * 1000
+                        let sid = UUID().uuidString
+                        let s = Session(id: sid, title: "默认会话", systemPrompt: "", messages: [], createdAt: now, updatedAt: now)
+                        self.model.sessions = [s]
+                        self.model.currentSessionId = sid
+                    }
+                }
+                self.save()
+            }
+        }
     }
 
     func clear(sessionId: String? = nil) {
@@ -136,6 +174,8 @@ final class ConversationStore {
         do {
             let data = try JSONEncoder().encode(model)
             try data.write(to: fileURL, options: .atomic)
+            // 广播存储变更，便于插件通知前端刷新（触发AI总结等）
+            NotificationCenter.default.post(name: .conversationStoreChanged, object: nil)
         } catch {
             NSLog("⚠️ ConversationStore 保存失败: \(error.localizedDescription)")
         }

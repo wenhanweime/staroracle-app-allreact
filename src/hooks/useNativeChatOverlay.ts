@@ -49,6 +49,12 @@ export const useNativeChatOverlay = () => {
       console.log('📱 浮窗状态变化:', data);
       console.log('📱 设置isOpen状态为:', data.isOpen);
       setIsOpen(data.isOpen);
+      // 🔧 同步最新的真实状态到状态守卫，避免原生侧关闭后缓存失真
+      try {
+        const visible = typeof data.visible === 'boolean' ? data.visible : (data.state !== 'hidden');
+        lastSentOverlayStateRef.current = { expanded: !!data.isOpen, visible };
+        console.log('🧭 [状态守卫同步] 真实状态 ->', lastSentOverlayStateRef.current);
+      } catch {}
     });
     
     // 新增监听器 - 对应Web版本的各种状态更新
@@ -199,14 +205,11 @@ export const useNativeChatOverlay = () => {
 
   const showOverlay = async (expanded = true) => {
     if (Capacitor.isNativePlatform()) {
-      // 🚨 【关键修复】状态守卫：只有在状态真的变化时才发送通知
+      // 🚨 【关键修复】状态守卫：仅当“已可见且展开状态一致”时才早退
       const currentOverlayState = { expanded, visible: true };
       const lastState = lastSentOverlayStateRef.current;
-      
-      if (lastState && 
-          lastState.expanded === currentOverlayState.expanded && 
-          lastState.visible === currentOverlayState.visible) {
-        console.log('☑️ [状态守卫] ChatOverlay状态未变化，跳过通知发送，防止竞争条件');
+      if (lastState && lastState.visible === true && lastState.expanded === expanded) {
+        console.log('☑️ [状态守卫] 已可见且展开状态一致，跳过重复show');
         return;
       }
       
