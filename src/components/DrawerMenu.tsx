@@ -163,7 +163,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
             animate={{ x: 0 }}
             exit={{ x: -320 }}
             transition={{ type: "spring", damping: 25, stiffness: 200 }}
-            className="w-80 h-full shadow-2xl"
+            className="w-80 h-full shadow-2xl flex flex-col"
             style={{
               background: 'linear-gradient(135deg, rgba(27, 39, 53, 0.95) 0%, rgba(9, 10, 15, 0.98) 100%)',
               backdropFilter: 'blur(20px)'
@@ -190,8 +190,8 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               </div>
             </div>
 
-            {/* 菜单项列表 */}
-            <div className="flex-1 overflow-y-auto">
+            {/* 菜单项列表（中间区域可滚动） */}
+            <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' as any }}>
               {/* 历史对话 */}
               <div className="px-5 py-3 text-xs text-white/40 font-medium tracking-wide uppercase">历史对话</div>
               <div className="px-3 pb-2">
