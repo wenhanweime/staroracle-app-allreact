@@ -1,6 +1,6 @@
 # Repository Guidelines
 ## 总是用中文回复
-## 完成之后，运行 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
+## 修复了功能并且判断可能需要重新同步，编译的时候，运行 npm run build && npx cap sync ios && sleep 3 && osascript -e 'tell application "Xcode" to activate' -e 'tell application "System Events" to keystroke "r" using {command down}'
 ## 完成之后，使用 bash中的 say  修改完成
 
 ## Project Structure & Module Organization

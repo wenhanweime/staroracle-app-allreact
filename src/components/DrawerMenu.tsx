@@ -19,6 +19,12 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
+  const [backdropReady, setBackdropReady] = useState(false); // 菜单展开动画完成后再显示背景模糊
+
+  // 打开时先隐藏背景模糊，待抽屉动画完成再显示
+  useEffect(() => {
+    if (isOpen) setBackdropReady(false);
+  }, [isOpen]);
 
   // 订阅原生侧会话变化
   useEffect(() => {
@@ -169,6 +175,10 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               background: 'linear-gradient(135deg, rgba(27, 39, 53, 0.95) 0%, rgba(9, 10, 15, 0.98) 100%)',
               backdropFilter: 'blur(20px)'
             }}
+            onAnimationComplete={() => {
+              // 抽屉滑入完成后再显示右侧模糊背景
+              setBackdropReady(true);
+            }}
           >
             {/* 抽屉顶部 - 与主页Header位置对齐（改为搜索 + 新建）*/}
             <div 
@@ -293,14 +303,16 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
             </div>
           </motion.div>
 
-          {/* 背景遮罩 */}
-          <motion.div 
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="flex-1 bg-black/50 backdrop-blur-sm"
-            onClick={onClose}
-          />
+          {/* 背景遮罩：等待抽屉动画完成后再显示，仅模糊不变暗 */}
+          {backdropReady && (
+            <motion.div 
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="flex-1 bg-transparent backdrop-blur-md"
+              onClick={onClose}
+            />
+          )}
         </div>
       )}
     </AnimatePresence>
