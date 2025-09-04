@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { listSessions as listNativeSessions, switchSession as switchNativeSession, newSession as newNativeSession, renameSession as renameNativeSession, onSessionsChanged, getSessionSummaryContext } from '@/utils/conversationBridge';
 import { ChatOverlay } from '@/plugins/ChatOverlay';
+import { InputDrawer } from '@/plugins/InputDrawer';
 
 interface DrawerMenuProps {
   isOpen: boolean;
@@ -20,10 +21,45 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
   const [backdropReady, setBackdropReady] = useState(false); // 菜单展开动画完成后再显示背景模糊
+  const [prevInputVisible, setPrevInputVisible] = useState<boolean | null>(null);
+  const [prevOverlayVisible, setPrevOverlayVisible] = useState<boolean | null>(null);
 
   // 打开时先隐藏背景模糊，待抽屉动画完成再显示
   useEffect(() => {
     if (isOpen) setBackdropReady(false);
+  }, [isOpen]);
+
+  // 当菜单打开时，隐藏原生输入与聊天浮层；关闭时按需恢复
+  useEffect(() => {
+    const syncNativeLayers = async () => {
+      try {
+        if (isOpen) {
+          // 记录当前可见性
+          try {
+            const vis = await InputDrawer.isVisible();
+            setPrevInputVisible(!!vis?.visible);
+          } catch {}
+          try {
+            const v2 = await ChatOverlay.isVisible();
+            setPrevOverlayVisible(!!v2?.visible);
+          } catch {}
+          // 隐藏两者（尽量用动画）
+          try { await InputDrawer.hide({ animated: true }); } catch {}
+          try { await (ChatOverlay as any).hide({ animated: true }); } catch {}
+        } else {
+          // 关闭菜单后恢复（仅在之前可见时）
+          try {
+            if (prevInputVisible) await InputDrawer.show({ animated: true });
+          } catch {}
+          try {
+            if (prevOverlayVisible) await ChatOverlay.show({ isOpen: true });
+          } catch {}
+          setPrevInputVisible(null);
+          setPrevOverlayVisible(null);
+        }
+      } catch {}
+    };
+    syncNativeLayers();
   }, [isOpen]);
 
   // 订阅原生侧会话变化

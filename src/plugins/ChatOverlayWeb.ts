@@ -7,11 +7,16 @@ export class ChatOverlayWeb extends WebPlugin implements ChatOverlayPlugin {
     // Web端回退到React组件
   }
 
-  async hide(): Promise<void> {
-    console.log('🌐 ChatOverlay hide called');
+  async hide(options?: { animated?: boolean }): Promise<void> {
+    console.log('🌐 ChatOverlay hide called', options);
   }
 
-  async sendMessage(options: { message: string }): Promise<void> {
+  
+  async isVisible(): Promise<{ visible: boolean }> {
+    console.log('🌐 ChatOverlay isVisible called');
+    return { visible: false };
+  }
+async sendMessage(options: { message: string }): Promise<void> {
     console.log('🌐 ChatOverlay sendMessage called with:', options);
   }
 

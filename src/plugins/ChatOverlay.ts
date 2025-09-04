@@ -2,7 +2,8 @@ import { registerPlugin } from '@capacitor/core';
 
 export interface ChatOverlayPlugin {
   show(options: { isOpen: boolean }): Promise<void>;
-  hide(): Promise<void>;
+  hide(options?: { animated?: boolean }): Promise<void>;
+  isVisible(): Promise<{ visible: boolean }>;
   sendMessage(options: { message: string }): Promise<void>;
   receiveAIResponse(options: { response: string; timestamp: number }): Promise<void>;
   updateMessages(options: { messages: any[] }): Promise<void>;
