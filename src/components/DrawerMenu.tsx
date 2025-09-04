@@ -180,8 +180,8 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                 paddingBottom: '0.5rem' // 8px - 与Header完全一致
               }}
             >
-              <div className="flex items-center gap-3">
-                <div className="flex-1 min-w-0 mr-2">
+              <div className="flex items-center gap-[30px]">
+                <div className="flex-1 min-w-0">
                   <input
                     type="text"
                     value={query}
@@ -281,7 +281,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
             {/* 底部用户信息 */}
             <div className="px-5 py-4 border-t border-white/10 backdrop-blur-sm" 
                  style={{ background: 'rgba(255, 255, 255, 0.02)' }}>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-[30px]">
                 <div className="w-8 h-8 bg-gradient-to-r from-blue-400 to-cyan-400 rounded-full flex items-center justify-center text-white text-sm font-bold">
                   ✦
                 </div>
