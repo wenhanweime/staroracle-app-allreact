@@ -180,8 +180,8 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
                 paddingBottom: '0.5rem' // 8px - 与Header完全一致
               }}
             >
-              <div className="flex items-center justify-between gap-3">
-                <div className="flex-none min-w-0" style={{ width: 'calc(100% - 2.5rem)' }}>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 min-w-0 mr-2">
                   <input
                     type="text"
                     value={query}
