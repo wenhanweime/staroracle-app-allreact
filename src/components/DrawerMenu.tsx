@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  X, 
+  Pencil,
   ChevronRight 
 } from 'lucide-react';
 import { listSessions as listNativeSessions, switchSession as switchNativeSession, newSession as newNativeSession, renameSession as renameNativeSession, onSessionsChanged, getSessionSummaryContext } from '@/utils/conversationBridge';
@@ -18,6 +18,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
   const [sessions, setSessions] = useState<Array<{ id: string; title?: string; displayTitle?: string; rawTitle?: string; hasCustomTitle?: boolean; createdAt: number; updatedAt: number; messagesCount?: number }>>([]);
   const [loadingSessions, setLoadingSessions] = useState(false);
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
+  const [query, setQuery] = useState('');
 
   // 订阅原生侧会话变化
   useEffect(() => {
@@ -169,7 +170,7 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               backdropFilter: 'blur(20px)'
             }}
           >
-            {/* 抽屉顶部 - 与主页Header位置对齐 */}
+            {/* 抽屉顶部 - 与主页Header位置对齐（改为搜索 + 新建）*/}
             <div 
               className="px-5 border-b border-white/10"
               style={{
@@ -180,12 +181,21 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
               }}
             >
               <div className="flex items-center justify-between">
-                <div className="stellar-title text-white">StarOracle</div>
+                <div className="flex-1 pr-3">
+                  <input
+                    type="text"
+                    value={query}
+                    onChange={(e) => setQuery(e.target.value)}
+                    placeholder="搜索对话…"
+                    className="w-full px-3 py-2 rounded-md bg-white/10 text-white placeholder-white/50 focus:outline-none focus:ring-2 focus:ring-blue-400/60"
+                  />
+                </div>
                 <button
-                  onClick={onClose}
-                  className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
+                  onClick={handleNew}
+                  className="p-2 rounded-full dialog-transparent-button transition-colors duration-200 hover:bg-white/10"
+                  title="新建对话"
                 >
-                  <X className="w-5 h-5" />
+                  <Pencil className="w-5 h-5 text-white" />
                 </button>
               </div>
             </div>
@@ -194,19 +204,21 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
             <div className="flex-1 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' as any }}>
               {/* 历史对话 */}
               <div className="px-5 py-3 text-xs text-white/40 font-medium tracking-wide uppercase">历史对话</div>
-              <div className="px-3 pb-2">
-                <button
-                  onClick={handleNew}
-                  className="w-full px-3 py-2 rounded-md bg-white/5 text-white/80 hover:bg-white/10 hover:text-white text-sm transition-colors"
-                >新建会话</button>
-              </div>
+              {/* 顶部已提供新建入口，移除列表上方的“新建会话”按钮 */}
               {loadingSessions && (
                 <div className="px-5 py-2 text-white/40 text-sm">加载中…</div>
               )}
               {!loadingSessions && sessions.length === 0 && (
                 <div className="px-5 py-2 text-white/40 text-sm">暂无历史会话</div>
               )}
-              {!loadingSessions && sessions.map(s => (
+              {!loadingSessions && sessions
+                .filter(s => {
+                  const q = query.trim().toLowerCase();
+                  if (!q) return true;
+                  const t = (s.displayTitle || s.title || '').toLowerCase();
+                  return t.includes(q);
+                })
+                .map(s => (
                 <div
                   key={s.id}
                   className="group flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-white/5 transition-colors"
