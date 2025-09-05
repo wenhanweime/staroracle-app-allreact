@@ -1,4 +1,4 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 type Quality = 'low' | 'mid' | 'high' | 'auto';
 
@@ -7,6 +7,7 @@ interface InteractiveGalaxyBackgroundProps {
   reducedMotion?: boolean;
   className?: string;
   onCanvasClick?: (payload: { x: number; y: number; region: 'emotion' | 'relation' | 'growth' }) => void;
+  debugControls?: boolean;
 }
 
 // Lightweight pseudo-noise (deterministic) to avoid extra dependencies
@@ -127,6 +128,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   reducedMotion = false,
   className,
   onCanvasClick,
+  debugControls = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const currentQualityRef = useRef<Exclude<Quality, 'auto'>>('mid');
@@ -137,6 +139,15 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const hoverRegionRef = useRef<'emotion' | 'relation' | 'growth' | null>(null);
   const nearLayerRef = useRef<HTMLCanvasElement | null>(null);
   const farLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const [params, setParams] = useState(defaultParams);
+  const paramsRef = useRef(params);
+  useEffect(() => { paramsRef.current = params; }, [params]);
+
+  const renderAllRef = useRef<() => void>();
+  // Rotation toggle: pause during debug by default
+  const [rotateEnabled, setRotateEnabled] = useState(!debugControls);
+  const rotateRef = useRef(rotateEnabled);
+  useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -167,7 +178,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
     // Generate pre-rendered layers
     const generateLayers = () => {
-      const p = defaultParams;
+      const p = paramsRef.current;
       const width = canvas.width;
       const height = canvas.height;
       const centerX = width / 2;
@@ -260,8 +271,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const height = canvas.height;
       const w = width; const h = height;
       const cx = w / 2; const cy = h / 2;
-      const rotNear = reducedMotion ? 0 : (time * 0.002) * (Math.PI / 180); // ~0.12deg/s
-      const rotFar = reducedMotion ? 0 : (time * 0.0015) * (Math.PI / 180);
+      const doRotate = rotateRef.current && !reducedMotion;
+      const rotNear = doRotate ? (time * 0.002) * (Math.PI / 180) : 0; // ~0.12deg/s
+      const rotFar = doRotate ? (time * 0.0015) * (Math.PI / 180) : 0;
 
       ctx.save();
       ctx.clearRect(0, 0, w, h);
@@ -294,6 +306,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     };
 
     const renderAll = () => { generateLayers(); };
+    renderAllRef.current = renderAll;
 
     resize();
     renderAll();
@@ -341,6 +354,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     };
   }, [quality, reducedMotion]);
 
+  // Re-generate layers when params change
+  useEffect(() => {
+    renderAllRef.current && renderAllRef.current();
+  }, [params]);
+
   // Angle→区域映射：将360°切为三等份
   const angleToRegion = (angleRad: number): 'emotion' | 'relation' | 'growth' => {
     const deg = ((angleRad * 180) / Math.PI + 360) % 360;
@@ -369,14 +387,74 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   };
 
   return (
-    <canvas
-      ref={canvasRef}
-      className={
-        className || 'fixed top-0 left-0 w-full h-full -z-10'
-      }
-      onClick={handleClick}
-      onMouseMove={handleMouseMove}
-    />
+    <>
+      <canvas
+        ref={canvasRef}
+        className={
+          className || 'fixed top-0 left-0 w-full h-full -z-10'
+        }
+        onClick={handleClick}
+        onMouseMove={handleMouseMove}
+      />
+      {debugControls && (
+        <div className="fixed top-20 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
+          <div className="flex items-center justify-between mb-2">
+            <strong className="text-sm">银河参数（临时）</strong>
+            <div className="flex items-center gap-2">
+              <label className="text-xs flex items-center gap-1">
+                <input type="checkbox" checked={rotateEnabled} onChange={(e)=>setRotateEnabled(e.target.checked)} />
+                旋转
+              </label>
+              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setParams(defaultParams)}>重置</button>
+            </div>
+          </div>
+          {(
+            [
+              {k:'coreDensity',min:0,max:1,step:0.01,label:'核心密度'},
+              {k:'coreRadius',min:5,max:100,step:1,label:'核心半径'},
+              {k:'armCount',min:1,max:7,step:1,label:'旋臂数量'},
+              {k:'armDensity',min:0,max:1,step:0.01,label:'旋臂密度'},
+              {k:'spiralB',min:0.1,max:0.5,step:0.01,label:'螺旋紧密度'},
+              {k:'armWidthInner',min:5,max:80,step:1,label:'内侧宽度'},
+              {k:'armWidthOuter',min:20,max:140,step:1,label:'外侧宽度'},
+              {k:'armWidthGrowth',min:1,max:3,step:0.1,label:'宽度增长'},
+              {k:'interArmDensity',min:0,max:0.5,step:0.01,label:'臂间基础密度'},
+              {k:'armTransitionSoftness',min:1,max:8,step:0.1,label:'山坡平缓度'},
+              {k:'fadeStartRadius',min:0.2,max:1,step:0.01,label:'淡化起始'},
+              {k:'fadeEndRadius',min:1,max:1.8,step:0.01,label:'淡化结束'},
+              {k:'backgroundDensity',min:0,max:0.0006,step:0.00001,label:'背景密度'},
+              {k:'jitterStrength',min:0,max:20,step:1,label:'垂直抖动强度'},
+              {k:'densityNoiseScale',min:0.005,max:0.05,step:0.001,label:'密度噪声缩放'},
+              {k:'densityNoiseStrength',min:0,max:1,step:0.05,label:'密度噪声强度'},
+              {k:'armStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'旋臂星星大小'},
+              {k:'interArmStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'臂间星星大小'},
+              {k:'backgroundStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'背景星星大小'},
+              {k:'backgroundSizeVariation',min:0.5,max:4,step:0.1,label:'背景星星大小变化'},
+              {k:'spiralA',min:2,max:20,step:1,label:'螺旋基准A'},
+            ] as Array<{k: keyof typeof defaultParams, min:number,max:number,step:number,label:string}>
+          ).map(({k,min,max,step,label}) => (
+            <div key={k as string} className="mb-2">
+              <label className="text-xs flex justify-between">
+                <span>{label}</span>
+                <span className="opacity-80">{(params as any)[k]}</span>
+              </label>
+              <input
+                type="range"
+                min={min}
+                max={max}
+                step={step}
+                value={(params as any)[k] as any}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setParams(prev => ({ ...prev, [k]: (k==='armCount'||k==='spiralA') ? Math.round(v) : v } as typeof prev));
+                }}
+                className="w-full"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+    </>
   );
 };
 

@@ -296,6 +296,7 @@ function App() {
           <InteractiveGalaxyBackground
             quality="auto"
             reducedMotion={window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches}
+            debugControls={featureFlags.galaxyDebugControls}
             onCanvasClick={({ x, y, region }) => {
               // 与 Constellation 点击逻辑保持一致
               try {
