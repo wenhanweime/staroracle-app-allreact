@@ -24,6 +24,7 @@ interface ChatOverlayProps {
   onFollowUpProcessed?: () => void;
   initialInput?: string;
   inputBottomSpace?: number; // 新增：输入框底部空间，用于计算吸附位置
+  onComplete?: () => void; // 完成觉察：由按钮触发
 }
 
 const ChatOverlay: React.FC<ChatOverlayProps> = ({
@@ -33,7 +34,8 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
   followUpQuestion,
   onFollowUpProcessed,
   initialInput,
-  inputBottomSpace = 70 // 默认70px
+  inputBottomSpace = 70, // 默认70px
+  onComplete
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
@@ -426,8 +428,12 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
               <div className="flex-1 text-left">
                 <button
                   onClick={(e) => {
-                    e.stopPropagation(); // 阻止冒泡到父元素的展开事件
-                    onClose();
+                    e.stopPropagation();
+                    if (onComplete) {
+                      onComplete();
+                    } else {
+                      onClose();
+                    }
                   }}
                   className="px-3 py-1 rounded-full dialog-transparent-button transition-colors duration-200 text-blue-400 text-sm font-medium stellar-body"
                 >

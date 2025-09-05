@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStarStore } from '../store/useStarStore';
 import { useChatStore } from '../store/useChatStore'; // 添加聊天状态导入
 import { playSound } from '../utils/soundUtils';
+const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 import Star from './Star';
 import StarRayIcon from './StarRayIcon';
 
@@ -14,7 +15,8 @@ const Constellation: React.FC = () => {
     setIsAsking,
     drawInspirationCard,
     pendingStarPosition,
-    isLoading
+    isLoading,
+    lastCreatedStarId
   } = useStarStore();
   
   // 添加聊天状态检查
@@ -24,6 +26,7 @@ const Constellation: React.FC = () => {
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [sparkles, setSparkles] = useState<Array<{ id: number; x: number; y: number }>>([]);
+  const [convergeParticles, setConvergeParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const [lastClickTime, setLastClickTime] = useState(0);
   
   useEffect(() => {
@@ -56,6 +59,27 @@ const Constellation: React.FC = () => {
       setSparkles(current => current.filter(sparkle => sparkle.id !== id));
     }, 1000);
   };
+
+  // 星尘汇聚：当加载结束且存在刚创建的恒星时，触发粒子向该星位置收敛
+  useEffect(() => {
+    if (!isLoading && lastCreatedStarId && pendingStarPosition === null) {
+      const created = constellation.stars.find(s => s.id === lastCreatedStarId);
+      if (!created) return;
+      const centerX = (created.x / 100) * dimensions.width;
+      const centerY = (created.y / 100) * dimensions.height;
+      // 生成一圈随机粒子
+      const N = prefersReducedMotion ? 10 : 24;
+      const particles = Array.from({ length: N }).map((_, i) => {
+        const angle = (i / N) * Math.PI * 2;
+        const radius = 80 + Math.random() * 60; // 从 80-140px 外围
+        return { id: Date.now() + i, x: centerX + Math.cos(angle) * radius, y: centerY + Math.sin(angle) * radius };
+      });
+      setConvergeParticles(particles);
+      // 粒子在1.2s后清理
+      const timer = setTimeout(() => setConvergeParticles([]), 1300);
+      return () => clearTimeout(timer);
+    }
+  }, [isLoading, lastCreatedStarId, dimensions.width, dimensions.height, constellation.stars, pendingStarPosition]);
   
   const handleBackgroundClick = (e: React.MouseEvent) => {
     console.log('🌌 Constellation clicked at:', e.clientX, e.clientY);
@@ -93,13 +117,22 @@ const Constellation: React.FC = () => {
       const rect = (e.target as HTMLElement).getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
+      // 记录点击位置用于后续恒星固化（不打开 OracleInput）
+      setIsAsking(false, { x, y });
       
       createSparkle(e.clientX, e.clientY);
       playSound('starReveal'); // 改为使用右键的音效
       
-      // 移动端单击直接走右键链路 - 弹出灵感卡片
-      console.log('🌟 主屏幕点击 - 显示灵感卡片（复用右键逻辑）');
-      const card = drawInspirationCard();
+      // 计算角度 → 区域映射（情绪/关系/成长）
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+      const deg = ((angle * 180) / Math.PI + 360) % 360;
+      const region = deg < 120 ? 'emotion' : deg < 240 ? 'relation' : 'growth';
+
+      // 单击：按区域分发灵感卡片
+      console.log('🌟 主屏幕点击 - 显示灵感卡片（按区域）', region);
+      const card = drawInspirationCard(region as any);
       console.log('📇 灵感卡片已生成:', card.question);
       
       setLastClickTime(currentTime);
@@ -127,12 +160,21 @@ const Constellation: React.FC = () => {
       const rect = (e.target as HTMLElement).getBoundingClientRect();
       const x = ((e.clientX - rect.left) / rect.width) * 100;
       const y = ((e.clientY - rect.top) / rect.height) * 100;
+      // 记录点击位置用于后续恒星固化（不打开 OracleInput）
+      setIsAsking(false, { x, y });
       
       createSparkle(e.clientX, e.clientY);
       playSound('starReveal');
       
-      console.log('🌟 右键点击 - 显示灵感卡片');
-      const card = drawInspirationCard();
+      // 右键同样按区域选择
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
+      const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+      const deg = ((angle * 180) / Math.PI + 360) % 360;
+      const region = deg < 120 ? 'emotion' : deg < 240 ? 'relation' : 'growth';
+
+      console.log('🌟 右键点击 - 显示灵感卡片（按区域）', region);
+      const card = drawInspirationCard(region as any);
       console.log('📇 灵感卡片已生成:', card.question);
     }
   };
@@ -194,6 +236,26 @@ const Constellation: React.FC = () => {
             initial={{ scale: 0, rotate: 0, opacity: 0 }}
             animate={{ scale: 1, rotate: 180, opacity: 1 }}
             exit={{ scale: 0, rotate: 360, opacity: 0 }}
+          />
+        ))}
+      </AnimatePresence>
+
+      {/* Converging dust to new star */}
+      <AnimatePresence>
+        {convergeParticles.map((p, idx) => (
+          <motion.div
+            key={p.id}
+            className="absolute w-1 h-1 rounded-full bg-white pointer-events-none"
+            style={{ left: p.x, top: p.y, zIndex: 30 }}
+            initial={{ x: 0, y: 0, opacity: 0.6, scale: 1 }}
+            animate={{ 
+              x: ((constellation.stars.find(s => s.id === lastCreatedStarId)?.x ?? 50) / 100) * dimensions.width - p.x, 
+              y: ((constellation.stars.find(s => s.id === lastCreatedStarId)?.y ?? 50) / 100) * dimensions.height - p.y,
+              opacity: [0.6, 1, 0],
+              scale: [1, 0.6, 0.2]
+            }}
+            transition={{ duration: 1.1 + (idx % 5) * 0.03, ease: 'easeInOut' }}
+            exit={{ opacity: 0 }}
           />
         ))}
       </AnimatePresence>

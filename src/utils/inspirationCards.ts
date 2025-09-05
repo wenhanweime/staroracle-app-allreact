@@ -194,9 +194,30 @@ const INSPIRATION_CARDS: InspirationCard[] = [
 ];
 
 // 获取随机灵感卡片
-export const getRandomInspirationCard = (): InspirationCard => {
-  const randomIndex = Math.floor(Math.random() * INSPIRATION_CARDS.length);
-  return INSPIRATION_CARDS[randomIndex];
+// 根据银河区域获取随机卡片（可选）
+export type GalaxyRegion = 'emotion' | 'relation' | 'growth';
+
+export const getRandomInspirationCard = (region?: GalaxyRegion): InspirationCard => {
+  if (!region) {
+    const randomIndex = Math.floor(Math.random() * INSPIRATION_CARDS.length);
+    return INSPIRATION_CARDS[randomIndex];
+  }
+
+  // 将三大区域映射到卡片分类池（可根据实际内容调整权重与集合）
+  const regionCategoryMap: Record<GalaxyRegion, string[]> = {
+    emotion: ['wellbeing', 'creative', 'existential'],
+    relation: ['relationships', 'wellbeing'],
+    growth: ['personal_growth', 'life_direction', 'existential'],
+  };
+
+  const categories = regionCategoryMap[region];
+  const pool = INSPIRATION_CARDS.filter(c => categories.includes(c.category));
+  if (pool.length === 0) {
+    const randomIndex = Math.floor(Math.random() * INSPIRATION_CARDS.length);
+    return INSPIRATION_CARDS[randomIndex];
+  }
+  const randomIndex = Math.floor(Math.random() * pool.length);
+  return pool[randomIndex];
 };
 
 // 根据标签获取相关卡片

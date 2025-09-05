@@ -12,9 +12,10 @@ import StarRayIcon from './StarRayIcon';
 interface InspirationCardProps {
   card: IInspirationCard;
   onDismiss: () => void;
+  onDeepDive?: (question: string) => void; // 深入探索：切换到对话浮层
 }
 
-const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) => {
+const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss, onDeepDive }) => {
   const { addStar } = useStarStore();
   const [isFlipped, setIsFlipped] = useState(false);
   const [bookAnswer, setBookAnswer] = useState('');
@@ -224,6 +225,22 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   <p className="text-center text-base text-neutral-300 font-normal">
                     翻开卡片，宇宙会回答你
                   </p>
+                  <div className="mt-4 flex justify-center">
+                    <button
+                      className="px-4 py-2 rounded-full bg-cosmic-accent/80 text-white text-sm hover:bg-cosmic-accent transition-colors"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        playSound('starClick');
+                        if (onDeepDive) {
+                          onDeepDive(card.question);
+                        } else {
+                          onDismiss();
+                        }
+                      }}
+                    >
+                      深入探索 · 开启对话
+                    </button>
+                  </div>
                 </motion.div>
 
                 {/* Decorative elements */}

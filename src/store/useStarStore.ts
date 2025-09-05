@@ -8,7 +8,7 @@ import {
   getAIConfig as getAIConfigFromUtils
 } from '../utils/aiTaggingUtils';
 import { instantiateTemplate } from '../utils/constellationTemplates';
-import { getRandomInspirationCard, InspirationCard } from '../utils/inspirationCards';
+import { getRandomInspirationCard, InspirationCard, GalaxyRegion } from '../utils/inspirationCards';
 import { ConstellationTemplate } from '../types';
 
 interface StarPosition {
@@ -25,8 +25,9 @@ interface StarState {
   currentInspirationCard: InspirationCard | null;
   hasTemplate: boolean;
   templateInfo: { name: string; element: string } | null;
+  lastCreatedStarId: string | null;
   addStar: (question: string) => Promise<Star>;
-  drawInspirationCard: () => InspirationCard;
+  drawInspirationCard: (region?: GalaxyRegion) => InspirationCard;
   useInspirationCard: () => void;
   dismissInspirationCard: () => void;
   viewStar: (id: string | null) => void;
@@ -63,6 +64,7 @@ export const useStarStore = create<StarState>((set, get) => {
     currentInspirationCard: null,
     hasTemplate: false,
     templateInfo: null,
+    lastCreatedStarId: null,
     
     addStar: async (question: string) => {
       const { constellation, pendingStarPosition } = get();
@@ -122,6 +124,7 @@ export const useStarStore = create<StarState>((set, get) => {
         activeStarId: newStar.id, // Show the star being created
         isAsking: false,
         pendingStarPosition: null,
+        lastCreatedStarId: newStar.id,
       });
       
       // Generate AI response with streaming
@@ -216,8 +219,8 @@ export const useStarStore = create<StarState>((set, get) => {
       return finalStar;
     },
 
-    drawInspirationCard: () => {
-      const card = getRandomInspirationCard();
+    drawInspirationCard: (region?: GalaxyRegion) => {
+      const card = getRandomInspirationCard(region);
       console.log('🌟 Drawing inspiration card:', card.question);
       set({ currentInspirationCard: card });
       return card;

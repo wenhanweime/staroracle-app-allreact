@@ -3,7 +3,9 @@ import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
 import { SplashScreen } from '@capacitor/splash-screen';
 import { Keyboard } from '@capacitor/keyboard';
-import StarryBackground from './components/StarryBackground';
+// import StarryBackground from './components/StarryBackground';
+import InteractiveGalaxyBackground from './components/InteractiveGalaxyBackground';
+import { featureFlags } from './config/featureFlags';
 import Constellation from './components/Constellation';
 import ChatMessages from './components/ChatMessages';
 import InspirationCard from './components/InspirationCard';
@@ -16,6 +18,7 @@ import Header from './components/Header';
 import ConversationDrawer from './components/ConversationDrawer';
 import ChatOverlay from './components/ChatOverlay'; // 新增对话浮层
 import OracleInput from './components/OracleInput';
+import { recordEvent, setTelemetryEnabled } from './utils/telemetry';
 import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
 import { triggerHapticFeedback } from './utils/hapticUtils';
 import { Menu } from 'lucide-react';
@@ -34,11 +37,15 @@ function App() {
   const [pendingFollowUpQuestion, setPendingFollowUpQuestion] = useState<string>(''); // 待处理的后续问题
   const [isChatOverlayOpen, setIsChatOverlayOpen] = useState(false); // 新增对话浮层状态
   const [initialChatInput, setInitialChatInput] = useState<string>(''); // 初始输入内容
+  const [deepDiveQuestion, setDeepDiveQuestion] = useState<string>(''); // 记录深入探索问题
   
   const { 
     applyTemplate, 
     currentInspirationCard, 
-    dismissInspirationCard 
+    dismissInspirationCard,
+    addStar,
+    drawInspirationCard,
+    setIsAsking
   } = useStarStore();
   
   const { messages } = useChatStore(); // 获取聊天消息以判断是否有对话历史
@@ -131,6 +138,8 @@ function App() {
       }
     };
     setupNative();
+    // Telemetry开关
+    setTelemetryEnabled(featureFlags.telemetry);
   }, []);
 
   // 检查API配置（静默模式 - 只在控制台提示）
@@ -282,8 +291,28 @@ function App() {
           filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
         }}
       >
-        {/* Background with stars - 已屏蔽 */}
-        {/* {appReady && <StarryBackground starCount={75} />} */}
+        {/* Living Galaxy background */}
+        {appReady && featureFlags.livingGalaxy && (
+          <InteractiveGalaxyBackground
+            quality="auto"
+            reducedMotion={window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches}
+            onCanvasClick={({ x, y, region }) => {
+              // 与 Constellation 点击逻辑保持一致
+              try {
+                setIsAsking(false, { x, y });
+                recordEvent('galaxy_click', { x, y, region });
+                playSound('starReveal');
+                if (Capacitor.isNativePlatform()) {
+                  triggerHapticFeedback('light');
+                }
+                const card = drawInspirationCard(region as any);
+                console.log('🃏 卡片（来自背景点击）:', card.question);
+              } catch (e) {
+                console.warn('背景点击处理异常:', e);
+              }
+            }}
+          />
+        )}
         
         {/* Header - 现在包含三个元素在一行 */}
         <Header 
@@ -299,6 +328,13 @@ function App() {
           <InspirationCard
             card={currentInspirationCard}
             onDismiss={dismissInspirationCard}
+            onDeepDive={(q) => {
+              setDeepDiveQuestion(q);
+              setInitialChatInput(q);
+              setIsChatOverlayOpen(true);
+              // 关闭卡片
+              dismissInspirationCard();
+            }}
           />
         )}
         
@@ -333,7 +369,7 @@ function App() {
         />
 
         {/* Oracle Input for star creation */}
-        <OracleInput />
+        {featureFlags.oracleInputEnabled && <OracleInput />}
       </div>
       
       {/* Conversation Drawer - 移到外层，不受3D变换影响 */}
@@ -354,6 +390,25 @@ function App() {
         onFollowUpProcessed={handleFollowUpProcessed}
         initialInput={initialChatInput}
         inputBottomSpace={isChatOverlayOpen ? 34 : 70} // 根据浮窗状态传递不同的底部空间
+        onComplete={async () => {
+          if (deepDiveQuestion.trim()) {
+            try {
+              // 根据深入探索的问题在记录的位置创建星星
+              recordEvent('deep_dive_complete', {});
+              if (Capacitor.isNativePlatform()) {
+                triggerHapticFeedback('medium');
+              }
+              await addStar(deepDiveQuestion.trim());
+            } catch (err) {
+              console.error('创建恒星失败:', err);
+            } finally {
+              setDeepDiveQuestion('');
+              handleCloseChatOverlay();
+            }
+          } else {
+            handleCloseChatOverlay();
+          }
+        }}
       />
     </>
   );
