@@ -140,8 +140,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const lastQualityChangeRef = useRef<number>(0);
   const hoverRegionRef = useRef<'emotion' | 'relation' | 'growth' | null>(null);
   const bgLayerRef = useRef<HTMLCanvasElement | null>(null); // 背景层：不缩放/不旋转，覆盖全屏
-  const nearLayerRef = useRef<HTMLCanvasElement | null>(null);
-  const farLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const nearLayerRef = useRef<HTMLCanvasElement | null>(null); // legacy
+  const farLayerRef = useRef<HTMLCanvasElement | null>(null);  // legacy
+  const bandLayersRef = useRef<HTMLCanvasElement[] | null>(null); // 差速旋转分层
   const [params, setParams] = useState(defaultParams);
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; }, [params]);
@@ -211,6 +212,15 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const bctx = bg.getContext('2d')!;
       const nctx = near.getContext('2d')!;
       const fctx = far.getContext('2d')!;
+      // Prepare band layers for differential rotation (no duplication)
+      const BAND_COUNT = 10;
+      const bands: HTMLCanvasElement[] = Array.from({ length: BAND_COUNT }, () => {
+        const c = document.createElement('canvas');
+        c.width = width; c.height = height;
+        return c;
+      });
+      const bandCtx = bands.map(c => c.getContext('2d')!);
+      bandCtx.forEach(ctx => { ctx.save(); ctx.scale(DPR, DPR); });
 
       const qualityScale = getQualityScale();
       const step = getStep();
@@ -270,11 +280,16 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               ox += (jitterAmount * Math.cos(jitterAngle)) / DPR;
               oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
             }
-
-            const target = (rng() < 0.4) ? fctx : nctx; // split to far/near
+            // assign to radial band for differential rotation
+            const dxC = (ox * DPR) - centerX;
+            const dyC = (oy * DPR) - centerY;
+            const r = Math.sqrt(dxC * dxC + dyC * dyC);
+            const rFrac = Math.max(0, Math.min(0.999, r / maxRadius));
+            const bandIndex = Math.min(BAND_COUNT - 1, Math.floor(rFrac * BAND_COUNT));
+            const target = bandCtx[bandIndex];
             target.fillStyle = '#FFFFFF';
             target.beginPath();
-            // add slight jitter to break grid alignment deterministically
+            // add slight deterministic jitter to break grid alignment
             const jx = (rng() - 0.5) * step;
             const jy = (rng() - 0.5) * step;
             target.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
@@ -285,9 +300,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       nctx.restore();
       fctx.restore();
 
+      bandCtx.forEach(ctx => ctx.restore && ctx.restore());
       bgLayerRef.current = bg;
-      nearLayerRef.current = near;
-      farLayerRef.current = far;
+      bandLayersRef.current = bands;
+      nearLayerRef.current = null;
+      farLayerRef.current = null;
     };
 
     const drawFrame = (time: number) => {
@@ -311,26 +328,23 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         ctx.restore();
       }
 
-      // 2) Rotating galaxy layers (scaled around center)
-      const near = nearLayerRef.current;
-      const far = farLayerRef.current;
+      // 2) Rotating galaxy layers (scaled around center) - differential rotation by radial bands
+      const bands = bandLayersRef.current || [];
       const scale = paramsRef.current.galaxyScale ?? 1;
-      if (far) {
+      const doRotate = rotateRef.current && !reducedMotion;
+      // Differential rotation: inner faster, outer slower
+      const baseDegPerMs = 0.0025; // inner angular speed baseline
+      for (let i = 0; i < bands.length; i++) {
+        const band = bands[i];
+        const rMid = (i + 0.5) / Math.max(1, bands.length); // 0..1
+        const omegaDegPerMs = doRotate ? (baseDegPerMs / (0.25 + rMid)) : 0; // ω ~ 1/(0.25+r)
+        const angle = omegaDegPerMs * time * (Math.PI / 180);
         ctx.save();
         ctx.translate(cx, cy);
         ctx.scale(scale, scale);
-        ctx.rotate(rotFar);
+        ctx.rotate(angle);
         ctx.globalAlpha = 1;
-        ctx.drawImage(far, -cx, -cy, w, h);
-        ctx.restore();
-      }
-      if (near) {
-        ctx.save();
-        ctx.translate(cx, cy);
-        ctx.scale(scale, scale);
-        ctx.rotate(rotNear);
-        ctx.globalAlpha = 1;
-        ctx.drawImage(near, -cx, -cy, w, h);
+        ctx.drawImage(band, -cx, -cy, w, h);
         ctx.restore();
       }
 
