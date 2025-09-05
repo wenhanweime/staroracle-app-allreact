@@ -25,16 +25,16 @@ const defaultParams = {
   coreSizeMin: 1.0,
   coreSizeMax: 3.5,
   armCount: 5,
-  armDensity: 0.60,
+  armDensity: 0.65,
   armBaseSizeMin: 0.7,
   armBaseSizeMax: 2.0,
   armHighlightSize: 5.0,
   armHighlightProb: 0.01,
   spiralA: 8,
   spiralB: 0.29,
-  armWidthInner: 29,
+  armWidthInner: 56,
   armWidthOuter: 53,
-  armWidthGrowth: 2.5,
+  armWidthGrowth: 2.8,
   armTransitionSoftness: 5.2,
   fadeStartRadius: 0.5,
   fadeEndRadius: 1.3,
@@ -43,16 +43,16 @@ const defaultParams = {
   interArmSizeMin: 0.6,
   interArmSizeMax: 1.2,
   radialDecay: 0.0015,
-  backgroundDensity: 0.00045,
+  backgroundDensity: 0.00057,
   backgroundSizeVariation: 2.0,
   jitterStrength: 10,
-  densityNoiseScale: 0.006,
+  densityNoiseScale: 0.049,
   densityNoiseStrength: 0.8,
   armStarSizeMultiplier: 1.0,
   interArmStarSizeMultiplier: 1.0,
   backgroundStarSizeMultiplier: 1.0,
   // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
-  galaxyScale: 0.618,
+  galaxyScale: 0.6,
 };
 
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
@@ -417,6 +417,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             [
               {k:'coreDensity',min:0,max:1,step:0.01,label:'核心密度'},
               {k:'coreRadius',min:5,max:100,step:1,label:'核心半径'},
+              {k:'galaxyScale',min:0.3,max:1.2,step:0.01,label:'整体缩放（银河占屏比例）'},
               {k:'armCount',min:1,max:7,step:1,label:'旋臂数量'},
               {k:'armDensity',min:0,max:1,step:0.01,label:'旋臂密度'},
               {k:'spiralB',min:0.1,max:0.5,step:0.01,label:'螺旋紧密度'},
@@ -435,7 +436,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               {k:'interArmStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'臂间星星大小'},
               {k:'backgroundStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'背景星星大小'},
               {k:'backgroundSizeVariation',min:0.5,max:4,step:0.1,label:'背景星星大小变化'},
-              {k:'galaxyScale',min:0.3,max:1.2,step:0.01,label:'整体缩放'},
               {k:'spiralA',min:2,max:20,step:1,label:'螺旋基准A'},
             ] as Array<{k: keyof typeof defaultParams, min:number,max:number,step:number,label:string}>
           ).map(({k,min,max,step,label}) => (
