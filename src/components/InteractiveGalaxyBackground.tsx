@@ -16,36 +16,37 @@ const noise2D = (x: number, y: number) => {
   return fract(t) * 2 - 1; // [-1, 1]
 };
 
+// Best visual defaults aligned to 3-arm design
 const defaultParams = {
-  coreDensity: 0.7,
-  coreRadius: 25,
-  coreSizeMin: 1,
-  coreSizeMax: 3.5,
-  armCount: 5,
-  armDensity: 0.6,
-  armBaseSizeMin: 0.7,
-  armBaseSizeMax: 2.0,
-  armHighlightSize: 5,
-  armHighlightProb: 0.01,
+  coreDensity: 0.75,
+  coreRadius: 28,
+  coreSizeMin: 1.2,
+  coreSizeMax: 3.8,
+  armCount: 3,
+  armDensity: 0.8,
+  armBaseSizeMin: 0.8,
+  armBaseSizeMax: 2.2,
+  armHighlightSize: 5.5,
+  armHighlightProb: 0.02,
   spiralA: 8,
-  spiralB: 0.29,
-  armWidthInner: 29,
-  armWidthOuter: 65,
-  armWidthGrowth: 2.5,
-  armTransitionSoftness: 5.2,
-  fadeStartRadius: 0.5,
-  fadeEndRadius: 1.3,
-  outerDensityMaintain: 0.1,
-  interArmDensity: 0.15,
-  interArmSizeMin: 0.6,
+  spiralB: 0.26,
+  armWidthInner: 24,
+  armWidthOuter: 72,
+  armWidthGrowth: 2.2,
+  armTransitionSoftness: 5.0,
+  fadeStartRadius: 0.52,
+  fadeEndRadius: 1.25,
+  outerDensityMaintain: 0.08,
+  interArmDensity: 0.08,
+  interArmSizeMin: 0.5,
   interArmSizeMax: 1.2,
-  radialDecay: 0.0015,
-  backgroundDensity: 0.00024,
-  backgroundSizeVariation: 2.0,
-  jitterStrength: 10,
-  densityNoiseScale: 0.018,
-  densityNoiseStrength: 0.8,
-  armStarSizeMultiplier: 1.0,
+  radialDecay: 0.0014,
+  backgroundDensity: 0.00018,
+  backgroundSizeVariation: 2.2,
+  jitterStrength: 8,
+  densityNoiseScale: 0.014,
+  densityNoiseStrength: 0.7,
+  armStarSizeMultiplier: 1.2,
   interArmStarSizeMultiplier: 1.0,
   backgroundStarSizeMultiplier: 1.0,
 };
@@ -131,7 +132,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const fpsSamplesRef = useRef<number[]>([]);
   const lastFpsSampleTimeRef = useRef<number>(performance.now());
   const lastFrameTimeRef = useRef<number>(performance.now());
+  const lastQualityChangeRef = useRef<number>(0);
   const hoverRegionRef = useRef<'emotion' | 'relation' | 'growth' | null>(null);
+  const nearLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const farLayerRef = useRef<HTMLCanvasElement | null>(null);
+  const burstsRef = useRef<Array<{x:number;y:number;start:number;life:number}>>([]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -159,7 +164,34 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const q = quality === 'auto' ? currentQualityRef.current : (quality as Exclude<Quality, 'auto'>);
       return q === 'high' ? 1.0 : q === 'mid' ? 1.1 : 1.4;
     };
-    const draw = () => {
+    // Color helpers for region hues
+    const regionHue = (deg: number) => {
+      // emotion: 330°, relation: 210°, growth: 240°/260° mix
+      if (deg < 120) return 330; // emotion
+      if (deg < 240) return 210; // relation
+      return 250; // growth
+    };
+    const hslToRgba = (h: number, s: number, l: number, a: number) => {
+      // h in [0,360], s/l in [0,1]
+      const c = (1 - Math.abs(2 * l - 1)) * s;
+      const hp = h / 60;
+      const x = c * (1 - Math.abs((hp % 2) - 1));
+      let [r1, g1, b1] = [0, 0, 0];
+      if (hp >= 0 && hp < 1) [r1, g1, b1] = [c, x, 0];
+      else if (hp < 2) [r1, g1, b1] = [x, c, 0];
+      else if (hp < 3) [r1, g1, b1] = [0, c, x];
+      else if (hp < 4) [r1, g1, b1] = [0, x, c];
+      else if (hp < 5) [r1, g1, b1] = [x, 0, c];
+      else [r1, g1, b1] = [c, 0, x];
+      const m = l - c / 2;
+      const r = Math.round((r1 + m) * 255);
+      const g = Math.round((g1 + m) * 255);
+      const b = Math.round((b1 + m) * 255);
+      return `rgba(${r},${g},${b},${a})`;
+    };
+
+    // Generate pre-rendered layers
+    const generateLayers = () => {
       const p = defaultParams;
       const width = canvas.width;
       const height = canvas.height;
@@ -168,31 +200,34 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const maxRadius = Math.min(width, height) * 0.4;
       const radialDecay = getRadialDecayFn(p);
 
-      ctx.save();
-      ctx.scale(DPR, DPR); // ensure crisp in CSS pixels
-      ctx.fillStyle = '#000000';
-      ctx.fillRect(0, 0, width, height);
-      ctx.fillStyle = '#FFFFFF';
+      // init offscreen layers
+      const near = document.createElement('canvas');
+      const far = document.createElement('canvas');
+      near.width = width; near.height = height;
+      far.width = width; far.height = height;
+      const nctx = near.getContext('2d')!;
+      const fctx = far.getContext('2d')!;
 
-      // Background stars
       const qualityScale = getQualityScale();
-      const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.7 : 1) * qualityScale);
+      const step = getStep();
+
+      // background small stars to far layer
+      const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.6 : 1) * qualityScale);
+      fctx.save(); fctx.scale(DPR, DPR); fctx.fillStyle = 'rgba(255,255,255,0.7)';
       for (let i = 0; i < bgCount; i++) {
         const x = Math.random() * (width / DPR);
         const y = Math.random() * (height / DPR);
-        let size: number;
-        const r = Math.random();
-        if (r < 0.85) size = 0.8;
-        else if (r < 0.97) size = 1.2;
-        else size = p.backgroundSizeVariation;
+        let size = Math.random() < 0.85 ? 0.8 : (Math.random() < 0.9 ? 1.2 : p.backgroundSizeVariation);
         size *= p.backgroundStarSizeMultiplier;
-        ctx.beginPath();
-        ctx.arc(x, y, size, 0, Math.PI * 2);
-        ctx.fill();
+        fctx.beginPath();
+        fctx.arc(x, y, size, 0, Math.PI * 2);
+        fctx.fill();
       }
+      fctx.restore();
 
-      // Galaxy grid
-      const step = getStep();
+      // galaxy field: raster grid to allocate points into near/far
+      nctx.save(); nctx.scale(DPR, DPR);
+      fctx.save(); fctx.scale(DPR, DPR);
       for (let x = 0; x < width / DPR; x += step) {
         for (let y = 0; y < height / DPR; y += step) {
           const dx = x - centerX / DPR;
@@ -218,8 +253,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           }
           density *= 0.8 + Math.random() * 0.4;
           if (Math.random() < density) {
-            let ox = x;
-            let oy = y;
+            let ox = x; let oy = y;
             if (!reducedMotion && result.profile > 0.001) {
               const pitchAngle = Math.atan(1 / p.spiralB);
               const jitterAngle = armInfo.theta + pitchAngle + Math.PI / 2;
@@ -227,52 +261,141 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               const rand2 = Math.random();
               const gaussian = Math.sqrt(-2.0 * Math.log(rand1)) * Math.cos(2.0 * Math.PI * rand2);
               const jitterAmount = p.jitterStrength * result.profile * gaussian;
-              const dxj = jitterAmount * Math.cos(jitterAngle);
-              const dyj = jitterAmount * Math.sin(jitterAngle);
-              ox += dxj / DPR;
-              oy += dyj / DPR;
+              ox += (jitterAmount * Math.cos(jitterAngle)) / DPR;
+              oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
             }
-            ctx.beginPath();
-            ox += (Math.random() - 0.5) * step;
-            oy += (Math.random() - 0.5) * step;
-            ctx.arc(ox, oy, size, 0, Math.PI * 2);
-            ctx.fill();
+
+            // Color by region hue with subtle variance
+            const angle = (Math.atan2(oy - centerY / DPR, ox - centerX / DPR) * 180) / Math.PI + 360;
+            const hue = regionHue(angle % 360) + (Math.random() - 0.5) * 8;
+            const sat = 0.65 + Math.random() * 0.1;
+            const lum = 0.65 - Math.min(0.25, radius / (maxRadius / DPR) * 0.25);
+            const color = hslToRgba(hue, sat, lum, 0.9);
+
+            const target = (Math.random() < 0.4) ? fctx : nctx; // split to far/near
+            target.fillStyle = color;
+            target.beginPath();
+            target.arc(ox, oy, size, 0, Math.PI * 2);
+            target.fill();
+
+            // Glow for highlight stars
+            if (size > 2.4 || (result.profile > 0.7 && Math.random() < p.armHighlightProb * 0.5)) {
+              const glow = hslToRgba(hue, sat, lum, 0.18);
+              target.fillStyle = glow;
+              target.beginPath();
+              target.arc(ox, oy, size * 3.2, 0, Math.PI * 2);
+              target.fill();
+            }
           }
         }
       }
-      
-      // Hover region soft highlight overlay
+      nctx.restore();
+      fctx.restore();
+
+      nearLayerRef.current = near;
+      farLayerRef.current = far;
+    };
+
+    const drawFrame = (time: number) => {
+      const width = canvas.width;
+      const height = canvas.height;
+      const w = width; const h = height;
+      const cx = w / 2; const cy = h / 2;
+      const basePeriod = 7000; // 7s breath
+      const t = time % basePeriod;
+      const breath = reducedMotion ? 1 : 0.95 + 0.15 * Math.sin((2 * Math.PI * t) / basePeriod);
+      const rotNear = reducedMotion ? 0 : (time * 0.002) * (Math.PI / 180); // ~0.002 deg/ms => 0.12deg/s
+      const rotFar = reducedMotion ? 0 : (time * 0.0015) * (Math.PI / 180);
+
+      ctx.save();
+      ctx.clearRect(0, 0, w, h);
+
+      // Draw rotating layers
+      const near = nearLayerRef.current;
+      const far = farLayerRef.current;
+      if (far) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotFar);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(far, -cx, -cy, w, h);
+        ctx.restore();
+      }
+      if (near) {
+        ctx.save();
+        ctx.translate(cx, cy);
+        ctx.rotate(rotNear);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(near, -cx, -cy, w, h);
+        ctx.restore();
+      }
+
+      // Breathing nebula overlay (soft radial)
+      if (!reducedMotion) {
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.6);
+        g.addColorStop(0, `rgba(120,120,160,${0.1 * breath})`);
+        g.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalCompositeOperation = 'lighter';
+        ctx.fillStyle = g;
+        ctx.beginPath(); ctx.arc(cx, cy, Math.min(w, h) * 0.6, 0, Math.PI * 2); ctx.fill();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // Hover region wedge highlight
       const region = hoverRegionRef.current;
       if (region && !reducedMotion) {
         ctx.save();
-        const w = width / DPR;
-        const h = height / DPR;
-        const cx = w / 2;
-        const cy = h / 2;
-        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.6);
         const color = region === 'emotion' ? '255,80,160' : region === 'relation' ? '80,160,255' : '160,140,255';
+        const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, Math.min(w, h) * 0.7);
         gradient.addColorStop(0, `rgba(${color}, 0.10)`);
         gradient.addColorStop(1, 'rgba(0,0,0,0)');
         ctx.globalCompositeOperation = 'lighter';
         ctx.fillStyle = gradient;
-        // Draw wedge
         const startDeg = region === 'emotion' ? 0 : region === 'relation' ? 120 : 240;
         const endDeg = startDeg + 120;
-        const start = (startDeg * Math.PI) / 180;
-        const end = (endDeg * Math.PI) / 180;
+        const start = (startDeg * Math.PI) / 180 + rotNear;
+        const end = (endDeg * Math.PI) / 180 + rotNear;
         ctx.beginPath();
         ctx.moveTo(cx, cy);
         ctx.arc(cx, cy, Math.min(w, h), start, end);
         ctx.closePath();
         ctx.fill();
         ctx.restore();
+        ctx.globalCompositeOperation = 'source-over';
+      }
+
+      // Vignette
+      const vignette = ctx.createRadialGradient(cx, cy, Math.min(w, h) * 0.6, cx, cy, Math.min(w, h) * 0.9);
+      vignette.addColorStop(0, 'rgba(0,0,0,0)');
+      vignette.addColorStop(1, 'rgba(0,0,0,0.25)');
+      ctx.fillStyle = vignette;
+      ctx.beginPath(); ctx.rect(0, 0, w, h); ctx.fill();
+
+      // Click bursts
+      if (burstsRef.current.length > 0) {
+        const now = performance.now();
+        burstsRef.current = burstsRef.current.filter(b => now - b.start < b.life);
+        burstsRef.current.forEach((b, i) => {
+          const progress = (now - b.start) / b.life;
+          const r = (40 + 120 * progress) * (currentQualityRef.current === 'low' ? 0.8 : 1);
+          const alpha = 0.35 * (1 - progress);
+          ctx.strokeStyle = `rgba(255,255,255,${alpha})`;
+          ctx.lineWidth = 1.2;
+          ctx.beginPath();
+          ctx.arc((b.x / 100) * w, (b.y / 100) * h, r, 0, Math.PI * 2);
+          ctx.stroke();
+        });
       }
 
       ctx.restore();
     };
 
+    const renderAll = () => { generateLayers(); };
+
     resize();
-    window.addEventListener('resize', resize);
+    renderAll();
+    const handleResize = () => { resize(); renderAll(); };
+    window.addEventListener('resize', handleResize);
     
     // FPS sampling loop for auto quality
     let rafId: number;
@@ -291,21 +414,26 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         // Auto adjust quality if needed
         if (quality === 'auto') {
           const q = currentQualityRef.current;
-          if (avg < 45 && q !== 'low') {
+          const since = now - lastQualityChangeRef.current;
+          if (avg < 45 && q !== 'low' && since > 3000) {
             currentQualityRef.current = q === 'high' ? 'mid' : 'low';
-            draw();
-          } else if (avg > 58 && q !== 'high') {
+            lastQualityChangeRef.current = now;
+            renderAll();
+          } else if (avg > 58 && q !== 'high' && since > 3000) {
             currentQualityRef.current = q === 'low' ? 'mid' : 'high';
-            draw();
+            lastQualityChangeRef.current = now;
+            renderAll();
           }
         }
       }
+      // frame draw
+      drawFrame(now);
       rafId = requestAnimationFrame(tick);
     };
     rafId = requestAnimationFrame(tick);
 
     return () => {
-      window.removeEventListener('resize', resize);
+      window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(rafId);
     };
   }, [quality, reducedMotion]);
@@ -319,7 +447,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   };
 
   const handleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
-    if (!onCanvasClick) return;
     const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * 100;
     const y = ((e.clientY - rect.top) / rect.height) * 100;
@@ -327,7 +454,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     const cy = rect.top + rect.height / 2;
     const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
     const region = angleToRegion(angle);
-    onCanvasClick({ x, y, region });
+    // burst
+    const life = reducedMotion ? 600 : 1000;
+    burstsRef.current.push({ x, y, start: performance.now(), life });
+    if (onCanvasClick) onCanvasClick({ x, y, region });
   };
 
   const handleMouseMove: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
