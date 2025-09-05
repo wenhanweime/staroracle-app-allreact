@@ -47,13 +47,17 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
           try { await InputDrawer.hide({ animated: true }); } catch {}
           try { await (ChatOverlay as any).hide({ animated: true }); } catch {}
         } else {
-          // 关闭菜单后恢复（仅在之前可见时）
-          try {
-            await InputDrawer.show({ animated: true });
-          } catch {}
-          try {
-            if (prevOverlayVisible) await ChatOverlay.show({ isOpen: true });
-          } catch {}
+          // 关闭菜单后恢复（方案A）：先彻底隐藏 ChatOverlay，再分两次恢复 InputDrawer
+          setTimeout(async () => {
+            try { await (ChatOverlay as any).hide({ animated: true }); } catch {}
+          }, 20);
+          setTimeout(async () => {
+            try { await InputDrawer.show({ animated: true }); } catch {}
+            try { await InputDrawer.setBottomSpace({ space: 0 }); } catch {}
+          }, 180);
+          setTimeout(async () => {
+            try { await InputDrawer.show({ animated: false }); } catch {}
+          }, 360);
           setPrevInputVisible(null);
           setPrevOverlayVisible(null);
         }
