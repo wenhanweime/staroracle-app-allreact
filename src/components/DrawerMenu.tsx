@@ -47,19 +47,28 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
           try { await InputDrawer.hide({ animated: true }); } catch {}
           try { await (ChatOverlay as any).hide({ animated: true }); } catch {}
         } else {
-          // 关闭菜单后恢复（方案A）：先彻底隐藏 ChatOverlay，再分两次恢复 InputDrawer
+          // 关闭菜单后恢复：根据之前的状态恢复输入框
           setTimeout(async () => {
-            try { await (ChatOverlay as any).hide({ animated: true }); } catch {}
-          }, 20);
-          setTimeout(async () => {
-            try { await InputDrawer.show({ animated: true }); } catch {}
-            try { await InputDrawer.setBottomSpace({ space: 0 }); } catch {}
-          }, 180);
-          setTimeout(async () => {
-            try { await InputDrawer.show({ animated: false }); } catch {}
-          }, 360);
-          setPrevInputVisible(null);
-          setPrevOverlayVisible(null);
+            try { 
+              // 确保 ChatOverlay 隐藏
+              await (ChatOverlay as any).hide({ animated: true }); 
+            } catch {}
+            
+            // 核心修复：如果之前聊天浮窗不是打开状态，就恢复输入框
+            if (!prevOverlayVisible) {
+              try {
+                await InputDrawer.show({ animated: true });
+                console.log('✅ 菜单关闭后恢复输入框显示 (因为聊天浮窗未打开)');
+              } catch (e) {
+                console.error('❌ 恢复输入框失败:', e);
+              }
+            } else {
+              console.log('ℹ️ 之前聊天浮窗是打开的，不恢复输入框，由浮窗管理');
+            }
+            
+            setPrevInputVisible(null);
+            setPrevOverlayVisible(null);
+          }, 100); // 减少延迟，让恢复更快
         }
       } catch {}
     };

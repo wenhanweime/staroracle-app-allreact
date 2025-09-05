@@ -332,7 +332,7 @@ function App() {
     applySystemPrompt();
   }, [isNative]);
 
-  // 🔒 保障：每次原生浮窗开合后，确保原生 InputDrawer 处于可见状态
+  // 🔒 保障（增强版）：原生浮窗状态变化后，集中兜底恢复 InputDrawer 可见与位置
   useEffect(() => {
     if (!isNative) return;
     const ensureVisible = async () => {
@@ -342,14 +342,35 @@ function App() {
           console.warn('🔁 ChatOverlay状态变化后，InputDrawer 不可见，尝试强制显示');
           await InputDrawer.show({ animated: false });
         }
+        // 位置兜底：复位 bottomSpace，避免停留在负空间或错误预留
+        try { await InputDrawer.setBottomSpace({ space: 0 }); } catch {}
       } catch (e) {
         console.warn('ensureVisible 检查失败:', e);
       }
     };
-    // 略微延迟，避开原生动画事务
-    const t = setTimeout(ensureVisible, 80);
-    return () => clearTimeout(t);
+    // 较长延迟，避开原生动画事务；并二次兜底
+    const t1 = setTimeout(ensureVisible, 300);
+    const t2 = setTimeout(ensureVisible, 600);
+    return () => { clearTimeout(t1); clearTimeout(t2); };
   }, [isNative, nativeChatOverlay.isOpen]);
+
+  // 🔒 保障（菜单关闭联动）：菜单从打开→关闭后，统一由 App 兜底恢复 InputDrawer（不再由 DrawerMenu 自行 setTimeout）
+  useEffect(() => {
+    if (!isNative) return;
+    if (!isDrawerMenuOpen) {
+      const ensureVisible = async () => {
+        try {
+          await InputDrawer.show({ animated: true });
+          try { await InputDrawer.setBottomSpace({ space: 0 }); } catch {}
+        } catch (e) {
+          console.warn('ensureVisible(menu-close) 显示失败:', e);
+        }
+      };
+      const t1 = setTimeout(ensureVisible, 200);
+      const t2 = setTimeout(ensureVisible, 500);
+      return () => { clearTimeout(t1); clearTimeout(t2); };
+    }
+  }, [isNative, isDrawerMenuOpen]);
 
   // 检查API配置（静默模式 - 只在控制台提示）
   useEffect(() => {
