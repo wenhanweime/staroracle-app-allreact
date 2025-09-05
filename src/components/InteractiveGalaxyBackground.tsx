@@ -51,6 +51,8 @@ const defaultParams = {
   armStarSizeMultiplier: 1.0,
   interArmStarSizeMultiplier: 1.0,
   backgroundStarSizeMultiplier: 1.0,
+  // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
+  galaxyScale: 0.618,
 };
 
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
@@ -281,9 +283,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       // Draw rotating layers
       const near = nearLayerRef.current;
       const far = farLayerRef.current;
+      const scale = paramsRef.current.galaxyScale ?? 1;
       if (far) {
         ctx.save();
         ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
         ctx.rotate(rotFar);
         ctx.globalAlpha = 1;
         ctx.drawImage(far, -cx, -cy, w, h);
@@ -292,6 +296,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       if (near) {
         ctx.save();
         ctx.translate(cx, cy);
+        ctx.scale(scale, scale);
         ctx.rotate(rotNear);
         ctx.globalAlpha = 1;
         ctx.drawImage(near, -cx, -cy, w, h);
@@ -430,6 +435,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               {k:'interArmStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'臂间星星大小'},
               {k:'backgroundStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'背景星星大小'},
               {k:'backgroundSizeVariation',min:0.5,max:4,step:0.1,label:'背景星星大小变化'},
+              {k:'galaxyScale',min:0.3,max:1.2,step:0.01,label:'整体缩放'},
               {k:'spiralA',min:2,max:20,step:1,label:'螺旋基准A'},
             ] as Array<{k: keyof typeof defaultParams, min:number,max:number,step:number,label:string}>
           ).map(({k,min,max,step,label}) => (
