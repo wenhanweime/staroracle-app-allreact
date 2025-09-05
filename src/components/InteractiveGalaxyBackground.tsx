@@ -25,34 +25,34 @@ const defaultParams = {
   coreSizeMin: 1.0,
   coreSizeMax: 3.5,
   armCount: 5,
-  armDensity: 0.65,
+  armDensity: 0.70,
   armBaseSizeMin: 0.7,
   armBaseSizeMax: 2.0,
   armHighlightSize: 5.0,
   armHighlightProb: 0.01,
   spiralA: 8,
-  spiralB: 0.29,
-  armWidthInner: 56,
-  armWidthOuter: 53,
+  spiralB: 0.21,
+  armWidthInner: 55,
+  armWidthOuter: 101,
   armWidthGrowth: 2.8,
   armTransitionSoftness: 5.2,
-  fadeStartRadius: 0.5,
-  fadeEndRadius: 1.3,
+  fadeStartRadius: 0.2,
+  fadeEndRadius: 1.36,
   outerDensityMaintain: 0.10,
   interArmDensity: 0.150,
   interArmSizeMin: 0.6,
   interArmSizeMax: 1.2,
   radialDecay: 0.0015,
-  backgroundDensity: 0.00057,
+  backgroundDensity: 0.0006,
   backgroundSizeVariation: 2.0,
-  jitterStrength: 10,
+  jitterStrength: 16,
   densityNoiseScale: 0.049,
-  densityNoiseStrength: 0.8,
-  armStarSizeMultiplier: 1.0,
-  interArmStarSizeMultiplier: 1.0,
+  densityNoiseStrength: 0.9,
+  armStarSizeMultiplier: 0.8,
+  interArmStarSizeMultiplier: 0.9,
   backgroundStarSizeMultiplier: 1.0,
   // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
-  galaxyScale: 0.6,
+  galaxyScale: 0.68,
 };
 
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
@@ -139,6 +139,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const lastFrameTimeRef = useRef<number>(performance.now());
   const lastQualityChangeRef = useRef<number>(0);
   const hoverRegionRef = useRef<'emotion' | 'relation' | 'growth' | null>(null);
+  const bgLayerRef = useRef<HTMLCanvasElement | null>(null); // 背景层：不缩放/不旋转，覆盖全屏
   const nearLayerRef = useRef<HTMLCanvasElement | null>(null);
   const farLayerRef = useRef<HTMLCanvasElement | null>(null);
   const [params, setParams] = useState(defaultParams);
@@ -180,6 +181,18 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
     // Generate pre-rendered layers
     const generateLayers = () => {
+      // Deterministic RNG to ensure same morphology for same params across regenerations
+      const seeded = (seed: number) => {
+        let t = seed >>> 0;
+        return () => {
+          t += 0x6D2B79F5;
+          let r = Math.imul(t ^ (t >>> 15), 1 | t);
+          r ^= r + Math.imul(r ^ (r >>> 7), 61 | r);
+          return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
+        };
+      };
+      const rng = seeded(0xA17C9E3); // fixed seed for stable output
+
       const p = paramsRef.current;
       const width = canvas.width;
       const height = canvas.height;
@@ -189,29 +202,34 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const radialDecay = getRadialDecayFn(p);
 
       // init offscreen layers
+      const bg = document.createElement('canvas'); // 背景层（不受缩放/旋转影响）
       const near = document.createElement('canvas');
       const far = document.createElement('canvas');
+      bg.width = width; bg.height = height;
       near.width = width; near.height = height;
       far.width = width; far.height = height;
+      const bctx = bg.getContext('2d')!;
       const nctx = near.getContext('2d')!;
       const fctx = far.getContext('2d')!;
 
       const qualityScale = getQualityScale();
       const step = getStep();
 
-      // background small stars to far layer
+      // Background small stars -> bg layer (full-screen, no rotation/scale)
       const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.6 : 1) * qualityScale);
-      fctx.save(); fctx.scale(DPR, DPR); fctx.fillStyle = 'rgba(255,255,255,0.9)';
+      bctx.save(); bctx.scale(DPR, DPR); bctx.fillStyle = 'rgba(255,255,255,0.9)';
       for (let i = 0; i < bgCount; i++) {
-        const x = Math.random() * (width / DPR);
-        const y = Math.random() * (height / DPR);
-        let size = Math.random() < 0.85 ? 0.8 : (Math.random() < 0.9 ? 1.2 : p.backgroundSizeVariation);
+        const x = rng() * (width / DPR);
+        const y = rng() * (height / DPR);
+        const r1 = rng();
+        const r2 = rng();
+        let size = r1 < 0.85 ? 0.8 : (r2 < 0.9 ? 1.2 : p.backgroundSizeVariation);
         size *= p.backgroundStarSizeMultiplier;
-        fctx.beginPath();
-        fctx.arc(x, y, size, 0, Math.PI * 2);
-        fctx.fill();
+        bctx.beginPath();
+        bctx.arc(x, y, size, 0, Math.PI * 2);
+        bctx.fill();
       }
-      fctx.restore();
+      bctx.restore();
 
       // galaxy field: raster grid to allocate points into near/far
       nctx.save(); nctx.scale(DPR, DPR);
@@ -239,24 +257,27 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             density = result.density * decay * modulation;
             size = result.size;
           }
-          density *= 0.8 + Math.random() * 0.4;
-          if (Math.random() < density) {
+          density *= 0.8 + rng() * 0.4;
+          if (rng() < density) {
             let ox = x; let oy = y;
             if (!reducedMotion && result.profile > 0.001) {
               const pitchAngle = Math.atan(1 / p.spiralB);
               const jitterAngle = armInfo.theta + pitchAngle + Math.PI / 2;
-              const rand1 = Math.random() || 1e-6;
-              const rand2 = Math.random();
+              const rand1 = rng() || 1e-6;
+              const rand2 = rng();
               const gaussian = Math.sqrt(-2.0 * Math.log(rand1)) * Math.cos(2.0 * Math.PI * rand2);
               const jitterAmount = p.jitterStrength * result.profile * gaussian;
               ox += (jitterAmount * Math.cos(jitterAngle)) / DPR;
               oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
             }
 
-            const target = (Math.random() < 0.4) ? fctx : nctx; // split to far/near
+            const target = (rng() < 0.4) ? fctx : nctx; // split to far/near
             target.fillStyle = '#FFFFFF';
             target.beginPath();
-            target.arc(ox, oy, size, 0, Math.PI * 2);
+            // add slight jitter to break grid alignment deterministically
+            const jx = (rng() - 0.5) * step;
+            const jy = (rng() - 0.5) * step;
+            target.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
             target.fill();
           }
         }
@@ -264,6 +285,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       nctx.restore();
       fctx.restore();
 
+      bgLayerRef.current = bg;
       nearLayerRef.current = near;
       farLayerRef.current = far;
     };
@@ -280,7 +302,16 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       ctx.save();
       ctx.clearRect(0, 0, w, h);
 
-      // Draw rotating layers
+      // 1) Background layer (fills the whole screen, not scaled/rotated)
+      const bg = bgLayerRef.current;
+      if (bg) {
+        ctx.save();
+        ctx.globalAlpha = 1;
+        ctx.drawImage(bg, 0, 0, w, h);
+        ctx.restore();
+      }
+
+      // 2) Rotating galaxy layers (scaled around center)
       const near = nearLayerRef.current;
       const far = farLayerRef.current;
       const scale = paramsRef.current.galaxyScale ?? 1;
