@@ -20,39 +20,49 @@ const noise2D = (x: number, y: number) => {
 // Best visual defaults aligned to 3-arm design
 const defaultParams = {
   // 对齐你提供的默认参数（与 ref/galaxy_claude 初始配置一致）
-  coreDensity: 0.70,
+  coreDensity: 0.7,
   coreRadius: 25,
   coreSizeMin: 1.0,
   coreSizeMax: 3.5,
   armCount: 5,
-  armDensity: 0.70,
+  armDensity: 0.6,
   armBaseSizeMin: 0.7,
   armBaseSizeMax: 2.0,
   armHighlightSize: 5.0,
   armHighlightProb: 0.01,
   spiralA: 8,
-  spiralB: 0.21,
-  armWidthInner: 55,
-  armWidthOuter: 101,
-  armWidthGrowth: 2.8,
-  armTransitionSoftness: 5.2,
-  fadeStartRadius: 0.2,
-  fadeEndRadius: 1.36,
+  spiralB: 0.29,
+  armWidthInner: 29,
+  armWidthOuter: 53,
+  armWidthGrowth: 2.5,
+  armTransitionSoftness: 7.3,
+  fadeStartRadius: 0.5,
+  fadeEndRadius: 1.54,
   outerDensityMaintain: 0.10,
-  interArmDensity: 0.150,
+  interArmDensity: 0.15,
   interArmSizeMin: 0.6,
   interArmSizeMax: 1.2,
   radialDecay: 0.0015,
-  backgroundDensity: 0.0006,
+  backgroundDensity: 0.00045,
   backgroundSizeVariation: 2.0,
-  jitterStrength: 16,
-  densityNoiseScale: 0.049,
+  jitterStrength: 17,
+  densityNoiseScale: 0.041,
   densityNoiseStrength: 0.9,
   armStarSizeMultiplier: 0.8,
-  interArmStarSizeMultiplier: 0.9,
-  backgroundStarSizeMultiplier: 1.0,
+  interArmStarSizeMultiplier: 1,
+  backgroundStarSizeMultiplier: 0.7,
   // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
   galaxyScale: 0.68,
+};
+
+// 模块颜色默认值（结构着色用）
+const defaultPalette = {
+  core: '#FFF8DC',      // 核心黄白
+  ridge: '#E6F3FF',     // 螺旋臂脊线（最亮）
+  armBright: '#ADD8E6', // 螺旋臂内部亮区
+  armEdge: '#87CEEB',   // 螺旋臂边缘
+  dust: '#8B4513',      // 尘埃带
+  outer: '#B0C4DE',     // 臂间/外围
 };
 
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
@@ -154,6 +164,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
   // 结构着色开关：按星系结构分类上色（默认关闭，保持白星风格）
   const [structureColoring, setStructureColoring] = useState(false);
+  const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
+  const paletteRef = useRef(palette);
+  useEffect(() => { paletteRef.current = palette; }, [palette]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -304,21 +317,22 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               const edgeT = 0.25;   // 臂边
               const dustOffset = 0.35 * aw;
               const dustHalf = 0.10 * aw * 0.5;
+              const pal = paletteRef.current;
               let fill = '#FFFFFF';
               if (rCSS < coreR) {
-                fill = '#FFF8DC'; // 核心黄白
+                fill = pal.core; // 核心黄白
               } else {
                 const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf;
                 if (inDust || noiseLocal < -0.2) {
-                  fill = '#8B4513'; // 尘埃带红褐
+                  fill = pal.dust; // 尘埃带红褐
                 } else if (result.profile > ridgeT) {
-                  fill = '#E6F3FF'; // 螺旋臂脊线（最亮）
+                  fill = pal.ridge; // 螺旋臂脊线（最亮）
                 } else if (result.profile > mainT) {
-                  fill = '#ADD8E6'; // 臂内部亮区
+                  fill = pal.armBright; // 臂内部亮区
                 } else if (result.profile > edgeT) {
-                  fill = '#87CEEB'; // 臂边缘淡蓝
+                  fill = pal.armEdge; // 臂边缘淡蓝
                 } else {
-                  fill = '#B0C4DE'; // 臂间/外围灰蓝
+                  fill = pal.outer; // 臂间/外围灰蓝
                 }
               }
               target.fillStyle = fill;
@@ -445,6 +459,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     renderAllRef.current && renderAllRef.current();
   }, [params]);
 
+  // 调整模块颜色时也需要重绘
+  useEffect(() => {
+    renderAllRef.current && renderAllRef.current();
+  }, [palette, structureColoring]);
+
   // Angle→区域映射：将360°切为三等份
   const angleToRegion = (angleRad: number): 'emotion' | 'relation' | 'growth' => {
     const deg = ((angleRad * 180) / Math.PI + 360) % 360;
@@ -483,7 +502,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onMouseMove={handleMouseMove}
       />
       {debugControls && (
-        <div className="fixed top-20 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
+        <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
             <strong className="text-sm">银河参数（临时）</strong>
             <div className="flex items-center gap-2">
@@ -498,6 +517,28 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setParams(defaultParams)}>重置</button>
             </div>
           </div>
+          {structureColoring && (
+            <div className="mb-3 border-b border-white/10 pb-2">
+              <div className="text-xs opacity-80 mb-2">模块颜色</div>
+              {([
+                {k:'core', label:'核心'},
+                {k:'ridge', label:'臂脊'},
+                {k:'armBright', label:'臂内'},
+                {k:'armEdge', label:'臂边'},
+                {k:'dust', label:'尘埃'},
+                {k:'outer', label:'外围'},
+              ] as Array<{k:keyof typeof defaultPalette,label:string}>).map(({k,label}) => (
+                <div key={k as string} className="mb-2 flex items-center justify-between gap-2">
+                  <span className="text-xs">{label}</span>
+                  <input type="color" value={(palette as any)[k]}
+                    onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }} />
+                  <input type="text" value={(palette as any)[k]}
+                    onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }}
+                    className="w-24 bg-transparent border border-white/10 rounded px-1 text-xs" />
+                </div>
+              ))}
+            </div>
+          )}
           {(
             [
               {k:'coreDensity',min:0,max:1,step:0.01,label:'核心密度'},
