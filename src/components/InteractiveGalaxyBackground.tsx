@@ -152,6 +152,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [rotateEnabled, setRotateEnabled] = useState(!debugControls);
   const rotateRef = useRef(rotateEnabled);
   useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
+  // 结构着色开关：按星系结构分类上色（默认关闭，保持白星风格）
+  const [structureColoring, setStructureColoring] = useState(false);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -287,7 +289,42 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             const rFrac = Math.max(0, Math.min(0.999, r / maxRadius));
             const bandIndex = Math.min(BAND_COUNT - 1, Math.floor(rFrac * BAND_COUNT));
             const target = bandCtx[bandIndex];
-            target.fillStyle = '#FFFFFF';
+            // 结构着色分类（核心/脊线/臂内/臂边/尘埃/外围），可通过开关启用
+            if (structureColoring) {
+              const cxCSS = centerX / DPR;
+              const cyCSS = centerY / DPR;
+              const rCSS = Math.sqrt((ox - cxCSS) ** 2 + (oy - cyCSS) ** 2);
+              const aw = (armInfo.armWidth || 1) / DPR;
+              const d = armInfo.distance / DPR;
+              const noiseLocal = noise2D(x * 0.05, y * 0.05);
+              // 简单阈值（可后续透出）：
+              const coreR = p.coreRadius;
+              const ridgeT = 0.7;   // 脊线
+              const mainT = 0.5;    // 臂内
+              const edgeT = 0.25;   // 臂边
+              const dustOffset = 0.35 * aw;
+              const dustHalf = 0.10 * aw * 0.5;
+              let fill = '#FFFFFF';
+              if (rCSS < coreR) {
+                fill = '#FFF8DC'; // 核心黄白
+              } else {
+                const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf;
+                if (inDust || noiseLocal < -0.2) {
+                  fill = '#8B4513'; // 尘埃带红褐
+                } else if (result.profile > ridgeT) {
+                  fill = '#E6F3FF'; // 螺旋臂脊线（最亮）
+                } else if (result.profile > mainT) {
+                  fill = '#ADD8E6'; // 臂内部亮区
+                } else if (result.profile > edgeT) {
+                  fill = '#87CEEB'; // 臂边缘淡蓝
+                } else {
+                  fill = '#B0C4DE'; // 臂间/外围灰蓝
+                }
+              }
+              target.fillStyle = fill;
+            } else {
+              target.fillStyle = '#FFFFFF';
+            }
             target.beginPath();
             // add slight deterministic jitter to break grid alignment
             const jx = (rng() - 0.5) * step;
@@ -331,7 +368,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       // 2) Rotating galaxy layers (scaled around center) - differential rotation by radial bands
       const bands = bandLayersRef.current || [];
       const scale = paramsRef.current.galaxyScale ?? 1;
-      const doRotate = rotateRef.current && !reducedMotion;
       // Differential rotation: inner faster, outer slower
       const baseDegPerMs = 0.0025; // inner angular speed baseline
       for (let i = 0; i < bands.length; i++) {
@@ -454,6 +490,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               <label className="text-xs flex items-center gap-1">
                 <input type="checkbox" checked={rotateEnabled} onChange={(e)=>setRotateEnabled(e.target.checked)} />
                 旋转
+              </label>
+              <label className="text-xs flex items-center gap-1">
+                <input type="checkbox" checked={structureColoring} onChange={(e)=>setStructureColoring(e.target.checked)} />
+                结构着色
               </label>
               <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setParams(defaultParams)}>重置</button>
             </div>
