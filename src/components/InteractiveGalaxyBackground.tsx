@@ -67,6 +67,15 @@ const defaultPalette = {
   dust: '#8B4513',      // 尘埃带
   outer: '#B0C4DE',     // 臂间/外围
 };
+// 分层透明度（仅用于显示着色，不影响算法/密度）
+const defaultLayerAlpha = {
+  core: 1.0,
+  ridge: 0.95,
+  armBright: 0.9,
+  armEdge: 0.85,
+  dust: 0.65,
+  outer: 0.75,
+};
 
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
   const progress = Math.min(radius / (maxRadius * 0.8), 1);
@@ -171,6 +180,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);
+  // 每层透明度（仅显示层）
+  const [layerAlpha, setLayerAlpha] = useState<typeof defaultLayerAlpha>(defaultLayerAlpha);
+  const layerAlphaRef = useRef(layerAlpha);
+  useEffect(() => { layerAlphaRef.current = layerAlpha; }, [layerAlpha]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -461,10 +474,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     renderAllRef.current && renderAllRef.current();
   }, [params]);
 
-  // 调整模块颜色时也需要重绘
+  // 调整模块颜色/透明度或开关时重绘（仅影响着色，不改生成参数）
   useEffect(() => {
     renderAllRef.current && renderAllRef.current();
-  }, [palette, structureColoring]);
+  }, [palette, layerAlpha, structureColoring]);
 
   // Angle→区域映射：将360°切为三等份
   const angleToRegion = (angleRad: number): 'emotion' | 'relation' | 'growth' => {
