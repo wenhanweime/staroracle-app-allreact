@@ -116,10 +116,10 @@ const defaultParams = {
 // 模块颜色默认值（结构着色用）
 const defaultPalette = {
   core: '#FFF8DC',      // 核心黄白
-  ridge: '#E6F3FF',     // 螺旋臂脊线（最亮）
+  ridge: '#FBFBF3',     // 螺旋臂脊线（最亮）(251,251,243)
   armBright: '#ADD8E6', // 螺旋臂内部亮区
   armEdge: '#87CEEB',   // 螺旋臂边缘
-  dust: '#8B4513',      // 尘埃带
+  dust: '#13318B',      // 尘埃带 (19,49,139)
   outer: '#B0C4DE',     // 臂间/外围
 };
 // 分层透明度（仅用于显示着色，不影响算法/密度）
