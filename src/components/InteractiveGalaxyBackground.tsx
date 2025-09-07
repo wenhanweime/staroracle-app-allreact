@@ -330,23 +330,27 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               const dustOffset = 0.35 * aw;
               const dustHalf = 0.10 * aw * 0.5;
               const pal = paletteRef.current;
+              const al = layerAlphaRef?.current || defaultLayerAlpha;
               let fill = '#FFFFFF';
+              let a = 1.0;
               if (rCSS < coreR) {
-                fill = pal.core; // 核心黄白
+                fill = pal.core; a = al.core; // 核心黄白
               } else {
                 const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf;
                 if (inDust || noiseLocal < -0.2) {
-                  fill = pal.dust; // 尘埃带红褐
+                  fill = pal.dust; a = al.dust; // 尘埃带红褐
                 } else if (result.profile > ridgeT) {
-                  fill = pal.ridge; // 螺旋臂脊线（最亮）
+                  fill = pal.ridge; a = al.ridge; // 螺旋臂脊线（最亮）
                 } else if (result.profile > mainT) {
-                  fill = pal.armBright; // 臂内部亮区
+                  fill = pal.armBright; a = al.armBright; // 臂内部亮区
                 } else if (result.profile > edgeT) {
-                  fill = pal.armEdge; // 臂边缘淡蓝
+                  fill = pal.armEdge; a = al.armEdge; // 臂边缘淡蓝
                 } else {
-                  fill = pal.outer; // 臂间/外围灰蓝
+                  fill = pal.outer; a = al.outer; // 臂间/外围灰蓝
                 }
               }
+              const prevAlpha = target.globalAlpha;
+              target.globalAlpha = prevAlpha * a;
               target.fillStyle = fill;
             } else {
               target.fillStyle = '#FFFFFF';
@@ -357,6 +361,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             const jy = (rng() - 0.5) * step;
             target.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
             target.fill();
+            if (structureColoring) { target.globalAlpha = 1; }
           }
         }
       }
@@ -516,7 +521,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           </div>
           {structureColoring && (
             <div className="mb-3 border-b border-white/10 pb-2">
-              <div className="text-xs opacity-80 mb-2">模块颜色</div>
+              <div className="text-xs opacity-80 mb-2">模块颜色与透明度（不影响参数，仅着色）</div>
               {([
                 {k:'core', label:'核心'},
                 {k:'ridge', label:'臂脊'},
@@ -532,6 +537,14 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
                   <input type="text" value={(palette as any)[k]}
                     onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }}
                     className="w-24 bg-transparent border border-white/10 rounded px-1 text-xs" />
+                  <div className="flex items-center gap-1">
+                    <span className="text-[10px] opacity-70">α</span>
+                    <input type="range" min={0} max={1} step={0.01}
+                      value={(layerAlpha as any)[k]}
+                      onChange={(e)=>{ const v = Number(e.target.value); setLayerAlpha(prev => ({...prev, [k]: v})); }}
+                      className="w-24" />
+                    <span className="text-[10px] opacity-70 w-8 text-right">{(layerAlpha as any)[k].toFixed(2)}</span>
+                  </div>
                 </div>
               ))}
             </div>
