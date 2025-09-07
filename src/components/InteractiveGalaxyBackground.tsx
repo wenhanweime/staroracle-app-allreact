@@ -1,4 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
+import HotspotOverlay from './HotspotOverlay';
+import { useGalaxyStore } from '../store/useGalaxyStore';
+import { useStarStore } from '../store/useStarStore';
 
 type Quality = 'low' | 'mid' | 'high' | 'auto';
 
@@ -105,7 +108,7 @@ const defaultParams = {
   interArmStarSizeMultiplier: 1,
   backgroundStarSizeMultiplier: 0.7,
   // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
-  galaxyScale: 0.68,
+  galaxyScale: 0.6,
   // 颜色波动（仅显示着色用）
   colorJitterHue: 10,     // 色相抖动幅度（度）
   colorJitterSat: 0.06,   // 饱和度抖动幅度（0..1）
@@ -211,6 +214,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   debugControls = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const setGalaxyCanvasSize = useGalaxyStore(s=>s.setCanvasSize)
+  const genHotspots = useGalaxyStore(s=>s.generateHotspots)
+  const hoverHs = useGalaxyStore(s=>s.hoverAt)
+  const clickHs = useGalaxyStore(s=>s.clickAt)
+  const drawInspirationCard = useStarStore(s=>s.drawInspirationCard)
   const currentQualityRef = useRef<Exclude<Quality, 'auto'>>('mid');
   const fpsSamplesRef = useRef<number[]>([]);
   const lastFpsSampleTimeRef = useRef<number>(performance.now());
@@ -255,6 +263,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       canvas.height = Math.floor(h * DPR);
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
+      setGalaxyCanvasSize(Math.floor(w * DPR), Math.floor(h * DPR))
     };
 
     // 为确保静止与旋转形态一致，锁定采样为“高质量”
@@ -505,6 +514,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
     resize();
     renderAll();
+    // 初始化热点（仅一次）
+    genHotspots(36)
     const handleResize = () => { resize(); renderAll(); };
     window.addEventListener('resize', handleResize);
     
@@ -560,6 +571,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
     const region = angleToRegion(angle);
     if (onCanvasClick) onCanvasClick({ x, y, region });
+    // 触发热点交互与内容分发（不改主体渲染）
+    clickHs(e.clientX, e.clientY)
+    drawInspirationCard(region as any)
   };
 
   const handleMouseMove: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
@@ -568,6 +582,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     const cy = rect.top + rect.height / 2;
     const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
     hoverRegionRef.current = angleToRegion(angle);
+    hoverHs(e.clientX, e.clientY)
   };
 
   return (
@@ -580,6 +595,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
+      {/* 交互热点与动效（不改主体渲染） */}
+      <HotspotOverlay />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
