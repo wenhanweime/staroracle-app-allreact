@@ -91,10 +91,11 @@ const getRadialDecayFn = (p = defaultParams) => (radius: number, maxRadius: numb
 
 const getArmPositions = (radius: number, centerX: number, centerY: number, p = defaultParams) => {
   const positions: Array<{ x: number; y: number; theta: number; armIndex: number }> = [];
+  // 反向旋臂方向：仅改变角度符号，其余参数保持不变
   const angle = Math.log(Math.max(radius, p.spiralA) / p.spiralA) / p.spiralB;
   for (let arm = 0; arm < p.armCount; arm++) {
     const armOffset = (arm * 2 * Math.PI) / p.armCount;
-    const theta = armOffset + angle;
+    const theta = armOffset - angle;
     positions.push({ x: centerX + radius * Math.cos(theta), y: centerY + radius * Math.sin(theta), theta, armIndex: arm });
   }
   return positions;
