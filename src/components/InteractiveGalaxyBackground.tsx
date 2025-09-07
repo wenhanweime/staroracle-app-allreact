@@ -17,6 +17,56 @@ const noise2D = (x: number, y: number) => {
   return fract(t) * 2 - 1; // [-1, 1]
 };
 
+// 颜色辅助：HEX ↔ HSL（仅用于显示着色的颜色抖动，不影响算法）
+const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
+const hexToRgb = (hex: string) => {
+  const h = hex.replace('#','');
+  const full = h.length === 3 ? h.split('').map(c=>c+c).join('') : h;
+  const num = parseInt(full, 16);
+  return { r: (num>>16)&255, g: (num>>8)&255, b: num&255 };
+};
+const rgbToHex = (r:number,g:number,b:number) => '#'+[r,g,b].map(v=>{
+  const s = Math.max(0,Math.min(255, Math.round(v))).toString(16).padStart(2,'0');
+  return s;
+}).join('');
+const rgbToHsl = (r:number,g:number,b:number) => {
+  r/=255; g/=255; b/=255;
+  const max=Math.max(r,g,b), min=Math.min(r,g,b);
+  let h=0, s=0; const l=(max+min)/2;
+  if (max!==min) {
+    const d=max-min; s = l>0.5? d/(2-max-min): d/(max+min);
+    switch (max) {
+      case r: h=(g-b)/d+(g<b?6:0); break;
+      case g: h=(b-r)/d+2; break;
+      default: h=(r-g)/d+4;
+    }
+    h/=6;
+  }
+  return { h: h*360, s, l };
+};
+const hslToRgb = (h:number,s:number,l:number) => {
+  h/=360;
+  const hue2rgb = (p:number,q:number,t:number)=>{
+    if (t<0) t+=1; if (t>1) t-=1;
+    if (t<1/6) return p+(q-p)*6*t;
+    if (t<1/2) return q;
+    if (t<2/3) return p+(q-p)*(2/3-t)*6;
+    return p;
+  };
+  let r:number,g:number,b:number;
+  if (s===0) { r=g=b=l; }
+  else {
+    const q = l<0.5? l*(1+s): l+s-l*s;
+    const p = 2*l-q;
+    r = hue2rgb(p,q,h+1/3);
+    g = hue2rgb(p,q,h);
+    b = hue2rgb(p,q,h-1/3);
+  }
+  return { r: Math.round(r*255), g: Math.round(g*255), b: Math.round(b*255) };
+};
+const hexToHsl = (hex:string) => { const {r,g,b}=hexToRgb(hex); return rgbToHsl(r,g,b); };
+const hslToHex = (h:number,s:number,l:number) => { const {r,g,b}=hslToRgb(h,s,l); return rgbToHex(r,g,b); };
+
 // Best visual defaults aligned to 3-arm design
 const defaultParams = {
   // 对齐你提供的默认参数（与 ref/galaxy_claude 初始配置一致）
@@ -56,6 +106,11 @@ const defaultParams = {
   backgroundStarSizeMultiplier: 0.7,
   // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
   galaxyScale: 0.68,
+  // 颜色波动（仅显示着色用）
+  colorJitterHue: 10,     // 色相抖动幅度（度）
+  colorJitterSat: 0.06,   // 饱和度抖动幅度（0..1）
+  colorJitterLight: 0.04, // 亮度抖动幅度（0..1）
+  colorNoiseScale: 0.05,  // 颜色噪声尺度
 };
 
 // 模块颜色默认值（结构着色用）
@@ -362,6 +417,15 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
                   fill = pal.outer; a = al.outer; // 臂间/外围灰蓝
                 }
               }
+              // 颜色波动（仅显示）：基于坐标的小幅 HSL 扰动
+              const baseHsl = hexToHsl(fill);
+              const nh = noise2D(ox * p.colorNoiseScale, oy * p.colorNoiseScale);
+              const ns = noise2D(ox * p.colorNoiseScale + 31.7, oy * p.colorNoiseScale + 11.3);
+              const nl = noise2D(ox * p.colorNoiseScale + 77.1, oy * p.colorNoiseScale + 59.9);
+              const h = (baseHsl.h + nh * p.colorJitterHue + 360) % 360;
+              const s = clamp01(baseHsl.s + ns * p.colorJitterSat);
+              const l = clamp01(baseHsl.l + nl * p.colorJitterLight);
+              fill = hslToHex(h, s, l);
               const prevAlpha = target.globalAlpha;
               target.globalAlpha = prevAlpha * a;
               target.fillStyle = fill;
@@ -609,6 +673,28 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               />
             </div>
           ))}
+          {structureColoring && (
+            <div className="mt-3">
+              <div className="text-xs opacity-80 mb-2">颜色波动（仅显示，不改算法）</div>
+              {([
+                {k:'colorJitterHue', min:0, max:30, step:1, label:'色相抖动(°)'},
+                {k:'colorJitterSat', min:0, max:0.3, step:0.01, label:'饱和度抖动'},
+                {k:'colorJitterLight', min:0, max:0.3, step:0.01, label:'亮度抖动'},
+                {k:'colorNoiseScale', min:0.005, max:0.2, step:0.005, label:'颜色噪声尺度'},
+              ] as Array<{k:keyof typeof defaultParams, min:number,max:number,step:number,label:string}>).map(({k,min,max,step,label}) => (
+                <div key={k as string} className="mb-2">
+                  <label className="text-xs flex justify-between">
+                    <span>{label}</span>
+                    <span className="opacity-80">{(params as any)[k]}</span>
+                  </label>
+                  <input type="range" min={min} max={max} step={step}
+                    value={(params as any)[k] as any}
+                    onChange={(e)=>{ const v=Number(e.target.value); setParams(prev=> ({...prev, [k]: v} as typeof prev)); }}
+                    className="w-full" />
+                </div>
+              ))}
+            </div>
+          )}
         </div>
       )}
     </>
