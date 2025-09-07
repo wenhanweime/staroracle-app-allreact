@@ -218,6 +218,12 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const centerX = width / 2;
       const centerY = height / 2;
       const maxRadius = Math.min(width, height) * 0.4;
+      // Overscan offscreen size for rotating bands (bigger frame without changing galaxy size)
+      const OV = Math.max(1, p.overscan || 1.0);
+      const owidth = Math.floor(width * OV);
+      const oheight = Math.floor(height * OV);
+      const oCenterX = owidth / 2;
+      const oCenterY = oheight / 2;
       const radialDecay = getRadialDecayFn(p);
 
       // init offscreen layers
@@ -234,7 +240,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const BAND_COUNT = 10;
       const bands: HTMLCanvasElement[] = Array.from({ length: BAND_COUNT }, () => {
         const c = document.createElement('canvas');
-        c.width = width; c.height = height;
+        c.width = owidth; c.height = oheight;
         return c;
       });
       const bandCtx = bands.map(c => c.getContext('2d')!);
@@ -262,15 +268,15 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       // galaxy field: raster grid to allocate points into near/far
       nctx.save(); nctx.scale(DPR, DPR);
       fctx.save(); fctx.scale(DPR, DPR);
-      for (let x = 0; x < width / DPR; x += step) {
-        for (let y = 0; y < height / DPR; y += step) {
-          const dx = x - centerX / DPR;
-          const dy = y - centerY / DPR;
+      for (let x = 0; x < owidth / DPR; x += step) {
+        for (let y = 0; y < oheight / DPR; y += step) {
+          const dx = x - oCenterX / DPR;
+          const dy = y - oCenterY / DPR;
           const radius = Math.sqrt(dx * dx + dy * dy);
           if (radius < 3) continue;
 
           const decay = radialDecay(radius, maxRadius / DPR);
-          const armInfo = getArmInfo(x * DPR, y * DPR, centerX, centerY, maxRadius, p);
+          const armInfo = getArmInfo(x * DPR, y * DPR, oCenterX, oCenterY, maxRadius, p);
           const result = calculateArmDensityProfile(armInfo, p);
 
           let density: number;
@@ -304,16 +310,16 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
             }
             // assign to radial band for differential rotation
-            const dxC = (ox * DPR) - centerX;
-            const dyC = (oy * DPR) - centerY;
+            const dxC = (ox * DPR) - oCenterX;
+            const dyC = (oy * DPR) - oCenterY;
             const r = Math.sqrt(dxC * dxC + dyC * dyC);
             const rFrac = Math.max(0, Math.min(0.999, r / maxRadius));
             const bandIndex = Math.min(BAND_COUNT - 1, Math.floor(rFrac * BAND_COUNT));
             const target = bandCtx[bandIndex];
             // 结构着色分类（核心/脊线/臂内/臂边/尘埃/外围），可通过开关启用
             if (structureColoring) {
-              const cxCSS = centerX / DPR;
-              const cyCSS = centerY / DPR;
+              const cxCSS = oCenterX / DPR;
+              const cyCSS = oCenterY / DPR;
               const rCSS = Math.sqrt((ox - cxCSS) ** 2 + (oy - cyCSS) ** 2);
               const aw = (armInfo.armWidth || 1) / DPR;
               const d = armInfo.distance / DPR;
@@ -402,7 +408,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         ctx.scale(scale, scale);
         ctx.rotate(angle);
         ctx.globalAlpha = 1;
-        ctx.drawImage(band, -cx, -cy, w, h);
+        const bw = band.width, bh = band.height; const bcx = bw / 2, bcy = bh / 2;
+        ctx.drawImage(band, -bcx, -bcy, bw, bh);
         ctx.restore();
       }
 
