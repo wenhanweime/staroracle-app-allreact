@@ -35,19 +35,19 @@ const defaultParams = {
   armWidthInner: 29,
   armWidthOuter: 113,
   armWidthGrowth: 2.5,
-  armTransitionSoftness: 73,
+  armTransitionSoftness: 3,
   fadeStartRadius: 0.5,
   fadeEndRadius: 1.54,
   outerDensityMaintain: 0.10,
-  interArmDensity: 0.25,
+  interArmDensity: 0.08,
   interArmSizeMin: 0.6,
   interArmSizeMax: 1.2,
   radialDecay: 0.0015,
   backgroundDensity: 0.00045,
   backgroundSizeVariation: 2.0,
   jitterStrength: 17,
-  densityNoiseScale: 0.175,
-  densityNoiseStrength: 1.6,
+  densityNoiseScale: 0.09,
+  densityNoiseStrength: 0.95,
   // 抖动不规律性（新增）
   jitterChaos: 7,            // 为抖动引入低频噪声调制，提升不规律
   jitterChaosScale: 1,       // 低频噪声的尺度（越小越大团）
