@@ -218,8 +218,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const centerX = width / 2;
       const centerY = height / 2;
       const maxRadius = Math.min(width, height) * 0.4;
-      // Overscan offscreen size for rotating bands (bigger frame without changing galaxy size)
-      const OV = Math.max(1, p.overscan || 1.0);
+      // 动态 overscan：保证旋转+缩放后不裁切（不改变主体尺寸）
+      const scaleLocal = Math.max(0.01, paramsRef.current.galaxyScale ?? 1);
+      const minOV = Math.max(Math.SQRT2 + 0.1, (1 / scaleLocal) + 0.2);
+      const OV = Math.max(1, p.overscan || 1.0, minOV);
       const owidth = Math.floor(width * OV);
       const oheight = Math.floor(height * OV);
       const oCenterX = owidth / 2;
