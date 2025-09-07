@@ -1,6 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import HotspotOverlay from './HotspotOverlay';
+import VoronoiOverlay from './VoronoiOverlay';
 import { useGalaxyStore } from '../store/useGalaxyStore';
+import { useGalaxyGridStore } from '../store/useGalaxyGridStore';
 import { useStarStore } from '../store/useStarStore';
 
 type Quality = 'low' | 'mid' | 'high' | 'auto';
@@ -219,6 +221,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const hoverHs = useGalaxyStore(s=>s.hoverAt)
   const clickHs = useGalaxyStore(s=>s.clickAt)
   const drawInspirationCard = useStarStore(s=>s.drawInspirationCard)
+  const setGridSize = useGalaxyGridStore(s=>s.setCanvasSize)
+  const genSites = useGalaxyGridStore(s=>s.generateSites)
   const currentQualityRef = useRef<Exclude<Quality, 'auto'>>('mid');
   const fpsSamplesRef = useRef<number[]>([]);
   const lastFpsSampleTimeRef = useRef<number>(performance.now());
@@ -263,7 +267,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       canvas.height = Math.floor(h * DPR);
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-      setGalaxyCanvasSize(Math.floor(w * DPR), Math.floor(h * DPR))
+      const cw = Math.floor(w * DPR), ch = Math.floor(h * DPR)
+      setGalaxyCanvasSize(cw, ch)
+      setGridSize(cw, ch)
     };
 
     // 为确保静止与旋转形态一致，锁定采样为“高质量”
@@ -516,6 +522,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     renderAll();
     // 初始化热点（仅一次）
     genHotspots(36)
+    genSites(120)
     const handleResize = () => { resize(); renderAll(); };
     window.addEventListener('resize', handleResize);
     
@@ -595,7 +602,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
-      {/* 交互热点与动效（不改主体渲染） */}
+      {/* 交互层：不规则小块（Voronoi）与热点（保留MVP） */}
+      <VoronoiOverlay />
       <HotspotOverlay />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
