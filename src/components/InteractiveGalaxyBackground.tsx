@@ -467,7 +467,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       window.removeEventListener('resize', handleResize);
       cancelAnimationFrame(rafId);
     };
-  }, [quality, reducedMotion]);
+  }, [quality, reducedMotion, structureColoring]);
 
   // Re-generate layers when params change
   useEffect(() => {
