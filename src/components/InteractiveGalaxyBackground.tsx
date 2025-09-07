@@ -33,21 +33,24 @@ const defaultParams = {
   spiralA: 8,
   spiralB: 0.29,
   armWidthInner: 29,
-  armWidthOuter: 53,
+  armWidthOuter: 113,
   armWidthGrowth: 2.5,
-  armTransitionSoftness: 7.3,
+  armTransitionSoftness: 73,
   fadeStartRadius: 0.5,
   fadeEndRadius: 1.54,
   outerDensityMaintain: 0.10,
-  interArmDensity: 0.15,
+  interArmDensity: 0.25,
   interArmSizeMin: 0.6,
   interArmSizeMax: 1.2,
   radialDecay: 0.0015,
   backgroundDensity: 0.00045,
   backgroundSizeVariation: 2.0,
   jitterStrength: 17,
-  densityNoiseScale: 0.041,
-  densityNoiseStrength: 0.9,
+  densityNoiseScale: 0.175,
+  densityNoiseStrength: 1.6,
+  // 抖动不规律性（新增）
+  jitterChaos: 7,            // 为抖动引入低频噪声调制，提升不规律
+  jitterChaosScale: 1,       // 低频噪声的尺度（越小越大团）
   armStarSizeMultiplier: 0.8,
   interArmStarSizeMultiplier: 1,
   backgroundStarSizeMultiplier: 0.7,
@@ -278,7 +281,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             size = (p.coreSizeMin + Math.random() * (p.coreSizeMax - p.coreSizeMin)) * p.armStarSizeMultiplier;
           } else {
             const n = noise2D(x * p.densityNoiseScale, y * p.densityNoiseScale);
-            const modulation = 1.0 - p.densityNoiseStrength * (0.5 * (1.0 - n));
+            // 放大可调上限：允许 densityNoiseStrength > 1，但对调制进行下限夹紧，避免负值
+            let modulation = 1.0 - p.densityNoiseStrength * (0.5 * (1.0 - n));
+            if (modulation < 0.0) modulation = 0.0;
             density = result.density * decay * modulation;
             size = result.size;
           }
@@ -291,7 +296,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               const rand1 = rng() || 1e-6;
               const rand2 = rng();
               const gaussian = Math.sqrt(-2.0 * Math.log(rand1)) * Math.cos(2.0 * Math.PI * rand2);
-              const jitterAmount = p.jitterStrength * result.profile * gaussian;
+              // 为抖动引入低频噪声混合，使之更不规律
+              const chaos = 1 + (p.jitterChaos || 0) * noise2D(x * (p.jitterChaosScale || 0.02), y * (p.jitterChaosScale || 0.02));
+              const randomMix = 0.7 + 0.6 * rng();
+              const jitterAmount = p.jitterStrength * chaos * randomMix * result.profile * gaussian;
               ox += (jitterAmount * Math.cos(jitterAngle)) / DPR;
               oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
             }
@@ -551,13 +559,15 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               {k:'armWidthOuter',min:20,max:140,step:1,label:'外侧宽度'},
               {k:'armWidthGrowth',min:1,max:3,step:0.1,label:'宽度增长'},
               {k:'interArmDensity',min:0,max:0.5,step:0.01,label:'臂间基础密度'},
-              {k:'armTransitionSoftness',min:1,max:8,step:0.1,label:'山坡平缓度'},
+              {k:'armTransitionSoftness',min:1,max:100,step:0.5,label:'山坡平缓度'},
               {k:'fadeStartRadius',min:0.2,max:1,step:0.01,label:'淡化起始'},
               {k:'fadeEndRadius',min:1,max:1.8,step:0.01,label:'淡化结束'},
               {k:'backgroundDensity',min:0,max:0.0006,step:0.00001,label:'背景密度'},
-              {k:'jitterStrength',min:0,max:20,step:1,label:'垂直抖动强度'},
-              {k:'densityNoiseScale',min:0.005,max:0.05,step:0.001,label:'密度噪声缩放'},
-              {k:'densityNoiseStrength',min:0,max:1,step:0.05,label:'密度噪声强度'},
+              {k:'jitterStrength',min:0,max:40,step:1,label:'垂直抖动强度'},
+              {k:'jitterChaos',min:0,max:10,step:0.1,label:'抖动不规律度(Chaos)'},
+              {k:'jitterChaosScale',min:0.001,max:2,step:0.001,label:'抖动噪声尺度'},
+              {k:'densityNoiseScale',min:0.005,max:0.2,step:0.001,label:'密度噪声缩放(上限提升)'},
+              {k:'densityNoiseStrength',min:0,max:2,step:0.05,label:'密度噪声强度(上限提升)'},
               {k:'armStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'旋臂星星大小'},
               {k:'interArmStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'臂间星星大小'},
               {k:'backgroundStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'背景星星大小'},
