@@ -395,7 +395,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const bands = bandLayersRef.current || [];
       const scale = paramsRef.current.galaxyScale ?? 1;
       // Differential rotation: inner faster, outer slower
-      const baseDegPerMs = 0.0025; // inner angular speed baseline
+      const baseDegPerMs = 0.00025; // 内层基础角速度（降为原来的 1/10）
       for (let i = 0; i < bands.length; i++) {
         const band = bands[i];
         const rMid = (i + 0.5) / Math.max(1, bands.length); // 0..1
