@@ -188,14 +188,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       canvas.style.height = `${h}px`;
     };
 
-    const getQualityScale = () => {
-      const q = quality === 'auto' ? currentQualityRef.current : (quality as Exclude<Quality, 'auto'>);
-      return q === 'high' ? 1 : q === 'mid' ? 0.8 : 0.6;
-    };
-    const getStep = () => {
-      const q = quality === 'auto' ? currentQualityRef.current : (quality as Exclude<Quality, 'auto'>);
-      return q === 'high' ? 1.0 : q === 'mid' ? 1.1 : 1.4;
-    };
+    // 为确保静止与旋转形态一致，锁定采样为“高质量”
+    const getQualityScale = () => 1;
+    const getStep = () => 1.0;
     // 原始样式：白色星点，不做额外着色/辉光
 
     // Generate pre-rendered layers
@@ -439,25 +434,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const t = now - lastFpsSampleTimeRef.current;
       fpsSamplesRef.current.push(fps);
       if (t > 1000) {
-        // compute average
-        const samples = fpsSamplesRef.current;
-        const avg = samples.reduce((a, b) => a + b, 0) / Math.max(1, samples.length);
+        // 仍然采样 FPS，但不再自动降质，保持形态一致
         fpsSamplesRef.current = [];
         lastFpsSampleTimeRef.current = now;
-        // Auto adjust quality if needed
-        if (quality === 'auto') {
-          const q = currentQualityRef.current;
-          const since = now - lastQualityChangeRef.current;
-          if (avg < 45 && q !== 'low' && since > 3000) {
-            currentQualityRef.current = q === 'high' ? 'mid' : 'low';
-            lastQualityChangeRef.current = now;
-            renderAll();
-          } else if (avg > 58 && q !== 'high' && since > 3000) {
-            currentQualityRef.current = q === 'low' ? 'mid' : 'high';
-            lastQualityChangeRef.current = now;
-            renderAll();
-          }
-        }
       }
       // frame draw
       drawFrame(now);
