@@ -17,42 +17,50 @@ const noise2D = (x: number, y: number) => {
   return fract(t) * 2 - 1; // [-1, 1]
 };
 
-// Best visual defaults aligned to 3-arm design
+// 【最终平衡版】默认参数
 const defaultParams = {
-  // 对齐你提供的默认参数（与 ref/galaxy_claude 初始配置一致）
-  coreDensity: 0.7,
+  // --- 核心形态 ---
+  armCount: 5,
   coreRadius: 25,
+  spiralTightness: 0.29,
+  coreDensity: 0.9,
+  // --- 旋臂特征 ---
+  armWidth: 29,                 // 旋臂起始宽度
+  armWidthOuter: 53,            // 旋臂外侧宽度（绝对值）
+  armWidthGrowth: 2.5,          // 宽度增长指数（power模型）
+  armWidthModel: 'power' as 'power' | 'sigmoid' | 'piecewise',
+  armWidthSigmoidK: 8,          // S型曲线陡峭度
+  armProfile: 2.8,              // 旋臂轮廓 (越小越平滑)
+  armBrightness: 0.6,           // 旋臂亮度（密度权重）
+  interArmBrightness: 0.18,     // 臂间亮度（密度基线）
+  // 旋臂外缘可见性补偿（对抗径向衰减）
+  armDecayBias: 0.7,            // 0..1，越小外缘越不衰减（仅作用于旋臂层）
+  armOuterBoost: 0.6,           // 0..1，按半径二次项提升外缘旋臂概率
+  // --- 星星尺寸（随机范围）与细节 ---
   coreSizeMin: 1.0,
   coreSizeMax: 3.5,
-  armCount: 5,
-  armDensity: 0.6,
-  armBaseSizeMin: 0.7,
-  armBaseSizeMax: 2.0,
-  armHighlightSize: 5.0,
-  armHighlightProb: 0.01,
-  spiralA: 8,
-  spiralB: 0.29,
-  armWidthInner: 29,
-  armWidthOuter: 53,
-  armWidthGrowth: 2.5,
-  armTransitionSoftness: 7.3,
-  fadeStartRadius: 0.5,
-  fadeEndRadius: 1.54,
-  outerDensityMaintain: 0.10,
-  interArmDensity: 0.15,
-  interArmSizeMin: 0.6,
-  interArmSizeMax: 1.2,
-  radialDecay: 0.0015,
-  backgroundDensity: 0.00045,
+  armStarSizeMin: 0.7,
+  armStarSizeMax: 2.0,
+  interArmStarSizeMin: 0.6,
+  interArmStarSizeMax: 1.2,
+  backgroundStarSize: 0.7,      // 背景星星大小
   backgroundSizeVariation: 2.0,
-  jitterStrength: 17,
-  densityNoiseScale: 0.041,
-  densityNoiseStrength: 0.9,
-  armStarSizeMultiplier: 0.8,
-  interArmStarSizeMultiplier: 1,
-  backgroundStarSizeMultiplier: 0.7,
-  // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
+  jitterStrength: 17,           // 垂直抖动
+  noiseStrength: 0.9,           // 尘埃强度（团块感）
+  noiseScale: 0.041,            // 尘埃大小（团块尺寸）
+  // --- 视图控制 ---
   galaxyScale: 0.68,
+  backgroundDensity: 0.00045,
+  // --- 内部硬编码 ---
+  _spiralA: 8,
+  _armHighlightProb: 0.006,
+  _armHighlightSize: 5.0,
+  _radialDecay: 0.0015,
+  _fadeStartRadius: 0.5,
+  _fadeEndRadius: 1.54,
+  _outerDensityMaintain: 0.10,
+  _coreSizeMaxFactor: 1.5,
+  _maxStarSize: 3.0,
 };
 
 // 模块颜色默认值（结构着色用）
@@ -65,14 +73,48 @@ const defaultPalette = {
   outer: '#B0C4DE',     // 臂间/外围
 };
 
+// 辅助组件：通用滑块
+const RenderSlider = ({ pKey, min, max, step, label, params, setParams }: any) => (
+  <div className="mb-2">
+    <label className="text-xs flex justify-between">
+      <span>{label}</span>
+      <span className="opacity-80">{(params as any)[pKey]}</span>
+    </label>
+    <input
+      type="range"
+      min={min}
+      max={max}
+      step={step}
+      value={(params as any)[pKey]}
+      onChange={(e) => {
+        const v = Number(e.target.value);
+        setParams((prev: any) => ({ ...prev, [pKey]: pKey === 'armCount' ? Math.round(v) : v }));
+      }}
+      className="w-full"
+    />
+  </div>
+);
+
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
-  const progress = Math.min(radius / (maxRadius * 0.8), 1);
-  return p.armWidthInner + (p.armWidthOuter - p.armWidthInner) * Math.pow(progress, p.armWidthGrowth);
+  const effectiveOuter = p.armWidthOuter ?? (p.armWidth * 1.83);
+  // 修正：归一化覆盖整个有效半径，避免80%后宽度恒定
+  const norm = Math.min(radius / maxRadius, 1);
+  if (p.armWidthModel === 'sigmoid') {
+    const k = Math.max(1, p.armWidthSigmoidK ?? 8);
+    const sig = 1 / (1 + Math.exp(-k * (norm - 0.5)));
+    return p.armWidth + (effectiveOuter - p.armWidth) * Math.pow(sig, p.armWidthGrowth ?? 2.5);
+  } else if (p.armWidthModel === 'piecewise') {
+    let growthFactor = norm < 0.3 ? (norm / 0.3) * 0.2 : norm < 0.8 ? 0.2 + ((norm - 0.3) / 0.5) * 0.6 : 0.8 + ((norm - 0.8) / 0.2) * 0.2;
+    return p.armWidth + (effectiveOuter - p.armWidth) * growthFactor;
+  }
+  // default power
+  return p.armWidth + (effectiveOuter - p.armWidth) * Math.pow(norm, p.armWidthGrowth ?? 2.5);
 };
 
+
 const getFadeFactor = (radius: number, maxRadius: number, p = defaultParams) => {
-  const fadeStart = maxRadius * p.fadeStartRadius;
-  const fadeEnd = maxRadius * p.fadeEndRadius;
+  const fadeStart = maxRadius * p._fadeStartRadius;
+  const fadeEnd = maxRadius * p._fadeEndRadius;
   if (radius < fadeStart) return 1;
   if (radius > fadeEnd) return 0;
   const progress = (radius - fadeStart) / (fadeEnd - fadeStart);
@@ -80,15 +122,15 @@ const getFadeFactor = (radius: number, maxRadius: number, p = defaultParams) => 
 };
 
 const getRadialDecayFn = (p = defaultParams) => (radius: number, maxRadius: number) => {
-  const baseFactor = Math.exp(-radius * p.radialDecay);
+  const baseFactor = Math.exp(-radius * p._radialDecay);
   const fadeFactor = getFadeFactor(radius, maxRadius, p);
-  const maintainFactor = p.outerDensityMaintain;
+  const maintainFactor = p._outerDensityMaintain;
   return Math.max(baseFactor * fadeFactor, maintainFactor * fadeFactor);
 };
 
 const getArmPositions = (radius: number, centerX: number, centerY: number, p = defaultParams) => {
   const positions: Array<{ x: number; y: number; theta: number; armIndex: number }> = [];
-  const angle = Math.log(Math.max(radius, p.spiralA) / p.spiralA) / p.spiralB;
+  const angle = Math.log(Math.max(radius, p._spiralA) / p._spiralA) / p.spiralTightness;
   for (let arm = 0; arm < p.armCount; arm++) {
     const armOffset = (arm * 2 * Math.PI) / p.armCount;
     const theta = armOffset + angle;
@@ -121,18 +163,13 @@ const getArmInfo = (x: number, y: number, centerX: number, centerY: number, maxR
 
 const calculateArmDensityProfile = (armInfo: ReturnType<typeof getArmInfo>, p = defaultParams) => {
   const { distance, armWidth } = armInfo;
-  const profile = Math.exp(-0.5 * Math.pow(distance / (armWidth / p.armTransitionSoftness), 2));
-  const totalDensity = p.interArmDensity + p.armDensity * profile;
-  let size: number;
-  if (profile > 0.1) {
-    size = p.armBaseSizeMin + (p.armBaseSizeMax - p.armBaseSizeMin) * profile;
-    if (profile > 0.7 && Math.random() < p.armHighlightProb) size = p.armHighlightSize;
-    size *= p.armStarSizeMultiplier;
-  } else {
-    size = p.interArmSizeMin + (p.interArmSizeMax - p.interArmSizeMin) * Math.random();
-    size *= p.interArmStarSizeMultiplier;
-  }
-  return { density: totalDensity, size, profile };
+  // 旋臂轮廓：越小越平滑
+  const sharpness = p.armProfile;
+  const spread = Math.max(1, armWidth / Math.max(0.0001, sharpness));
+  const profile = Math.exp(-0.5 * Math.pow(distance / spread, 2));
+  // 仅返回旋臂“额外贡献”的密度，不含臂间基线
+  const armContributionDensity = p.armBrightness * profile;
+  return { density: armContributionDensity, size: 0, profile };
 };
 
 const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = ({
@@ -248,8 +285,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         const y = rng() * (height / DPR);
         const r1 = rng();
         const r2 = rng();
-        let size = r1 < 0.85 ? 0.8 : (r2 < 0.9 ? 1.2 : p.backgroundSizeVariation);
-        size *= p.backgroundStarSizeMultiplier;
+        let size = p.backgroundStarSize * (r1 < 0.85 ? 0.9 : (r2 < 0.9 ? 1.4 : p.backgroundSizeVariation));
         bctx.beginPath();
         bctx.arc(x, y, size, 0, Math.PI * 2);
         bctx.fill();
@@ -266,85 +302,129 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           const radius = Math.sqrt(dx * dx + dy * dy);
           if (radius < 3) continue;
 
-          const decay = radialDecay(radius, maxRadius / DPR);
+          // 基础径向衰减
+          let decay = radialDecay(radius, maxRadius / DPR);
           const armInfo = getArmInfo(x * DPR, y * DPR, centerX, centerY, maxRadius, p);
           const result = calculateArmDensityProfile(armInfo, p);
+
+          // 分层策略：不在此处做宽度补偿，避免整体亮度异常
 
           let density: number;
           let size: number;
           if (radius < p.coreRadius) {
             const coreProfile = Math.exp(-Math.pow(radius / p.coreRadius, 1.5));
-            density = p.coreDensity * coreProfile * decay;
-            size = (p.coreSizeMin + Math.random() * (p.coreSizeMax - p.coreSizeMin)) * p.armStarSizeMultiplier;
+            density = (p.coreDensity ?? (p.armBrightness * 1.2)) * coreProfile * decay;
+            size = p.coreSizeMin + rng() * (p.coreSizeMax - p.coreSizeMin);
+            size = Math.min(size, p._maxStarSize);
           } else {
-            const n = noise2D(x * p.densityNoiseScale, y * p.densityNoiseScale);
-            const modulation = 1.0 - p.densityNoiseStrength * (0.5 * (1.0 - n));
-            density = result.density * decay * modulation;
-            size = result.size;
-          }
-          density *= 0.8 + rng() * 0.4;
-          if (rng() < density) {
-            let ox = x; let oy = y;
-            if (!reducedMotion && result.profile > 0.001) {
-              const pitchAngle = Math.atan(1 / p.spiralB);
-              const jitterAngle = armInfo.theta + pitchAngle + Math.PI / 2;
-              const rand1 = rng() || 1e-6;
-              const rand2 = rng();
-              const gaussian = Math.sqrt(-2.0 * Math.log(rand1)) * Math.cos(2.0 * Math.PI * rand2);
-              const jitterAmount = p.jitterStrength * result.profile * gaussian;
-              ox += (jitterAmount * Math.cos(jitterAngle)) / DPR;
-              oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
+            // 分层叠加：臂间基线 + 经噪声调制的旋臂贡献（分别独立采样绘制）
+            const baseDensity = p.interArmBrightness;
+            const armContribution = result.density;
+            const n = noise2D(x * p.noiseScale, y * p.noiseScale);
+            const modulation = 1.0 + n * p.noiseStrength; // 平衡噪声模型
+            const modulatedArmContribution = armContribution * modulation;
+
+            // 径向衰减：臂间使用全衰减；旋臂使用偏置衰减 + 外缘提升，增强外圈可见宽度
+            let baseProb = baseDensity * decay;
+            const rNormFull = Math.min((armInfo.radius / (maxRadius)), 1);
+            const decayArm = Math.pow(decay, Math.max(0.1, Math.min(1.0, p.armDecayBias)));
+            let armProb = modulatedArmContribution * decayArm * (1 + Math.max(0, Math.min(1, p.armOuterBoost)) * (rNormFull * rNormFull));
+            // 注入随机因子，避免过于规整
+            baseProb *= 0.8 + rng() * 0.4;
+            armProb *= 0.8 + rng() * 0.4;
+            baseProb = Math.max(0, Math.min(1, baseProb));
+            armProb = Math.max(0, Math.min(1, armProb));
+
+            // 背景（臂间）星层：全域存在，不受臂内外限制
+            if (rng() < baseProb) {
+              const jx = (rng() - 0.5) * step;
+              const jy = (rng() - 0.5) * step;
+              const px = x + jx;
+              const py = y + jy;
+              const dxC = (px * DPR) - centerX;
+              const dyC = (py * DPR) - centerY;
+              const r = Math.sqrt(dxC * dxC + dyC * dyC);
+              const rFrac = Math.max(0, Math.min(0.999, r / maxRadius));
+              const bandIndex = Math.min(BAND_COUNT - 1, Math.floor(rFrac * BAND_COUNT));
+              const ctxT = bandCtx[bandIndex];
+              ctxT.fillStyle = structureColoring ? paletteRef.current.outer : '#FFFFFF';
+              const sBaseRaw = p.interArmStarSizeMin + rng() * (p.interArmStarSizeMax - p.interArmStarSizeMin);
+              const sBase = Math.min(sBaseRaw, p._maxStarSize);
+              ctxT.beginPath();
+              ctxT.arc(px, py, sBase, 0, Math.PI * 2);
+              ctxT.fill();
             }
-            // assign to radial band for differential rotation
-            const dxC = (ox * DPR) - centerX;
-            const dyC = (oy * DPR) - centerY;
-            const r = Math.sqrt(dxC * dxC + dyC * dyC);
-            const rFrac = Math.max(0, Math.min(0.999, r / maxRadius));
-            const bandIndex = Math.min(BAND_COUNT - 1, Math.floor(rFrac * BAND_COUNT));
-            const target = bandCtx[bandIndex];
-            // 结构着色分类（核心/脊线/臂内/臂边/尘埃/外围），可通过开关启用
-            if (structureColoring) {
-              const cxCSS = centerX / DPR;
-              const cyCSS = centerY / DPR;
-              const rCSS = Math.sqrt((ox - cxCSS) ** 2 + (oy - cyCSS) ** 2);
-              const aw = (armInfo.armWidth || 1) / DPR;
-              const d = armInfo.distance / DPR;
-              const noiseLocal = noise2D(x * 0.05, y * 0.05);
-              // 简单阈值（可后续透出）：
-              const coreR = p.coreRadius;
-              const ridgeT = 0.7;   // 脊线
-              const mainT = 0.5;    // 臂内
-              const edgeT = 0.25;   // 臂边
-              const dustOffset = 0.35 * aw;
-              const dustHalf = 0.10 * aw * 0.5;
-              const pal = paletteRef.current;
-              let fill = '#FFFFFF';
-              if (rCSS < coreR) {
-                fill = pal.core; // 核心黄白
-              } else {
-                const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf;
-                if (inDust || noiseLocal < -0.2) {
-                  fill = pal.dust; // 尘埃带红褐
-                } else if (result.profile > ridgeT) {
-                  fill = pal.ridge; // 螺旋臂脊线（最亮）
-                } else if (result.profile > mainT) {
-                  fill = pal.armBright; // 臂内部亮区
-                } else if (result.profile > edgeT) {
-                  fill = pal.armEdge; // 臂边缘淡蓝
-                } else {
-                  fill = pal.outer; // 臂间/外围灰蓝
-                }
+
+            // 旋臂星层：仅在臂内概率较高，但全域可受 profile 微弱影响
+            if (rng() < armProb) {
+              let ox = x; let oy = y;
+              if (!reducedMotion && result.profile > 0.001) {
+                const pitchAngle = Math.atan(1 / p.spiralTightness);
+                const jitterAngle = armInfo.theta + pitchAngle + Math.PI / 2;
+                const rand1 = rng() || 1e-6;
+                const rand2 = rng();
+                const gaussian = Math.sqrt(-2.0 * Math.log(rand1)) * Math.cos(2.0 * Math.PI * rand2);
+                const jitterAmount = p.jitterStrength * result.profile * gaussian;
+                ox += (jitterAmount * Math.cos(jitterAngle)) / DPR;
+                oy += (jitterAmount * Math.sin(jitterAngle)) / DPR;
               }
-              target.fillStyle = fill;
-            } else {
-              target.fillStyle = '#FFFFFF';
+              const jx2 = (rng() - 0.5) * step;
+              const jy2 = (rng() - 0.5) * step;
+              const px2 = ox + jx2;
+              const py2 = oy + jy2;
+              const dxC2 = (px2 * DPR) - centerX;
+              const dyC2 = (py2 * DPR) - centerY;
+              const r2 = Math.sqrt(dxC2 * dxC2 + dyC2 * dyC2);
+              const rFrac2 = Math.max(0, Math.min(0.999, r2 / maxRadius));
+              const bandIndex2 = Math.min(BAND_COUNT - 1, Math.floor(rFrac2 * BAND_COUNT));
+              const target2 = bandCtx[bandIndex2];
+
+              // 结构着色分类（核心/脊线/臂内/臂边/尘埃/外围），可通过开关启用
+              if (structureColoring) {
+                const cxCSS = centerX / DPR;
+                const cyCSS = centerY / DPR;
+                const rCSS = Math.sqrt((px2 - cxCSS) ** 2 + (py2 - cyCSS) ** 2);
+                const aw = (armInfo.armWidth || 1) / DPR;
+                const d = armInfo.distance / DPR;
+                const noiseLocal = noise2D(x * 0.05, y * 0.05);
+                const coreR = p.coreRadius;
+                const ridgeT = 0.7;
+                const mainT = 0.5;
+                const edgeT = 0.25;
+                const dustOffset = 0.35 * aw;
+                const dustHalf = 0.10 * aw * 0.5;
+                const pal = paletteRef.current;
+                let fill = '#FFFFFF';
+                if (rCSS < coreR) {
+                  fill = pal.core;
+                } else {
+                  const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf;
+                  if (inDust || noiseLocal < -0.2) {
+                    fill = pal.dust;
+                  } else if (result.profile > ridgeT) {
+                    fill = pal.ridge;
+                  } else if (result.profile > mainT) {
+                    fill = pal.armBright;
+                  } else if (result.profile > edgeT) {
+                    fill = pal.armEdge;
+                  } else {
+                    fill = pal.outer;
+                  }
+                }
+                target2.fillStyle = fill;
+              } else {
+                target2.fillStyle = '#FFFFFF';
+              }
+
+              let size2 = p.armStarSizeMin + (p.armStarSizeMax - p.armStarSizeMin) * result.profile;
+              if (result.profile > 0.7 && rng() < p._armHighlightProb) {
+                size2 = p._armHighlightSize;
+              }
+              size2 = Math.min(size2, p._maxStarSize);
+              target2.beginPath();
+              target2.arc(px2, py2, size2, 0, Math.PI * 2);
+              target2.fill();
             }
-            target.beginPath();
-            // add slight deterministic jitter to break grid alignment
-            const jx = (rng() - 0.5) * step;
-            const jy = (rng() - 0.5) * step;
-            target.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
-            target.fill();
           }
         }
       }
@@ -504,7 +584,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
-            <strong className="text-sm">银河参数（临时）</strong>
+            <strong className="text-sm">银河参数 (最终版)</strong>
             <div className="flex items-center gap-2">
               <label className="text-xs flex items-center gap-1">
                 <input type="checkbox" checked={rotateEnabled} onChange={(e)=>setRotateEnabled(e.target.checked)} />
@@ -517,73 +597,95 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setParams(defaultParams)}>重置</button>
             </div>
           </div>
-          {structureColoring && (
-            <div className="mb-3 border-b border-white/10 pb-2">
-              <div className="text-xs opacity-80 mb-2">模块颜色</div>
-              {([
-                {k:'core', label:'核心'},
-                {k:'ridge', label:'臂脊'},
-                {k:'armBright', label:'臂内'},
-                {k:'armEdge', label:'臂边'},
-                {k:'dust', label:'尘埃'},
-                {k:'outer', label:'外围'},
-              ] as Array<{k:keyof typeof defaultPalette,label:string}>).map(({k,label}) => (
-                <div key={k as string} className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-xs">{label}</span>
-                  <input type="color" value={(palette as any)[k]}
-                    onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }} />
-                  <input type="text" value={(palette as any)[k]}
-                    onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }}
-                    className="w-24 bg-transparent border border-white/10 rounded px-1 text-xs" />
-                </div>
-              ))}
+
+          {/* --- 核心形态 --- */}
+          <div className="mb-3 p-2 border border-white/10 rounded">
+            <h3 className="text-xs font-bold mb-2 opacity-80">核心形态</h3>
+            {[
+              { k: 'armCount', min: 1, max: 8, step: 1, label: '旋臂数量' },
+              { k: 'coreRadius', min: 10, max: 80, step: 1, label: '核心半径' },
+              { k: 'coreDensity', min: 0.1, max: 2.0, step: 0.05, label: '核心密度' },
+              { k: 'spiralTightness', min: 0.15, max: 0.6, step: 0.01, label: '螺旋紧密度' },
+            ].map(({ k, min, max, step, label }) => (
+              <RenderSlider key={k} pKey={k} min={min} max={max} step={step} label={label} params={params} setParams={setParams} />
+            ))}
+          </div>
+
+          {/* --- 旋臂宽度模型 --- */}
+          <div className="mb-3 p-2 border border-white/10 rounded">
+            <h3 className="text-xs font-bold mb-2 opacity-80">旋臂宽度模型</h3>
+            <div className="mb-2">
+              <label className="text-xs mr-2">宽度模型</label>
+              <select
+                className="bg-black/40 border border-white/10 rounded px-2 py-1 text-xs"
+                value={(params as any).armWidthModel}
+                onChange={(e)=>setParams(prev => ({...prev, armWidthModel: e.target.value as any}))}
+              >
+                <option value="power">幂函数</option>
+                <option value="sigmoid">S型</option>
+                <option value="piecewise">分段线性</option>
+              </select>
             </div>
-          )}
-          {(
-            [
-              {k:'coreDensity',min:0,max:1,step:0.01,label:'核心密度'},
-              {k:'coreRadius',min:5,max:100,step:1,label:'核心半径'},
-              {k:'galaxyScale',min:0.3,max:1.2,step:0.01,label:'整体缩放（银河占屏比例）'},
-              {k:'armCount',min:1,max:7,step:1,label:'旋臂数量'},
-              {k:'armDensity',min:0,max:1,step:0.01,label:'旋臂密度'},
-              {k:'spiralB',min:0.1,max:0.5,step:0.01,label:'螺旋紧密度'},
-              {k:'armWidthInner',min:5,max:80,step:1,label:'内侧宽度'},
-              {k:'armWidthOuter',min:20,max:140,step:1,label:'外侧宽度'},
-              {k:'armWidthGrowth',min:1,max:3,step:0.1,label:'宽度增长'},
-              {k:'interArmDensity',min:0,max:0.5,step:0.01,label:'臂间基础密度'},
-              {k:'armTransitionSoftness',min:1,max:8,step:0.1,label:'山坡平缓度'},
-              {k:'fadeStartRadius',min:0.2,max:1,step:0.01,label:'淡化起始'},
-              {k:'fadeEndRadius',min:1,max:1.8,step:0.01,label:'淡化结束'},
-              {k:'backgroundDensity',min:0,max:0.0006,step:0.00001,label:'背景密度'},
-              {k:'jitterStrength',min:0,max:20,step:1,label:'垂直抖动强度'},
-              {k:'densityNoiseScale',min:0.005,max:0.05,step:0.001,label:'密度噪声缩放'},
-              {k:'densityNoiseStrength',min:0,max:1,step:0.05,label:'密度噪声强度'},
-              {k:'armStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'旋臂星星大小'},
-              {k:'interArmStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'臂间星星大小'},
-              {k:'backgroundStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'背景星星大小'},
-              {k:'backgroundSizeVariation',min:0.5,max:4,step:0.1,label:'背景星星大小变化'},
-              {k:'spiralA',min:2,max:20,step:1,label:'螺旋基准A'},
-            ] as Array<{k: keyof typeof defaultParams, min:number,max:number,step:number,label:string}>
-          ).map(({k,min,max,step,label}) => (
-            <div key={k as string} className="mb-2">
-              <label className="text-xs flex justify-between">
-                <span>{label}</span>
-                <span className="opacity-80">{(params as any)[k]}</span>
-              </label>
-              <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={(params as any)[k] as any}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setParams(prev => ({ ...prev, [k]: (k==='armCount'||k==='spiralA') ? Math.round(v) : v } as typeof prev));
-                }}
-                className="w-full"
-              />
-            </div>
-          ))}
+            {[
+              { k: 'armWidth', min: 10, max: 100, step: 1, label: '基础宽度' },
+              { k: 'armWidthOuter', min: 20, max: 200, step: 1, label: '外侧宽度' },
+              { k: 'armWidthGrowth', min: 1, max: 5, step: 0.1, label: '宽度增长指数' },
+            ].map(({ k, min, max, step, label }) => (
+              <RenderSlider key={k} pKey={k} min={min} max={max} step={step} label={label} params={params} setParams={setParams} />
+            ))}
+            { (params as any).armWidthModel === 'sigmoid' && (
+              <RenderSlider pKey={'armWidthSigmoidK'} min={2} max={16} step={1} label={'S型陡峭度'} params={params} setParams={setParams} />
+            )}
+          </div>
+
+          {/* --- 旋臂与臂间亮度 --- */}
+          <div className="mb-3 p-2 border border-white/10 rounded">
+            <h3 className="text-xs font-bold mb-2 opacity-80">旋臂与臂间亮度</h3>
+            {[
+              { k: 'armProfile', min: 1.5, max: 8, step: 0.1, label: '轮廓平滑度' },
+              { k: 'armBrightness', min: 0.1, max: 1.5, step: 0.05, label: '旋臂亮度' },
+              { k: 'interArmBrightness', min: 0, max: 0.5, step: 0.01, label: '臂间亮度' },
+              { k: 'armDecayBias', min: 0.3, max: 1.0, step: 0.05, label: '旋臂衰减偏置(越小越亮)' },
+              { k: 'armOuterBoost', min: 0, max: 1.0, step: 0.05, label: '外缘可见性提升' },
+            ].map(({ k, min, max, step, label }) => (
+              <RenderSlider key={k} pKey={k} min={min} max={max} step={step} label={label} params={params} setParams={setParams} />
+            ))}
+          </div>
+
+          {/* --- 星星尺寸 (随机范围) --- */}
+          <div className="mb-3 p-2 border border-white/10 rounded">
+            <h3 className="text-xs font-bold mb-2 opacity-80">星星尺寸 (随机范围)</h3>
+            {[
+              { k: 'coreSizeMin', min: 0.5, max: 3, step: 0.1, label: '核心尺寸 Min' },
+              { k: 'coreSizeMax', min: 1, max: 6, step: 0.1, label: '核心尺寸 Max' },
+              { k: 'armStarSizeMin', min: 0.5, max: 2, step: 0.05, label: '旋臂尺寸 Min' },
+              { k: 'armStarSizeMax', min: 1, max: 3, step: 0.05, label: '旋臂尺寸 Max' },
+              { k: 'interArmStarSizeMin', min: 0.5, max: 2, step: 0.05, label: '背景尺寸 Min' },
+              { k: 'interArmStarSizeMax', min: 1, max: 3, step: 0.05, label: '背景尺寸 Max' },
+              { k: 'backgroundStarSize', min: 0.5, max: 2, step: 0.05, label: '远背景尺寸' },
+              { k: 'backgroundSizeVariation', min: 1, max: 5, step: 0.1, label: '远背景尺寸变化' },
+              { k: '_armHighlightProb', min: 0, max: 0.05, step: 0.001, label: '高亮星概率' },
+              { k: '_armHighlightSize', min: 1, max: 8, step: 0.1, label: '高亮星尺寸' },
+              { k: '_coreSizeMaxFactor', min: 0.5, max: 3, step: 0.1, label: '核心随机尺寸因子' },
+              { k: '_maxStarSize', min: 1, max: 8, step: 0.1, label: '全局最大星半径' },
+            ].map(({ k, min, max, step, label }) => (
+              <RenderSlider key={k} pKey={k} min={min} max={max} step={step} label={label} params={params} setParams={setParams} />
+            ))}
+          </div>
+
+          {/* --- 细节与纹理 --- */}
+          <div className="mb-3 p-2 border border-white/10 rounded">
+            <h3 className="text-xs font-bold mb-2 opacity-80">细节与纹理</h3>
+            {[
+              { k: 'jitterStrength', min: 0, max: 30, step: 1, label: '垂直抖动' },
+              { k: 'noiseStrength', min: 0, max: 1, step: 0.05, label: '尘埃强度' },
+              { k: 'noiseScale', min: 0.01, max: 0.1, step: 0.001, label: '尘埃大小' },
+              { k: 'galaxyScale', min: 0.3, max: 1.2, step: 0.01, label: '整体缩放' },
+              { k: 'backgroundDensity', min: 0, max: 0.0006, step: 0.00001, label: '背景密度' },
+            ].map(({ k, min, max, step, label }) => (
+              <RenderSlider key={k} pKey={k} min={min} max={max} step={step} label={label} params={params} setParams={setParams} />
+            ))}
+          </div>
         </div>
       )}
     </>
