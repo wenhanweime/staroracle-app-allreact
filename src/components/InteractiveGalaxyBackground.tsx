@@ -234,11 +234,30 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const nearLayerRef = useRef<HTMLCanvasElement | null>(null); // legacy
   const farLayerRef = useRef<HTMLCanvasElement | null>(null);  // legacy
   const bandLayersRef = useRef<HTMLCanvasElement[] | null>(null); // 差速旋转分层
+  // 星点掩膜层：与图层对应的掩膜和每帧合成后的掩膜
+  const bgMaskRef = useRef<HTMLCanvasElement | null>(null);
+  const bandMaskLayersRef = useRef<HTMLCanvasElement[] | null>(null);
+  const starMaskCompositeRef = useRef<HTMLCanvasElement | null>(null);
   const [params, setParams] = useState(defaultParams);
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; }, [params]);
   // 星点默认使用偏灰白，避免纯白饱和（为交互提亮留余量）
   const starBaseColor = '#CCCCCC';
+  // 闪烁动效配置（用于 ClickGlowOverlay）
+  const [glowCfg, setGlowCfg] = useState({
+    pickProb: 0.2,
+    pulseWidth: 0.25,
+    bandFactor: 0.12,
+    noiseFactor: 0.08,
+    edgeAlphaThresh: 8,
+    edgeExponent: 1.1,
+    radiusFactor: 0.035,
+    minRadius: 30,
+    durationMs: 1100,
+    ease: 'sine' as 'sine' | 'cubic',
+  });
+  // 闪烁调试参数（用于 ClickGlowOverlay）
+  
 
   const renderAllRef = useRef<() => void>();
   // Rotation toggle: pause during debug by default
@@ -321,6 +340,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const bctx = bg.getContext('2d')!;
       const nctx = near.getContext('2d')!;
       const fctx = far.getContext('2d')!;
+      // 掩膜：与图层同尺寸
+      const bgMask = document.createElement('canvas'); bgMask.width = width; bgMask.height = height;
+      const bmctx = bgMask.getContext('2d')!;
       // Prepare band layers for differential rotation (no duplication)
       const BAND_COUNT = 10;
       const bands: HTMLCanvasElement[] = Array.from({ length: BAND_COUNT }, () => {
@@ -330,6 +352,13 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       });
       const bandCtx = bands.map(c => c.getContext('2d')!);
       bandCtx.forEach(ctx => { ctx.save(); ctx.scale(DPR, DPR); });
+      const bandMasks: HTMLCanvasElement[] = Array.from({ length: BAND_COUNT }, () => {
+        const c = document.createElement('canvas');
+        c.width = owidth; c.height = oheight;
+        return c;
+      });
+      const bandMaskCtx = bandMasks.map(c => c.getContext('2d')!);
+      bandMaskCtx.forEach(ctx => { ctx.save(); ctx.scale(DPR, DPR); });
 
       const qualityScale = getQualityScale();
       const step = getStep();
@@ -337,6 +366,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       // Background small stars -> bg layer (full-screen, no rotation/scale)
       const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.6 : 1) * qualityScale);
       bctx.save(); bctx.scale(DPR, DPR); bctx.globalAlpha = 1; bctx.fillStyle = starBaseColor;
+      bmctx.save(); bmctx.scale(DPR, DPR); bmctx.fillStyle = '#FFFFFF';
       for (let i = 0; i < bgCount; i++) {
         const x = rng() * (width / DPR);
         const y = rng() * (height / DPR);
@@ -344,11 +374,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         const r2 = rng();
         let size = r1 < 0.85 ? 0.8 : (r2 < 0.9 ? 1.2 : p.backgroundSizeVariation);
         size *= p.backgroundStarSizeMultiplier;
-        bctx.beginPath();
-        bctx.arc(x, y, size, 0, Math.PI * 2);
-        bctx.fill();
+        bctx.beginPath(); bctx.arc(x, y, size, 0, Math.PI * 2); bctx.fill();
+        bmctx.beginPath(); bmctx.arc(x, y, size, 0, Math.PI * 2); bmctx.fill();
       }
-      bctx.restore();
+      bctx.restore(); bmctx.restore();
 
       // galaxy field: raster grid to allocate points into near/far
       nctx.save(); nctx.scale(DPR, DPR);
@@ -401,6 +430,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             const rFrac = Math.max(0, Math.min(0.999, r / maxRadius));
             const bandIndex = Math.min(BAND_COUNT - 1, Math.floor(rFrac * BAND_COUNT));
             const target = bandCtx[bandIndex];
+            const targetMask = bandMaskCtx[bandIndex];
             // 结构着色分类（核心/脊线/臂内/臂边/尘埃/外围），可通过开关启用
             if (structureColoring) {
               const cxCSS = oCenterX / DPR;
@@ -458,6 +488,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             const jy = (rng() - 0.5) * step;
             target.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
             target.fill();
+            // 掩膜：同样位置半径写入白色
+            targetMask.beginPath();
+            targetMask.fillStyle = '#FFFFFF';
+            targetMask.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
+            targetMask.fill();
             if (structureColoring) { target.globalAlpha = 1; }
           }
         }
@@ -466,8 +501,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       fctx.restore();
 
       bandCtx.forEach(ctx => ctx.restore && ctx.restore());
+      bandMaskCtx.forEach(ctx => ctx.restore && ctx.restore());
       bgLayerRef.current = bg;
       bandLayersRef.current = bands;
+      bgMaskRef.current = bgMask;
+      bandMaskLayersRef.current = bandMasks;
       nearLayerRef.current = null;
       farLayerRef.current = null;
     };
@@ -486,6 +524,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
       // 1) Background layer (fills the whole screen, not scaled/rotated)
       const bg = bgLayerRef.current;
+      const bgMask = bgMaskRef.current;
       if (bg) {
         ctx.save();
         ctx.globalAlpha = 1;
@@ -495,11 +534,21 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
       // 2) Rotating galaxy layers (scaled around center) - differential rotation by radial bands
       const bands = bandLayersRef.current || [];
+      const bandMasks = bandMaskLayersRef.current || [];
       const scale = paramsRef.current.galaxyScale ?? 1;
+      // Prepare/update screen-space star mask composite
+      if (!starMaskCompositeRef.current) {
+        const c = document.createElement('canvas'); c.width = w; c.height = h; starMaskCompositeRef.current = c;
+      }
+      const mctx = starMaskCompositeRef.current!.getContext('2d')!;
+      mctx.clearRect(0,0,w,h);
+      if (bgMask) mctx.drawImage(bgMask, 0, 0, w, h);
+
       // Differential rotation: inner faster, outer slower
       const baseDegPerMs = 0.00025; // 内层基础角速度（降为原来的 1/10）
       for (let i = 0; i < bands.length; i++) {
         const band = bands[i];
+        const bandMask = bandMasks[i];
         const rMid = (i + 0.5) / Math.max(1, bands.length); // 0..1
         const omegaDegPerMs = doRotate ? (baseDegPerMs / (0.25 + rMid)) : 0; // ω ~ 1/(0.25+r)
         const angle = omegaDegPerMs * time * (Math.PI / 180);
@@ -511,6 +560,17 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         const bw = band.width, bh = band.height; const bcx = bw / 2, bcy = bh / 2;
         ctx.drawImage(band, -bcx, -bcy, bw, bh);
         ctx.restore();
+
+        // 同步变换叠加掩膜
+        if (bandMask) {
+          mctx.save();
+          mctx.translate(cx, cy);
+          mctx.scale(scale, scale);
+          mctx.rotate(angle);
+          const bw2 = bandMask.width, bh2 = bandMask.height; const bcx2 = bw2/2, bcy2 = bh2/2;
+          mctx.drawImage(bandMask, -bcx2, -bcy2, bw2, bh2);
+          mctx.restore();
+        }
       }
 
       // 原始风格：无呼吸云层、无区域楔形高亮、无暗角
@@ -608,8 +668,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
-      {/* 简化交互：点击附近星点先亮后还原，仅此一层 */}
-      <ClickGlowOverlay baseCanvasRef={canvasRef} />
+      {/* 简化交互：点击附近星点先亮后还原，仅此一层（使用星点掩膜） */}
+      <ClickGlowOverlay baseCanvasRef={canvasRef} starMaskRef={starMaskCompositeRef} config={glowCfg} />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
@@ -656,6 +716,31 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               ))}
             </div>
           )}
+          {/* 闪烁动效调试 */}
+          <div className="mt-3 border-b border-white/10 pb-2">
+            <div className="text-xs opacity-80 mb-2">闪烁调试（点击星变亮→回灰）</div>
+            {([
+              {k:'pickProb', min:0, max:0.5, step:0.01, label:'选中比例'},
+              {k:'pulseWidth', min:0.1, max:0.5, step:0.01, label:'脉冲宽度'},
+              {k:'bandFactor', min:0.05, max:0.3, step:0.005, label:'扩散软边系数'},
+              {k:'noiseFactor', min:0, max:0.2, step:0.005, label:'径向形变强度'},
+              {k:'edgeAlphaThresh', min:0, max:32, step:1, label:'掩膜边缘阈值'},
+              {k:'edgeExponent', min:1.0, max:2.5, step:0.05, label:'掩膜边缘幂'},
+              {k:'radiusFactor', min:0.01, max:0.12, step:0.001, label:'点击半径系数'},
+              {k:'minRadius', min:5, max:120, step:1, label:'最小点击半径(px)'},
+            ] as Array<{k: keyof typeof glowCfg, min:number, max:number, step:number, label:string}>).map(({k,min,max,step,label}) => (
+              <div key={k as string} className="mb-2">
+                <label className="text-xs flex justify-between">
+                  <span>{label}</span>
+                  <span className="opacity-80">{(glowCfg as any)[k]}</span>
+                </label>
+                <input type="range" min={min} max={max} step={step}
+                  value={(glowCfg as any)[k] as any}
+                  onChange={(e)=>{ const v = Number(e.target.value); setGlowCfg(prev=> ({...prev, [k]: v})); }}
+                  className="w-full" />
+              </div>
+            ))}
+          </div>
           {(
             [
               {k:'coreDensity',min:0,max:1,step:0.01,label:'核心密度'},
