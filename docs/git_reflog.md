@@ -1,0 +1,16 @@
+- reachable | 7ec8266ba71ce68d782a7effdf3cb5db56c3be4c | 2025-09-06 13:31:51 +0800 | checkout: moving from main to params-lock-7ec8266
+- reachable | 00aaeffd44bc6b3548d49eb74fa6c46dc3e3aeea | 2025-09-05 01:40:21 +0800 | checkout: moving from 7ec8266ba71ce68d782a7effdf3cb5db56c3be4c to main
+- reachable | 7ec8266ba71ce68d782a7effdf3cb5db56c3be4c | 2025-09-06 13:31:51 +0800 | commit: chore(参数): 锁定银河默认参数为指定数值\n\n- 核心密度: 0.7, 核心半径: 25\n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29\n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5\n- 臂间基础密度: 0.15, 山坡平缓度: 7.3\n- 淡化起始: 0.5, 淡化结束: 1.54\n- 背景密度: 0.00045\n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9\n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7\n\n后续不再轻易修改默认参数，如需变更将另行说明。
+- reachable | cbb116859040e514fc79e42f900554a28f85a55e | 2025-09-06 13:19:47 +0800 | commit: feat(视觉): 按星系结构分色并加入前台开关\n\n- 新增结构着色开关（默认关闭），启用后按核心/臂脊/臂内/臂边/尘埃/外围分类上色\n- 保持背景全屏白星、不随缩放/旋转；主体仍按差速旋转呈现\n- 保留固定随机种子，保证同参数形态一致\n- 未开启开关时维持白星风格，便于性能与形态对比
+- reachable | 8582f3934f70412b3a2b5ddfc49fada7abf65dfe | 2025-09-06 02:05:22 +0800 | commit: feat(visual): replace dual-layer spin with differential rotation by radial bands; deterministic RNG for stable morphology; keep background full-screen
+- reachable | e14b1d5eaa60b1ca851ed32859c60e30933795e8 | 2025-09-06 01:57:05 +0800 | commit: chore(galaxy): update defaults per latest user params (galaxyScale=0.68, armDensity=0.70, spiralB=0.21, inner=55, outer=101, fade 0.2-1.36, bgDensity=0.0006, jitter=16, noiseStrength=0.9, multipliers 0.8/0.9) and sync docs
+- reachable | 17442cb3729d061d1ca95318a60910db6ba22052 | 2025-09-06 01:35:58 +0800 | commit: chore(galaxy): update defaults per latest tuning (armDensity=0.65, innerWidth=56, growth=2.8, bgDensity=0.00057, noiseScale=0.049, galaxyScale=0.6) and docs
+- reachable | 3c8d83505065964e232b766a20e91fdd315719cb | 2025-09-06 01:18:41 +0800 | commit: feat(visual): add galaxyScale (default 0.618) and apply scale around center; expose slider in debug panel
+- reachable | a6a062b547fcfe5a34bf0f509ad47ad707c19874 | 2025-09-06 01:06:20 +0800 | commit: chore(galaxy): apply user-adjusted defaults (outerWidth=53, bgDensity=0.00045, noiseScale=0.006, etc.) and update docs/log
+- reachable | ea080289e5bda88e3ec307a688512e5888e3f3d1 | 2025-09-06 00:58:22 +0800 | commit: feat(debug): add pause-rotation toggle in galaxy debug panel (default paused when debugging)
+- reachable | daa4cc0c4183894cda04e4a7a6f241ea7c4a47f8 | 2025-09-06 00:41:40 +0800 | commit: chore(galaxy): set homepage galaxy defaults to user-provided params and update doc
+- reachable | 6b9db23e16628c437999bdb76974ed422e280f86 | 2025-09-06 00:24:27 +0800 | commit: fix(visual): align galaxy params to saved ref and remove glow/overlays
+- reachable | 7dd6d1a2f5d2966b3a8e8d61fa6623fffc7ae8df | 2025-09-05 23:59:43 +0800 | commit: feat(visual): rotating living galaxy with breathing and 3-arm palette
+- reachable | 2e9bb34210173f6ffa893afbf98f38545f9d4fdb | 2025-09-05 23:46:02 +0800 | commit: feat(galaxy): living galaxy integration and interaction loop
+- reachable | ca82a1cc56c14db7ac6aceaceb8c92170c4cf042 | 2025-08-25 01:01:18 +0800 | checkout: moving from main to ca82a1c
+- reachable | 00aaeffd44bc6b3548d49eb74fa6c46dc3e3aeea | 2025-09-05 01:40:21 +0800 | clone: from /Users/pot/Documents/staroracle-app_v1/.

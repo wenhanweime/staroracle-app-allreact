@@ -1,0 +1,139 @@
+- 023a751 | 2025-08-17T00:49:18+08:00 | pot |  Initial commit: StarOracle Capacitor App
+- bc61bd3 | 2025-08-17T02:01:17+08:00 | pot |  Save project state before fixing Xcode compatibility issues
+- e73ca84 | 2025-08-17T02:25:21+08:00 | pot |  Fix Xcode compatibility issues and update dependencies
+- 994e555 | 2025-08-17T14:17:36+08:00 | pot |  Implement dark input bar design for ConversationDrawer
+- d8f18b0 | 2025-08-17T15:32:51+08:00 | pot |  重新安装依赖之前 为了使用capacitor external
+- 9d0a923 | 2025-08-17T20:18:42+08:00 | pot |  Fix StarCard layout alignment issues
+- 092036c | 2025-08-18T22:56:10+08:00 | pot |  Fix iOS StarCard alignment issues with Safari-specific optimizations
+- a8474f7 | 2025-08-18T23:44:45+08:00 | pot |  Fix ConversationDrawer input bar transparent background - Phase 1
+- 0a965e0 | 2025-08-20T01:06:23+08:00 | pot |  Add code-fine and diff commands, prepare for conversation drawer fixes
+- 9ab5d72 | 2025-08-20T01:08:52+08:00 | pot |  Optimize ConversationDrawer: Merge DarkInputBar design with iOS compatibility
+- 2b6e2ec | 2025-08-20T01:15:26+08:00 | pot |  Ultimate fix for iOS ConversationDrawer button issues: Perfect circles and transparent backgrounds
+- 7eed6f8 | 2025-08-20T02:09:44+08:00 | pot |  FINAL FIX: Remove conflicting CSS padding rules that broke button styling
+- 419a890 | 2025-08-20T02:36:07+08:00 | pot |  Fix iOS Safari button styling with dialog-transparent-button CSS class
+- 2bf00b8 | 2025-08-20T02:50:08+08:00 | pot |  Remove input border styling to match reference design
+- 74d1d93 | 2025-08-20T03:04:29+08:00 | pot |  Remove plus button from input bars for cleaner design
+- 5e6f029 | 2025-08-20T22:48:31+08:00 | pot |  Implement new header layout with drawer menu and logo button
+- 6b66caf | 2025-08-20T22:55:15+08:00 | pot |  Move Template button functionality to drawer menu
+- 0b07dab | 2025-08-20T22:58:46+08:00 | pot |  Fix drawer menu styling to match cosmic theme
+- 682f0d0 | 2025-08-20T23:03:39+08:00 | pot |  Unify button styles across the application
+- 2c3e9b4 | 2025-08-20T23:12:10+08:00 | pot |  Remove button background color changes, keep only content color transitions
+- 47be20f | 2025-08-20T23:13:55+08:00 | pot |  Fix drawer menu close button to match invisible button style
+- c7c9f3e | 2025-08-21T00:32:51+08:00 | pot |  Optimize Header positioning to perfectly align with Dynamic Island
+- 3d823de | 2025-08-21T00:44:00+08:00 | pot |  调整了所有按钮的效果
+- 9878f10 | 2025-08-21T00:46:52+08:00 | pot |  修复了左侧抽屉按钮里面的文字顶部的高度
+- 8e45863 | 2025-08-21T01:31:11+08:00 | pot |  Localize Star Collection to 集星 and remove drawer menu border
+- 889e75e | 2025-08-21T01:59:16+08:00 | pot |  移除抽屉菜单图标并优化iOS键盘交互
+- 47c905e | 2025-08-21T02:02:37+08:00 | pot |  实现iOS键盘与输入框同步弹起优化
+- 0f73b2a | 2025-08-21T02:18:05+08:00 | pot |  完成字体系统统一，准备进一步优化输入框逻辑
+- f745e44 | 2025-08-21T02:36:44+08:00 | pot |  实现首页对话框功能并集成模拟AI回复
+- 4f1653d | 2025-08-21T02:41:49+08:00 | pot |  优化界面交互体验，禁用不必要的长按复制功能
+- 641caf2 | 2025-08-21T02:45:58+08:00 | pot |  修改主屏幕点击交互，复用右键出星卡逻辑
+- 64c14df | 2025-08-21T02:48:17+08:00 | pot |  修复灵感卡片翻转时自动弹出键盘的问题
+- 1dd6d46 | 2025-08-21T02:51:50+08:00 | pot |  优化灵感卡片动画性能 - 分阶段加载动画
+- 9d66576 | 2025-08-21T02:54:29+08:00 | pot |  修复灵感卡片背景星星位置跳变问题
+- 0754276 | 2025-08-21T02:56:53+08:00 | pot |  修复背景星星微小位移问题
+- 27f6d0f | 2025-08-21T03:06:05+08:00 | pot |  修复灵感卡片星星上下位移问题
+- e8a2232 | 2025-08-21T22:28:09+08:00 | pot |  优化灵感卡片动画时序 - 背景星星在主星星完成后开始
+- 6654625 | 2025-08-21T22:57:12+08:00 | pot |  修复背景星星状态切换导致的视觉跳变问题
+- 6ed8040 | 2025-08-21T23:19:34+08:00 | pot |  修复灵感卡片翻转不可逆问题
+- 5f1b7a3 | 2025-08-21T23:25:36+08:00 | pot |  加快灵感卡片主星星出现速度
+- e9b7a6f | 2025-08-21T23:35:45+08:00 | pot |  进一步优化主星星出现速度 - 延迟设为0
+- d7293af | 2025-08-21T23:47:08+08:00 | pot |  接入真实AI API到聊天系统
+- cdc6486 | 2025-08-22T21:31:14+08:00 | pot |  修复AI功能 - 解决环境变量读取和API调用问题
+- 880032e | 2025-08-22T21:52:32+08:00 | pot |  实现流式AI回复输出功能
+- f2fcc58 | 2025-08-23T00:56:24+08:00 | pot |  优化流式输出UI体验和聊天界面
+- 40d71be | 2025-08-23T01:52:20+08:00 | pot |  实现多轮对话功能和文本格式优化
+- b251e86 | 2025-08-23T02:06:35+08:00 | pot |  实现觉察功能完整体系
+- f6c2736 | 2025-08-23T02:33:43+08:00 | pot |  修复觉察功能的所有问题
+- 224c32d | 2025-08-23T02:39:50+08:00 | pot |  重新设计觉察图标 - 使用星星动画设计
+- 50bbad0 | 2025-08-23T13:11:14+08:00 | pot |  完善觉察动画位置和布局优化
+- 1a5f090 | 2025-08-23T14:55:27+08:00 | pot |  修复聊天时背景点击问题和字体大小一致性
+- 6dbe319 | 2025-08-23T15:29:27+08:00 | pot |  重构对话架构 - 分离主页和对话功能
+- 84c9d73 | 2025-08-24T04:09:51+08:00 | pot |  增加对话浮窗功能
+- 5b1b510 | 2025-08-24T13:49:56+08:00 | pot |  优化对话浮窗UI和交互体验
+- ca82a1c | 2025-08-25T01:01:18+08:00 | pot |  优化输入框响应速度 - 解耦聚焦行为和浮窗动画
+- 5de8d6b | 2025-08-25T02:08:28+08:00 | pot |  🎯 输入框原生化优化完成 - 迈向混合架构
+- 3ff0401 | 2025-08-27T01:54:21+08:00 | pot |  初步跑通swift原生插件
+- ac5ab2f | 2025-08-27T02:29:52+08:00 | pot |  ✅ ChatOverlay双文件架构完成 - 删除所有测试UI
+- 1624d53 | 2025-08-27T02:30:37+08:00 | pot |  📝 清理历史文档和调试代码
+- d0a107c | 2025-08-27T23:03:08+08:00 | pot |  🎯 ChatOverlay原生插件核心功能完成 - 解决三大问题
+- 64824c9 | 2025-08-27T23:03:59+08:00 | pot |  📝 更新CLAUDE.md构建指令 - 添加Xcode自动化命令
+- 578982f | 2025-08-28T00:48:10+08:00 | pot |  🎯 修复ChatOverlay原生插件消息同步和AI对话逻辑
+- 595b768 | 2025-08-28T23:53:56+08:00 | pot |  🎯 解决触摸事件穿透问题 - 实现PassthroughWindow智能触摸处理
+- c6e946f | 2025-08-30T00:19:18+08:00 | pot |  🎯 完善ChatOverlay和InputDrawer定位系统 - 降低整体高度50px
+- 4c2aee7 | 2025-08-30T00:34:17+08:00 | pot |  🐛 修复第一次缩小浮窗位置异常bug - 添加时序控制确保位置计算准确
+- 0aeade3 | 2025-08-30T01:11:51+08:00 | pot |  🎯 优化ChatOverlay交互体验 - 完善滑动收起和动画效果
+- 4c1c144 | 2025-08-30T23:46:08+08:00 | pot |  🚀 彻底解决ChatOverlay双重动画问题 - 多层次架构优化
+- d658b5d | 2025-08-31T18:49:49+08:00 | codex-cli |  (tag: pre-codex-20250831-104949) chore: snapshot before Codex changes 2025-08-31T10:49:49Z
+- c631692 | 2025-09-01T01:12:36+08:00 | codex-cli |  (tag: snapshot-20250831-171235) chore: snapshot after animation fix 2025-08-31T17:12:35Z
+- 76e9cb5 | 2025-09-01T22:29:15+08:00 | codex-cli |  cursor修复之前 - 保存当前版本用于问题分析
+- 56d1292 | 2025-09-01T22:31:52+08:00 | codex-cli |  修复原生对话框发送动画重复和流式输出冲突问题
+- 23fb004 | 2025-09-01T22:34:35+08:00 | codex-cli |  优化：从时间限制改为状态机机制，避免极端案例
+- d80919a | 2025-09-01T22:40:00+08:00 | codex-cli |  修复Swift编译错误：状态机属性引用问题
+- b02d420 | 2025-09-01T23:13:42+08:00 | codex-cli |  基于iChatGPT设计优化流式输出实现
+- 97483d5 | 2025-09-02T02:24:38+08:00 | codex-cli |  chore: snapshot after InputDrawer visibility safeguards and AGENTS.md
+- b2dd330 | 2025-09-02T02:39:16+08:00 | codex-cli |  feat(stream): ensure per-char streaming to native via appendAIChunk fallback to updateLastAI; add periodic beat sync; fix InputDrawer visibility
+- 9e1a3a8 | 2025-09-02T21:38:17+08:00 | codex-cli |  fix: 修复流式输出和动画重复问题的综合解决方案
+- 8cd7eee | 2025-09-03T00:11:40+08:00 | codex-cli |  fix: 初步修复聊天浮窗残影问题
+- 16fd9a4 | 2025-09-03T01:02:06+08:00 | codex-cli |  fix: iOS background 3D scaling animation
+- ac44054 | 2025-09-03T01:06:20+08:00 | codex-cli |  fix(ios): gate first user send animation until layout expansion completes
+- 436c845 | 2025-09-03T01:26:00+08:00 | codex-cli |  fix(ios): always animate user sends even during AI streaming
+- ede2dd7 | 2025-09-03T01:29:08+08:00 | codex-cli |  fix(ios): resolve AnimationState type ambiguity; compare against .userAnimating using qualified default state
+- 7b4760a | 2025-09-03T01:34:52+08:00 | codex-cli |  revert(send): align user send animation trigger with 9e1a3a8 logic
+- 1e3e82a | 2025-09-03T01:40:03+08:00 | codex-cli |  chore: checkpoint — 当前保留3D/主页动画修复；首条消息发送仍有双重发送/打断问题，其他问题基本正常
+- e9712be | 2025-09-03T01:49:29+08:00 | codex-cli |  feat(native-stream): switch iOS chat to native StreamingClient
+- 6b6f644 | 2025-09-03T01:52:29+08:00 | codex-cli |  feat(ios): trigger user insert animation at native stream start
+- 26a7f91 | 2025-09-03T01:54:32+08:00 | codex-cli |  fix(ios): idle-only guarded insert animation at native stream start
+- 31d2dba | 2025-09-03T01:56:24+08:00 | codex-cli |  fix(ios): reset animation state to idle after native stream completes
+- d7392ac | 2025-09-03T02:06:04+08:00 | codex-cli |  fix(ios): ensure user message visible even when insert animation not triggered
+- 8f49f10 | 2025-09-03T02:15:41+08:00 | codex-cli |  fix(ios): use oldMessages.count to detect insert vs stream in VC.updateMessages
+- 6e5f467 | 2025-09-03T02:20:03+08:00 | codex-cli |  chore(native-stream): no-op JS nativeChatOverlay.updateMessages when native streaming enabled
+- b4b0d92 | 2025-09-03T02:25:18+08:00 | codex-cli |  fix(fallback): ensure messages visible by JS fallback streaming to native when startNativeStream fails
+- 2da6073 | 2025-09-03T22:24:31+08:00 | codex-cli |  fix(ui): push user+AI placeholder to native overlay before starting stream
+- a49a8d1 | 2025-09-03T22:37:36+08:00 | codex-cli |  fix(send): use fresh Zustand state after addUserMessage for native bootstrap and conversation
+- 9577657 | 2025-09-03T22:46:50+08:00 | codex-cli |  refactor(send): remove pre-render native updateMessages; use fresh Zustand state for startNativeStream
+- 49621c0 | 2025-09-03T22:50:30+08:00 | codex-cli |  chore: checkpoint — 修复原生发消息不显示；AI回复被顶掉，且无流式输出（待修复）
+- 204d367 | 2025-09-03T22:54:56+08:00 | codex-cli |  fix(ios): - Preserve previous AI messages by not resetting UI messages from JS param; only append new user row in startNativeStreaming - Start gradual replay (beginAIReplayAfterAnimation) after insert animation to show streaming effect - Show loading indicator for AI empty text in MessageTableViewCell - Use updated Zustand state in App.tsx; remove conflicting pre-render native updateMessages in native path
+- 2fa3e68 | 2025-09-03T22:59:28+08:00 | codex-cli |  fix(ios/js): correct plugin usage in App.tsx; ensure assistant placeholder exists; start replay after insert animation
+- 65b1d18 | 2025-09-03T23:09:01+08:00 | codex-cli |  feat(conversation): add ConversationStore; expose system prompt + history APIs; include system prompt + context window in native stream
+- 801b436 | 2025-09-03T23:13:36+08:00 | codex-cli |  feat(M2): logging + conversation bridge + history load
+- 10d605e | 2025-09-03T23:23:48+08:00 | codex-cli |  fix(build): remove direct ConversationStore references from plugin; use manager wrappers
+- fc2a0ab | 2025-09-03T23:38:50+08:00 | codex-cli |  chore: checkpoint — 对话基本问题已修复；prompt 被修改、流式未完全恢复、偶发英文回复（待跟进）
+- c07f315 | 2025-09-04T00:00:45+08:00 | codex-cli |  chore: checkpoint — 增加旋转Star加载动画；存在视觉重叠与偶发bug（待优化）
+- 000f16c | 2025-09-04T00:26:54+08:00 | codex-cli |  style(overlay): match InputDrawer style (bg-gray-900 + border-gray-800), remove gradient
+- bd74745 | 2025-09-04T00:32:00+08:00 | codex-cli |  chore: checkpoint — 浮窗样式与输入框一致（bg-gray-900 + border-gray-800）；修复残余渐变引用编译错误
+- 28e72a4 | 2025-09-04T00:57:52+08:00 | codex-cli |  fix: 修复首次缩小时输入框无法被键盘顶起的问题
+- b21a241 | 2025-09-04T01:19:53+08:00 | codex-cli |  fix: 统一AI对话系统Prompt并注入原生
+- 10ad80a | 2025-09-04T01:24:11+08:00 | codex-cli |  feat(ios): 为输入框与对话浮窗加入柔和位移动画
+- 8b41562 | 2025-09-04T01:29:03+08:00 | codex-cli |  fix(ios): 首次收缩未对齐问题 — 监听输入框实际位置并同步对齐
+- 2c35362 | 2025-09-04T01:34:55+08:00 | codex-cli |  fix(ios): 修正收缩定位公式为‘浮窗在输入框上方’并随实际位置联动
+- 08bdbb9 | 2025-09-04T01:36:26+08:00 | codex-cli |  Revert "fix(ios): 修正收缩定位公式为‘浮窗在输入框上方’并随实际位置联动"
+- 40de917 | 2025-09-04T01:42:52+08:00 | codex-cli |  fix(ios): 仅首次收缩延迟由输入框实际位置驱动对齐，之后保持原逻辑
+- 1ed95eb | 2025-09-04T01:59:30+08:00 | codex-cli |  fix(ios-first-collapse): 仅修复首次收缩的对齐
+- 9ec8afe | 2025-09-04T02:00:37+08:00 | codex-cli |  chore(ref): revert unintended changes to ref/stelloracle-home.tsx (no functional impact)
+- d895a13 | 2025-09-04T02:05:49+08:00 | codex-cli |  fix(ios-first-collapse): 首次收缩在键盘可见时也上移输入框为浮窗预留空间（仅一次）
+- 4b9bb00 | 2025-09-04T02:15:06+08:00 | codex-cli |  perf(ios-startup): 立即隐藏启动屏以消除首次点击输入框的延迟
+- 973dd36 | 2025-09-05T01:01:30+08:00 | codex-cli |  feat: 历史会话AI标题总结与侧边交互修复\n\n- 移除侧栏历史对话重命名/删除按钮，点击直接切换并唤起浮窗\n- 新增基于弹幕链路的会话标题AI总结（取消条数阈值，所有会话均总结）\n- iOS 插件：listSessions/sessionsChanged 返回 messagesCount/rawTitle/displayTitle/hasCustomTitle；新增 getSessionSummaryContext；会话存储变更广播\n- 展示标题兜底逻辑优化，优先显示持久化标题；过渡展示使用裁剪文本\n- Web stub 同步补齐接口避免开发态报错\n- 文档：更新 历史会话和会话能力升级.md 变更记录
+- 353062b | 2025-09-05T01:03:56+08:00 | codex-cli |  feat: 侧边栏滚动优化\n\n- DrawerMenu 抽屉容器改为 flex 列布局，中部列表区域启用 overflow-y-auto 并支持 iOS 惯性滚动\n- 文档追加滚动优化的修改日志
+- edf6a0b | 2025-09-05T01:09:54+08:00 | codex-cli |  feat: 侧边栏布局改版（搜索 + 新建）\n\n- 移除列表上方“新建会话”按钮；顶部右侧改为铅笔图标并触发新建\n- 顶部标题替换为搜索框，支持按标题关键字过滤\n- 保持遮罩点击可关闭抽屉\n- 文档追加布局调整记录
+- 741251e | 2025-09-05T01:13:50+08:00 | codex-cli |  style: 优化侧边栏搜索框与新建按钮样式\n\n- 搜索输入改为圆角并加边框，父容器加 gap 保留与按钮间距\n- 将新建按钮替换为 lucide-react 的 SquarePen 图标，并增强 hover/边框视觉\n- 文档记录样式与布局的调整
+- c209613 | 2025-09-05T01:17:39+08:00 | codex-cli |  style: 搜索框圆角与宽度微调\n\n- 顶栏容器增加 gap，搜索输入改为 rounded-full 并缩短整体宽度（比按钮多预留一个图标宽度）\n- 通过 calc(100% - 2.5rem) 精准控制右侧留白，避免与编辑按钮贴合
+- fd54381 | 2025-09-05T01:25:56+08:00 | codex-cli |  fix: 侧边栏搜索框圆角被重置覆盖的问题\n\n- 为搜索输入增加 sidebar-search-input 类并在全局样式中以 !important 强制圆角\n- 兼容 iOS 的输入重置（appearance/border-radius），确保真机圆角生效\n- 更新文档记录该覆盖策略
+- 27adf62 | 2025-09-05T01:31:58+08:00 | codex-cli |  style: 顶栏搜索框宽度与间距优化\n\n- 使用 flex-1 + mr-2 + gap-3 替代固定 calc 宽度，避免与右侧按钮交叉\n- 保持圆角与边框样式不变，提升自适应布局稳定性
+- 00aaeff | 2025-09-05T01:40:21+08:00 | codex-cli |  (origin/main, origin/HEAD, main) style: 调整搜索框与编辑按钮间距为30px\n\n- 顶栏使用 gap-[30px] 并移除输入容器 mr，确保两者间固定30px间距\n- 保持圆角与边框样式不变
+- 2e9bb34 | 2025-09-05T23:46:02+08:00 | pot |  feat(galaxy): living galaxy integration and interaction loop
+- 7dd6d1a | 2025-09-05T23:59:43+08:00 | pot |  feat(visual): rotating living galaxy with breathing and 3-arm palette
+- 6b9db23 | 2025-09-06T00:24:27+08:00 | pot |  fix(visual): align galaxy params to saved ref and remove glow/overlays
+- daa4cc0 | 2025-09-06T00:41:40+08:00 | pot |  chore(galaxy): set homepage galaxy defaults to user-provided params and update doc
+- ea08028 | 2025-09-06T00:58:22+08:00 | pot |  feat(debug): add pause-rotation toggle in galaxy debug panel (default paused when debugging)
+- a6a062b | 2025-09-06T01:06:20+08:00 | pot |  chore(galaxy): apply user-adjusted defaults (outerWidth=53, bgDensity=0.00045, noiseScale=0.006, etc.) and update docs/log
+- 3c8d835 | 2025-09-06T01:18:41+08:00 | pot |  feat(visual): add galaxyScale (default 0.618) and apply scale around center; expose slider in debug panel
+- 17442cb | 2025-09-06T01:35:58+08:00 | pot |  chore(galaxy): update defaults per latest tuning (armDensity=0.65, innerWidth=56, growth=2.8, bgDensity=0.00057, noiseScale=0.049, galaxyScale=0.6) and docs
+- e14b1d5 | 2025-09-06T01:57:05+08:00 | pot |  chore(galaxy): update defaults per latest user params (galaxyScale=0.68, armDensity=0.70, spiralB=0.21, inner=55, outer=101, fade 0.2-1.36, bgDensity=0.0006, jitter=16, noiseStrength=0.9, multipliers 0.8/0.9) and sync docs
+- 8582f39 | 2025-09-06T02:05:22+08:00 | pot |  feat(visual): replace dual-layer spin with differential rotation by radial bands; deterministic RNG for stable morphology; keep background full-screen
+- cbb1168 | 2025-09-06T13:19:47+08:00 | pot |  feat(视觉): 按星系结构分色并加入前台开关\n\n- 新增结构着色开关（默认关闭），启用后按核心/臂脊/臂内/臂边/尘埃/外围分类上色\n- 保持背景全屏白星、不随缩放/旋转；主体仍按差速旋转呈现\n- 保留固定随机种子，保证同参数形态一致\n- 未开启开关时维持白星风格，便于性能与形态对比
+- 7ec8266 | 2025-09-06T13:31:51+08:00 | pot |  (HEAD -> params-lock-7ec8266) chore(参数): 锁定银河默认参数为指定数值\n\n- 核心密度: 0.7, 核心半径: 25\n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29\n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5\n- 臂间基础密度: 0.15, 山坡平缓度: 7.3\n- 淡化起始: 0.5, 淡化结束: 1.54\n- 背景密度: 0.00045\n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9\n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7\n\n后续不再轻易修改默认参数，如需变更将另行说明。
+- 49c0fa9 | 2025-09-07T03:34:38+08:00 | git stash |  untracked files on (no branch): 7ec8266 chore(参数): 锁定银河默认参数为指定数值\n\n- 核心密度: 0.7, 核心半径: 25\n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29\n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5\n- 臂间基础密度: 0.15, 山坡平缓度: 7.3\n- 淡化起始: 0.5, 淡化结束: 1.54\n- 背景密度: 0.00045\n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9\n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7\n\n后续不再轻易修改默认参数，如需变更将另行说明。
+- cf2c9bd | 2025-09-07T03:34:38+08:00 | git stash |  index on (no branch): 7ec8266 chore(参数): 锁定银河默认参数为指定数值\n\n- 核心密度: 0.7, 核心半径: 25\n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29\n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5\n- 臂间基础密度: 0.15, 山坡平缓度: 7.3\n- 淡化起始: 0.5, 淡化结束: 1.54\n- 背景密度: 0.00045\n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9\n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7\n\n后续不再轻易修改默认参数，如需变更将另行说明。
+- 4bd6d4b | 2025-09-07T03:34:38+08:00 | git stash |  (refs/stash) On (no branch): wip: temp before switch to main

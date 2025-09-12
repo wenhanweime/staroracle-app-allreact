@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import HotspotOverlay from './HotspotOverlay';
 import VoronoiOverlay from './VoronoiOverlay';
+import ClickGlowOverlay from './ClickGlowOverlay';
 import { useGalaxyStore } from '../store/useGalaxyStore';
 import { useGalaxyGridStore } from '../store/useGalaxyGridStore';
 import { useStarStore } from '../store/useStarStore';
@@ -236,6 +237,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [params, setParams] = useState(defaultParams);
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; }, [params]);
+  // 星点默认使用偏灰白，避免纯白饱和（为交互提亮留余量）
+  const starBaseColor = '#CCCCCC';
 
   const renderAllRef = useRef<() => void>();
   // Rotation toggle: pause during debug by default
@@ -268,8 +271,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
       const cw = Math.floor(w * DPR), ch = Math.floor(h * DPR)
-      setGalaxyCanvasSize(cw, ch)
-      setGridSize(cw, ch)
+      // 交互层与存储统一使用 CSS 像素尺寸，避免与 DPR 不一致
+      setGalaxyCanvasSize(w, h)
+      setGridSize(w, h)
     };
 
     // 为确保静止与旋转形态一致，锁定采样为“高质量”
@@ -332,7 +336,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
       // Background small stars -> bg layer (full-screen, no rotation/scale)
       const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.6 : 1) * qualityScale);
-      bctx.save(); bctx.scale(DPR, DPR); bctx.fillStyle = 'rgba(255,255,255,0.9)';
+      bctx.save(); bctx.scale(DPR, DPR); bctx.globalAlpha = 1; bctx.fillStyle = starBaseColor;
       for (let i = 0; i < bgCount; i++) {
         const x = rng() * (width / DPR);
         const y = rng() * (height / DPR);
@@ -445,7 +449,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               target.globalAlpha = prevAlpha * a;
               target.fillStyle = fill;
             } else {
-              target.fillStyle = '#FFFFFF';
+              target.globalAlpha = 1;
+              target.fillStyle = starBaseColor;
             }
             target.beginPath();
             // add slight deterministic jitter to break grid alignment
@@ -522,7 +527,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     renderAll();
     // 初始化热点（仅一次）
     genHotspots(36)
-    genSites(120)
+    // 单元细化：提高站点数量，单元尺寸约缩小至原来的 1/5
+    genSites(600)
     const handleResize = () => { resize(); renderAll(); };
     window.addEventListener('resize', handleResize);
     
@@ -602,9 +608,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
-      {/* 交互层：不规则小块（Voronoi）与热点（保留MVP） */}
-      <VoronoiOverlay />
-      <HotspotOverlay />
+      {/* 简化交互：点击附近星点先亮后还原，仅此一层 */}
+      <ClickGlowOverlay baseCanvasRef={canvasRef} />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">

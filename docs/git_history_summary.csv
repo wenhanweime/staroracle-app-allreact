@@ -1,0 +1,139 @@
+short_hash	date	author	type	scope	breaking	subject	files_changed	insertions	deletions	tags	branches	remotes	reachable	reflog_only
+4bd6d4b	2025-09-07T03:34:38+08:00	git stash	merge		no	On (no branch): wip:  emp before swi ch  o main	3	307	184				yes	no
+cf2c9bd	2025-09-07T03:34:38+08:00	git stash	other		no	index on (no branch): 7ec8266 chore(参数): 锁定银河默认参数为指定数值 n n- 核心密度: 0.7, 核心半径: 25 n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29 n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5 n- 臂间基础密度: 0.15, 山坡平缓度: 7.3 n- 淡化起始: 0.5, 淡化结束: 1.54 n- 背景密度: 0.00045 n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9 n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7 n n后续不再轻易修改默认参数，如需变更将另行说明。	0	0	0				yes	no
+49c0fa9	2025-09-07T03:34:38+08:00	git stash	merge		no	un racked files on (no branch): 7ec8266 chore(参数): 锁定银河默认参数为指定数值 n n- 核心密度: 0.7, 核心半径: 25 n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29 n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5 n- 臂间基础密度: 0.15, 山坡平缓度: 7.3 n- 淡化起始: 0.5, 淡化结束: 1.54 n- 背景密度: 0.00045 n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9 n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7 n n后续不再轻易修改默认参数，如需变更将另行说明。	0	0	0				yes	no
+7ec8266	2025-09-06T13:31:51+08:00	pot	chore	参数	no	chore(参数): 锁定银河默认参数为指定数值 n n- 核心密度: 0.7, 核心半径: 25 n- 旋臂数量: 5, 旋臂密度: 0.6, 螺旋紧密度: 0.29 n- 内侧宽度: 29, 外侧宽度: 53, 宽度增长: 2.5 n- 臂间基础密度: 0.15, 山坡平缓度: 7.3 n- 淡化起始: 0.5, 淡化结束: 1.54 n- 背景密度: 0.00045 n- 垂直抖动强度: 17, 噪声缩放: 0.041, 噪声强度: 0.9 n- 星大小倍数: 旋臂 0.8, 臂间 1, 背景 0.7 n n后续不再轻易修改默认参数，如需变更将另行说明。	1	63	22		params-lock-7ec8266;		yes	no
+cbb1168	2025-09-06T13:19:47+08:00	pot	feat	视觉	no	fea (视觉): 按星系结构分色并加入前台开关 n n- 新增结构着色开关（默认关闭），启用后按核心/臂脊/臂内/臂边/尘埃/外围分类上色 n- 保持背景全屏白星、不随缩放/旋转；主体仍按差速旋转呈现 n- 保留固定随机种子，保证同参数形态一致 n- 未开启开关时维持白星风格，便于性能与形态对比	1	42	2		params-lock-7ec8266;		yes	no
+8582f39	2025-09-06T02:05:22+08:00	pot	feat	visual	no	fea (visual): replace dual-layer spin wi h differen ial ro a ion by radial bands; de erminis ic RNG for s able morphology; keep background full-screen	1	36	22		params-lock-7ec8266;		yes	no
+e14b1d5	2025-09-06T01:57:05+08:00	pot	chore	galaxy	no	chore(galaxy): upda e defaul s per la es  user params (galaxyScale=0.68, armDensi y=0.70, spiralB=0.21, inner=55, ou er=101, fade 0.2-1.36, bgDensi y=0.0006, ji  er=16, noiseS reng h=0.9, mul ipliers 0.8/0.9) and sync docs	2	88	57		params-lock-7ec8266;		yes	no
+17442cb	2025-09-06T01:35:58+08:00	pot	chore	galaxy	no	chore(galaxy): upda e defaul s per la es   uning (armDensi y=0.65, innerWid h=56, grow h=2.8, bgDensi y=0.00057, noiseScale=0.049, galaxyScale=0.6) and docs	2	18	13		params-lock-7ec8266;		yes	no
+3c8d835	2025-09-06T01:18:41+08:00	pot	feat	visual	no	fea (visual): add galaxyScale (defaul  0.618) and apply scale around cen er; expose slider in debug panel	1	6	0		params-lock-7ec8266;		yes	no
+a6a062b	2025-09-06T01:06:20+08:00	pot	chore	galaxy	no	chore(galaxy): apply user-adjus ed defaul s (ou erWid h=53, bgDensi y=0.00045, noiseScale=0.006, e c.) and upda e docs/log	3	9	6		params-lock-7ec8266;		yes	no
+ea08028	2025-09-06T00:58:22+08:00	pot	feat	debug	no	fea (debug): add pause-ro a ion  oggle in galaxy debug panel (defaul  paused when debugging)	3	92	12		params-lock-7ec8266;		yes	no
+daa4cc0	2025-09-06T00:41:40+08:00	pot	chore	galaxy	no	chore(galaxy): se  homepage galaxy defaul s  o user-provided params and upda e doc	2	136	26		params-lock-7ec8266;		yes	no
+6b9db23	2025-09-06T00:24:27+08:00	pot	fix	visual	no	fix(visual): align galaxy params  o saved ref and remove glow/overlays	1	31	131		params-lock-7ec8266;		yes	no
+7dd6d1a	2025-09-05T23:59:43+08:00	pot	feat	visual	no	fea (visual): ro a ing living galaxy wi h brea hing and 3-arm pale  e	2	210	74		params-lock-7ec8266;		yes	no
+2e9bb34	2025-09-05T23:46:02+08:00	pot	feat	galaxy	no	fea (galaxy): living galaxy in egra ion and in erac ion loop	24	19631	28		params-lock-7ec8266;		yes	no
+00aaeff	2025-09-05T01:40:21+08:00	codex-cli	style		no	s yle: 调整搜索框与编辑按钮间距为30px n n- 顶栏使用 gap-[30px] 并移除输入容器 mr，确保两者间固定30px间距 n- 保持圆角与边框样式不变	1	3	3		main;	origin/HEAD;origin/main;	yes	no
+27adf62	2025-09-05T01:31:58+08:00	codex-cli	style		no	s yle: 顶栏搜索框宽度与间距优化 n n- 使用 flex-1 + mr-2 + gap-3 替代固定 calc 宽度，避免与右侧按钮交叉 n- 保持圆角与边框样式不变，提升自适应布局稳定性	1	2	2		main;	origin/HEAD;origin/main;	yes	no
+fd54381	2025-09-05T01:25:56+08:00	codex-cli	fix		no	fix: 侧边栏搜索框圆角被重置覆盖的问题 n n- 为搜索输入增加 sidebar-search-inpu  类并在全局样式中以 !impor an  强制圆角 n- 兼容 iOS 的输入重置（appearance/border-radius），确保真机圆角生效 n- 更新文档记录该覆盖策略	3	16	2		main;	origin/HEAD;origin/main;	yes	no
+c209613	2025-09-05T01:17:39+08:00	codex-cli	style		no	s yle: 搜索框圆角与宽度微调 n n- 顶栏容器增加 gap，搜索输入改为 rounded-full 并缩短整体宽度（比按钮多预留一个图标宽度） n- 通过 calc(100% - 2.5rem) 精准控制右侧留白，避免与编辑按钮贴合	1	2	2		main;	origin/HEAD;origin/main;	yes	no
+741251e	2025-09-05T01:13:50+08:00	codex-cli	style		no	s yle: 优化侧边栏搜索框与新建按钮样式 n n- 搜索输入改为圆角并加边框，父容器加 gap 保留与按钮间距 n- 将新建按钮替换为 lucide-reac  的 SquarePen 图标，并增强 hover/边框视觉 n- 文档记录样式与布局的调整	2	9	8		main;	origin/HEAD;origin/main;	yes	no
+edf6a0b	2025-09-05T01:09:54+08:00	codex-cli	feat		no	fea : 侧边栏布局改版（搜索 + 新建） n n- 移除列表上方“新建会话”按钮；顶部右侧改为铅笔图标并触发新建 n- 顶部标题替换为搜索框，支持按标题关键字过滤 n- 保持遮罩点击可关闭抽屉 n- 文档追加布局调整记录	2	32	13		main;	origin/HEAD;origin/main;	yes	no
+353062b	2025-09-05T01:03:56+08:00	codex-cli	feat		no	fea : 侧边栏滚动优化 n n- DrawerMenu 抽屉容器改为 flex 列布局，中部列表区域启用 overflow-y-au o 并支持 iOS 惯性滚动 n- 文档追加滚动优化的修改日志	2	10	3		main;	origin/HEAD;origin/main;	yes	no
+973dd36	2025-09-05T01:01:30+08:00	codex-cli	feat		no	fea : 历史会话AI标题总结与侧边交互修复 n n- 移除侧栏历史对话重命名/删除按钮，点击直接切换并唤起浮窗 n- 新增基于弹幕链路的会话标题AI总结（取消条数阈值，所有会话均总结） n- iOS 插件：lis Sessions/sessionsChanged 返回 messagesCoun /rawTi le/displayTi le/hasCus omTi le；新增 ge SessionSummaryCon ex ；会话存储变更广播 n- 展示标题兜底逻辑优化，优先显示持久化标题；过渡展示使用裁剪文本 n- Web s ub 同步补齐接口避免开发态报错 n- 文档：更新 历史会话和会话能力升级.md 变更记录	11	749	12		main;	origin/HEAD;origin/main;	yes	no
+4b9bb00	2025-09-04T02:15:06+08:00	codex-cli	perf	ios-startup	no	perf(ios-s ar up): 立即隐藏启动屏以消除首次点击输入框的延迟	2	10	6		main;	origin/HEAD;origin/main;	yes	no
+d895a13	2025-09-04T02:05:49+08:00	codex-cli	fix	ios-first-collapse	no	fix(ios-firs -collapse): 首次收缩在键盘可见时也上移输入框为浮窗预留空间（仅一次）	2	23	4		main;	origin/HEAD;origin/main;	yes	no
+9ec8afe	2025-09-04T02:00:37+08:00	codex-cli	chore	ref	no	chore(ref): rever  unin ended changes  o ref/s elloracle-home. sx (no func ional impac )	1	2	14		main;	origin/HEAD;origin/main;	yes	no
+1ed95eb	2025-09-04T01:59:30+08:00	codex-cli	fix	ios-first-collapse	no	fix(ios-firs -collapse): 仅修复首次收缩的对齐	4	27	2		main;	origin/HEAD;origin/main;	yes	no
+40de917	2025-09-04T01:42:52+08:00	codex-cli	fix	ios	no	fix(ios): 仅首次收缩延迟由输入框实际位置驱动对齐，之后保持原逻辑	2	74	15		main;	origin/HEAD;origin/main;	yes	no
+08bdbb9	2025-09-04T01:36:26+08:00	codex-cli	other		no	Rever  "fix(ios): 修正收缩定位公式为‘浮窗在输入框上方’并随实际位置联动"	2	11	13		main;	origin/HEAD;origin/main;	yes	no
+2c35362	2025-09-04T01:34:55+08:00	codex-cli	fix	ios	no	fix(ios): 修正收缩定位公式为‘浮窗在输入框上方’并随实际位置联动	3	15	11		main;	origin/HEAD;origin/main;	yes	no
+8b41562	2025-09-04T01:29:03+08:00	codex-cli	fix	ios	no	fix(ios): 首次收缩未对齐问题 — 监听输入框实际位置并同步对齐	3	38	9		main;	origin/HEAD;origin/main;	yes	no
+10ad80a	2025-09-04T01:24:11+08:00	codex-cli	feat	ios	no	fea (ios): 为输入框与对话浮窗加入柔和位移动画	3	25	6		main;	origin/HEAD;origin/main;	yes	no
+b21a241	2025-09-04T01:19:53+08:00	codex-cli	fix		no	fix: 统一AI对话系统Promp 并注入原生	5	63	43		main;	origin/HEAD;origin/main;	yes	no
+28e72a4	2025-09-04T00:57:52+08:00	codex-cli	fix		no	fix: 修复首次缩小时输入框无法被键盘顶起的问题	3	9223372036854775807	39		main;	origin/HEAD;origin/main;	yes	no
+bd74745	2025-09-04T00:32:00+08:00	codex-cli	chore		no	chore: checkpoin  — 浮窗样式与输入框一致（bg-gray-900 + border-gray-800）；修复残余渐变引用编译错误	0	0	0		main;	origin/HEAD;origin/main;	yes	no
+000f16c	2025-09-04T00:26:54+08:00	codex-cli	style	overlay	no	s yle(overlay): ma ch Inpu Drawer s yle (bg-gray-900 + border-gray-800), remove gradien 	2	151	36		main;	origin/HEAD;origin/main;	yes	no
+c07f315	2025-09-04T00:00:45+08:00	codex-cli	chore		no	chore: checkpoin  — 增加旋转S ar加载动画；存在视觉重叠与偶发bug（待优化）	1	1	0		main;	origin/HEAD;origin/main;	yes	no
+fc2a0ab	2025-09-03T23:38:50+08:00	codex-cli	chore		no	chore: checkpoin  — 对话基本问题已修复；promp  被修改、流式未完全恢复、偶发英文回复（待跟进）	0	0	0		main;	origin/HEAD;origin/main;	yes	no
+10d605e	2025-09-03T23:23:48+08:00	codex-cli	fix	build	no	fix(build): remove direc  Conversa ionS ore references from plugin; use manager wrappers	3	141	51		main;	origin/HEAD;origin/main;	yes	no
+801b436	2025-09-03T23:13:36+08:00	codex-cli	feat	M2	no	fea (M2): logging + conversa ion bridge + his ory load	4	37	0		main;	origin/HEAD;origin/main;	yes	no
+65b1d18	2025-09-03T23:09:01+08:00	codex-cli	feat	conversation	no	fea (conversa ion): add Conversa ionS ore; expose sys em promp  + his ory APIs; include sys em promp  + con ex  window in na ive s ream	4	144	7		main;	origin/HEAD;origin/main;	yes	no
+2fa3e68	2025-09-03T22:59:28+08:00	codex-cli	fix	ios/js	no	fix(ios/js): correc  plugin usage in App. sx; ensure assis an  placeholder exis s; s ar  replay af er inser  anima ion	2	15	7		main;	origin/HEAD;origin/main;	yes	no
+204d367	2025-09-03T22:54:56+08:00	codex-cli	fix	ios	no	fix(ios): - Preserve previous AI messages by no  rese  ing UI messages from JS param; only append new user row in s ar Na iveS reaming - S ar  gradual replay (beginAIReplayAf erAnima ion) af er inser  anima ion  o show s reaming effec  - Show loading indica or for AI emp y  ex  in MessageTableViewCell - Use upda ed Zus and s a e in App. sx; remove conflic ing pre-render na ive upda eMessages in na ive pa h	1	37	19		main;	origin/HEAD;origin/main;	yes	no
+49621c0	2025-09-03T22:50:30+08:00	codex-cli	chore		no	chore: checkpoin  — 修复原生发消息不显示；AI回复被顶掉，且无流式输出（待修复）	0	0	0		main;	origin/HEAD;origin/main;	yes	no
+9577657	2025-09-03T22:46:50+08:00	codex-cli	refactor	send	no	refac or(send): remove pre-render na ive upda eMessages; use fresh Zus and s a e for s ar Na iveS ream	1	9	11		main;	origin/HEAD;origin/main;	yes	no
+a49a8d1	2025-09-03T22:37:36+08:00	codex-cli	fix	send	no	fix(send): use fresh Zus and s a e af er addUserMessage for na ive boo s rap and conversa ion	1	13	8		main;	origin/HEAD;origin/main;	yes	no
+2da6073	2025-09-03T22:24:31+08:00	codex-cli	fix	ui	no	fix(ui): push user+AI placeholder  o na ive overlay before s ar ing s ream	1	4	0		main;	origin/HEAD;origin/main;	yes	no
+b4b0d92	2025-09-03T02:25:18+08:00	codex-cli	fix	fallback	no	fix(fallback): ensure messages visible by JS fallback s reaming  o na ive when s ar Na iveS ream fails	1	23	1		main;	origin/HEAD;origin/main;	yes	no
+6e5f467	2025-09-03T02:20:03+08:00	codex-cli	chore	native-stream	no	chore(na ive-s ream): no-op JS na iveCha Overlay.upda eMessages when na ive s reaming enabled	1	4	0		main;	origin/HEAD;origin/main;	yes	no
+8f49f10	2025-09-03T02:15:41+08:00	codex-cli	fix	ios	no	fix(ios): use oldMessages.coun   o de ec  inser  vs s ream in VC.upda eMessages	1	2	2		main;	origin/HEAD;origin/main;	yes	no
+d7392ac	2025-09-03T02:06:04+08:00	codex-cli	fix	ios	no	fix(ios): ensure user message visible even when inser  anima ion no   riggered	1	5	1		main;	origin/HEAD;origin/main;	yes	no
+31d2dba	2025-09-03T01:56:24+08:00	codex-cli	fix	ios	no	fix(ios): rese  anima ion s a e  o idle af er na ive s ream comple es	1	11	0		main;	origin/HEAD;origin/main;	yes	no
+26a7f91	2025-09-03T01:54:32+08:00	codex-cli	fix	ios	no	fix(ios): idle-only guarded inser  anima ion a  na ive s ream s ar 	1	13	5		main;	origin/HEAD;origin/main;	yes	no
+6b6f644	2025-09-03T01:52:29+08:00	codex-cli	feat	ios	no	fea (ios):  rigger user inser  anima ion a  na ive s ream s ar 	1	19	0		main;	origin/HEAD;origin/main;	yes	no
+e9712be	2025-09-03T01:49:29+08:00	codex-cli	feat	native-stream	no	fea (na ive-s ream): swi ch iOS cha   o na ive S reamingClien 	3	54	119		main;	origin/HEAD;origin/main;	yes	no
+1e3e82a	2025-09-03T01:40:03+08:00	codex-cli	chore		no	chore: checkpoin  — 当前保留3D/主页动画修复；首条消息发送仍有双重发送/打断问题，其他问题基本正常	0	0	0		main;	origin/HEAD;origin/main;	yes	no
+7b4760a	2025-09-03T01:34:52+08:00	codex-cli	revert	send	no	rever (send): align user send anima ion  rigger wi h 9e1a3a8 logic	1	10	36		main;	origin/HEAD;origin/main;	yes	no
+ede2dd7	2025-09-03T01:29:08+08:00	codex-cli	fix	ios	no	fix(ios): resolve Anima ionS a e  ype ambigui y; compare agains  .userAnima ing using qualified defaul  s a e	1	3	3		main;	origin/HEAD;origin/main;	yes	no
+436c845	2025-09-03T01:26:00+08:00	codex-cli	fix	ios	no	fix(ios): always anima e user sends even during AI s reaming	2	502	1		main;	origin/HEAD;origin/main;	yes	no
+ac44054	2025-09-03T01:06:20+08:00	codex-cli	fix	ios	no	fix(ios): ga e firs  user send anima ion un il layou  expansion comple es	1	34	10		main;	origin/HEAD;origin/main;	yes	no
+16fd9a4	2025-09-03T01:02:06+08:00	codex-cli	fix		no	fix: iOS background 3D scaling anima ion	3	79	70		main;	origin/HEAD;origin/main;	yes	no
+8cd7eee	2025-09-03T00:11:40+08:00	codex-cli	fix		no	fix: 初步修复聊天浮窗残影问题	2	14	0		main;	origin/HEAD;origin/main;	yes	no
+9e1a3a8	2025-09-02T21:38:17+08:00	codex-cli	fix		no	fix: 修复流式输出和动画重复问题的综合解决方案	7	796	17		main;	origin/HEAD;origin/main;	yes	no
+b2dd330	2025-09-02T02:39:16+08:00	codex-cli	feat	stream	no	fea (s ream): ensure per-char s reaming  o na ive via appendAIChunk fallback  o upda eLas AI; add periodic bea  sync; fix Inpu Drawer visibili y	3	88	24		main;	origin/HEAD;origin/main;	yes	no
+97483d5	2025-09-02T02:24:38+08:00	codex-cli	chore		no	chore: snapsho  af er Inpu Drawer visibili y safeguards and AGENTS.md	9	529	76		main;	origin/HEAD;origin/main;	yes	no
+b02d420	2025-09-01T23:13:42+08:00	codex-cli	other		no	基于iCha GPT设计优化流式输出实现	4	46	17		main;	origin/HEAD;origin/main;	yes	no
+d80919a	2025-09-01T22:40:00+08:00	codex-cli	other		no	修复Swif 编译错误：状态机属性引用问题	1	19	17		main;	origin/HEAD;origin/main;	yes	no
+23fb004	2025-09-01T22:34:35+08:00	codex-cli	other		no	优化：从时间限制改为状态机机制，避免极端案例	2	60	27		main;	origin/HEAD;origin/main;	yes	no
+56d1292	2025-09-01T22:31:52+08:00	codex-cli	other		no	修复原生对话框发送动画重复和流式输出冲突问题	3	150	16		main;	origin/HEAD;origin/main;	yes	no
+76e9cb5	2025-09-01T22:29:15+08:00	codex-cli	other		no	cursor修复之前 - 保存当前版本用于问题分析	1	153	31		main;	origin/HEAD;origin/main;	yes	no
+c631692	2025-09-01T01:12:36+08:00	codex-cli	chore		no	chore: snapsho  af er anima ion fix 2025-08-31T17:12:35Z	6	5805	39	snapshot-20250831-171235;	main;	origin/HEAD;origin/main;	yes	no
+d658b5d	2025-08-31T18:49:49+08:00	codex-cli	chore		no	chore: snapsho  before Codex changes 2025-08-31T10:49:49Z	2	94	154	pre-codex-20250831-104949;	main;	origin/HEAD;origin/main;	yes	no
+4c1c144	2025-08-30T23:46:08+08:00	pot	other		no	🚀 彻底解决Cha Overlay双重动画问题 - 多层次架构优化	10	753	146		main;	origin/HEAD;origin/main;	yes	no
+0aeade3	2025-08-30T01:11:51+08:00	pot	other		no	🎯 优化Cha Overlay交互体验 - 完善滑动收起和动画效果	4	213	41		main;	origin/HEAD;origin/main;	yes	no
+4c2aee7	2025-08-30T00:34:17+08:00	pot	other		no	🐛 修复第一次缩小浮窗位置异常bug - 添加时序控制确保位置计算准确	2	28	8		main;	origin/HEAD;origin/main;	yes	no
+c6e946f	2025-08-30T00:19:18+08:00	pot	other		no	🎯 完善Cha Overlay和Inpu Drawer定位系统 - 降低整体高度50px	5	730	97		main;	origin/HEAD;origin/main;	yes	no
+595b768	2025-08-28T23:53:56+08:00	pot	other		no	🎯 解决触摸事件穿透问题 - 实现Pass hroughWindow智能触摸处理	10	1304	50		main;	origin/HEAD;origin/main;	yes	no
+578982f	2025-08-28T00:48:10+08:00	pot	other		no	🎯 修复Cha Overlay原生插件消息同步和AI对话逻辑	6	579254	350		main;	origin/HEAD;origin/main;	yes	no
+64824c9	2025-08-27T23:03:59+08:00	pot	other		no	📝 更新CLAUDE.md构建指令 - 添加Xcode自动化命令	1	4	1		main;	origin/HEAD;origin/main;	yes	no
+d0a107c	2025-08-27T23:03:08+08:00	pot	other		no	🎯 Cha Overlay原生插件核心功能完成 - 解决三大问题	2	495	31		main;	origin/HEAD;origin/main;	yes	no
+1624d53	2025-08-27T02:30:37+08:00	pot	other		no	📝 清理历史文档和调试代码	9	1626	1643		main;	origin/HEAD;origin/main;	yes	no
+ac5ab2f	2025-08-27T02:29:52+08:00	pot	other		no	✅ Cha Overlay双文件架构完成 - 删除所有测试UI	117	6779	856		main;	origin/HEAD;origin/main;	yes	no
+3ff0401	2025-08-27T01:54:21+08:00	pot	other		no	初步跑通swif 原生插件	23	3105	35		main;	origin/HEAD;origin/main;	yes	no
+5de8d6b	2025-08-25T02:08:28+08:00	pot	other		no	🎯 输入框原生化优化完成 - 迈向混合架构	12	16030	403		main;	origin/HEAD;origin/main;	yes	no
+ca82a1c	2025-08-25T01:01:18+08:00	pot	other		no	优化输入框响应速度 - 解耦聚焦行为和浮窗动画	9	611	197		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+5b1b510	2025-08-24T13:49:56+08:00	pot	other		no	优化对话浮窗UI和交互体验	2	32	26		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+84c9d73	2025-08-24T04:09:51+08:00	pot	other		no	增加对话浮窗功能	3	311	305		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+6dbe319	2025-08-23T15:29:27+08:00	pot	other		no	重构对话架构 - 分离主页和对话功能	3	451	133		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+1a5f090	2025-08-23T14:55:27+08:00	pot	other		no	修复聊天时背景点击问题和字体大小一致性	3	61	20		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+50bbad0	2025-08-23T13:11:14+08:00	pot	other		no	完善觉察动画位置和布局优化	5	246	6		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+224c32d	2025-08-23T02:39:50+08:00	pot	other		no	重新设计觉察图标 - 使用星星动画设计	1	201	113		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+f6c2736	2025-08-23T02:33:43+08:00	pot	other		no	修复觉察功能的所有问题	3	73	27		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+b251e86	2025-08-23T02:06:35+08:00	pot	other		no	实现觉察功能完整体系	11	1944	9		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+40d71be	2025-08-23T01:52:20+08:00	pot	other		no	实现多轮对话功能和文本格式优化	4	120	10		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+f2fcc58	2025-08-23T00:56:24+08:00	pot	other		no	优化流式输出UI体验和聊天界面	5	202	69		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+880032e	2025-08-22T21:52:32+08:00	pot	other		no	实现流式AI回复输出功能	6	276	53		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+cdc6486	2025-08-22T21:31:14+08:00	pot	other		no	修复AI功能 - 解决环境变量读取和API调用问题	3	216	155		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+d7293af	2025-08-21T23:47:08+08:00	pot	other		no	接入真实AI API到聊天系统	2	23	16		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+e9b7a6f	2025-08-21T23:35:45+08:00	pot	other		no	进一步优化主星星出现速度 - 延迟设为0	1	1	1		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+5f1b7a3	2025-08-21T23:25:36+08:00	pot	other		no	加快灵感卡片主星星出现速度	1	2	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+6ed8040	2025-08-21T23:19:34+08:00	pot	other		no	修复灵感卡片翻转不可逆问题	1	5	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+6654625	2025-08-21T22:57:12+08:00	pot	other		no	修复背景星星状态切换导致的视觉跳变问题	1	9	10		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+e8a2232	2025-08-21T22:28:09+08:00	pot	other		no	优化灵感卡片动画时序 - 背景星星在主星星完成后开始	1	2	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+27f6d0f	2025-08-21T03:06:05+08:00	pot	other		no	修复灵感卡片星星上下位移问题	1	2	3		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+0754276	2025-08-21T02:56:53+08:00	pot	other		no	修复背景星星微小位移问题	1	1	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+9d66576	2025-08-21T02:54:29+08:00	pot	other		no	修复灵感卡片背景星星位置跳变问题	1	32	11		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+1dd6d46	2025-08-21T02:51:50+08:00	pot	other		no	优化灵感卡片动画性能 - 分阶段加载动画	1	27	17		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+64c14df	2025-08-21T02:48:17+08:00	pot	other		no	修复灵感卡片翻转时自动弹出键盘的问题	3	219	9		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+641caf2	2025-08-21T02:45:58+08:00	pot	other		no	修改主屏幕点击交互，复用右键出星卡逻辑	1	5	11		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+4f1653d	2025-08-21T02:41:49+08:00	pot	other		no	优化界面交互体验，禁用不必要的长按复制功能	3	26	5		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+f745e44	2025-08-21T02:36:44+08:00	pot	other		no	实现首页对话框功能并集成模拟AI回复	8	302	8		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+0f73b2a	2025-08-21T02:18:05+08:00	pot	other		no	完成字体系统统一，准备进一步优化输入框逻辑	2	2	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+47c905e	2025-08-21T02:02:37+08:00	pot	other		no	实现iOS键盘与输入框同步弹起优化	3	142	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+889e75e	2025-08-21T01:59:16+08:00	pot	other		no	移除抽屉菜单图标并优化iOS键盘交互	4	108	29		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+8e45863	2025-08-21T01:31:11+08:00	pot	other		no	Localize S ar Collec ion  o 集星 and remove drawer menu border	3	18	30		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+9878f10	2025-08-21T00:46:52+08:00	pot	other		no	修复了左侧抽屉按钮里面的文字顶部的高度	1	10	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+3d823de	2025-08-21T00:44:00+08:00	pot	other		no	调整了所有按钮的效果	4	37	7		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+c7c9f3e	2025-08-21T00:32:51+08:00	pot	other		no	Op imize Header posi ioning  o perfec ly align wi h Dynamic Island	6	2092	55		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+47be20f	2025-08-20T23:13:55+08:00	pot	other		no	Fix drawer menu close bu  on  o ma ch invisible bu  on s yle	1	2	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+2c3e9b4	2025-08-20T23:12:10+08:00	pot	other		no	Remove bu  on background color changes, keep only con en  color  ransi ions	3	41	30		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+682f0d0	2025-08-20T23:03:39+08:00	pot	other		no	Unify bu  on s yles across  he applica ion	1	16	13		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+0b07dab	2025-08-20T22:58:46+08:00	pot	other		no	Fix drawer menu s yling  o ma ch cosmic  heme	1	27	19		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+6b66caf	2025-08-20T22:55:15+08:00	pot	other		no	Move Templa e bu  on func ionali y  o drawer menu	2	13	14		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+5e6f029	2025-08-20T22:48:31+08:00	pot	other		no	Implemen  new header layou  wi h drawer menu and logo bu  on	3	532	464		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+74d1d93	2025-08-20T03:04:29+08:00	pot	other		no	Remove plus bu  on from inpu  bars for cleaner design	2	2	31		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+2bf00b8	2025-08-20T02:50:08+08:00	pot	other		no	Remove inpu  border s yling  o ma ch reference design	1	9	0		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+419a890	2025-08-20T02:36:07+08:00	pot	other		no	Fix iOS Safari bu  on s yling wi h dialog- ransparen -bu  on CSS class	3	63	14		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+7eed6f8	2025-08-20T02:09:44+08:00	pot	other		no	FINAL FIX: Remove conflic ing CSS padding rules  ha  broke bu  on s yling	4	1443	61		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+2b6e2ec	2025-08-20T01:15:26+08:00	pot	other		no	Ul ima e fix for iOS Conversa ionDrawer bu  on issues: Perfec  circles and  ransparen  backgrounds	3	8	6		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+9ab5d72	2025-08-20T01:08:52+08:00	pot	other		no	Op imize Conversa ionDrawer: Merge DarkInpu Bar design wi h iOS compa ibili y	2	1	1		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+0a965e0	2025-08-20T01:06:23+08:00	pot	other		no	Add code-fine and diff commands, prepare for conversa ion drawer fixes	18	30202	53		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+a8474f7	2025-08-18T23:44:45+08:00	pot	other		no	Fix Conversa ionDrawer inpu  bar  ransparen  background - Phase 1	1	2	2		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+092036c	2025-08-18T22:56:10+08:00	pot	other		no	Fix iOS S arCard alignmen  issues wi h Safari-specific op imiza ions	1	96	0		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+9d0a923	2025-08-17T20:18:42+08:00	pot	other		no	Fix S arCard layou  alignmen  issues	1	65	1031		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+d8f18b0	2025-08-17T15:32:51+08:00	pot	other		no	重新安装依赖之前 为了使用capaci or ex ernal	47	72404	287		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+994e555	2025-08-17T14:17:36+08:00	pot	other		no	Implemen  dark inpu  bar design for Conversa ionDrawer	2	279	122		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+e73ca84	2025-08-17T02:25:21+08:00	pot	other		no	Fix Xcode compa ibili y issues and upda e dependencies	1	16881	0		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
+bc61bd3	2025-08-17T02:01:17+08:00	pot	other		no	Save projec  s a e before fixing Xcode compa ibili y issues	2	9868	664		main;params-lock-7ec8266;	origin/HEAD;origin/main;	yes	no
