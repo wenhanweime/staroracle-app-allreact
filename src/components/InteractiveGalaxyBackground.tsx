@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import HotspotOverlay from './HotspotOverlay';
 import VoronoiOverlay from './VoronoiOverlay';
-import ClickGlowOverlay from './ClickGlowOverlay';
+import GalaxyDOMPulseOverlay from './GalaxyDOMPulseOverlay';
 import { useGalaxyStore } from '../store/useGalaxyStore';
 import { useGalaxyGridStore } from '../store/useGalaxyGridStore';
 import { useStarStore } from '../store/useStarStore';
@@ -234,6 +234,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const nearLayerRef = useRef<HTMLCanvasElement | null>(null); // legacy
   const farLayerRef = useRef<HTMLCanvasElement | null>(null);  // legacy
   const bandLayersRef = useRef<HTMLCanvasElement[] | null>(null); // 差速旋转分层
+  // DOM 脉冲用：记录可见星点（CSS像素坐标，仅BG层，免读像素）
+  const domStarPointsRef = useRef<Array<{x:number;y:number;size:number}>>([]);
+  // 记录分层（旋转臂）星点：band 层坐标及其画布尺寸，用于点击时做矩阵变换
+  const bandStarPointsRef = useRef<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>>([]);
   // 星点掩膜层：与图层对应的掩膜和每帧合成后的掩膜
   const bgMaskRef = useRef<HTMLCanvasElement | null>(null);
   const bandMaskLayersRef = useRef<HTMLCanvasElement[] | null>(null);
@@ -251,7 +255,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     noiseFactor: 0.08,
     edgeAlphaThresh: 8,
     edgeExponent: 1.1,
-    radiusFactor: 0.035,
+    radiusFactor: 0.0175,
     minRadius: 30,
     durationMs: 1100,
     ease: 'sine' as 'sine' | 'cubic',
@@ -352,6 +356,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       });
       const bandCtx = bands.map(c => c.getContext('2d')!);
       bandCtx.forEach(ctx => { ctx.save(); ctx.scale(DPR, DPR); });
+      // 收集 band 星点（不含旋转，仅记录生成时 band 层坐标）
+      const bandPts: Array<Array<{x:number;y:number;size:number}>> = Array.from({length:BAND_COUNT},()=>[]);
       const bandMasks: HTMLCanvasElement[] = Array.from({ length: BAND_COUNT }, () => {
         const c = document.createElement('canvas');
         c.width = owidth; c.height = oheight;
@@ -364,6 +370,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const step = getStep();
 
       // Background small stars -> bg layer (full-screen, no rotation/scale)
+      const domPoints: Array<{x:number;y:number;size:number}> = [];
       const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.6 : 1) * qualityScale);
       bctx.save(); bctx.scale(DPR, DPR); bctx.globalAlpha = 1; bctx.fillStyle = starBaseColor;
       bmctx.save(); bmctx.scale(DPR, DPR); bmctx.fillStyle = '#FFFFFF';
@@ -376,6 +383,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         size *= p.backgroundStarSizeMultiplier;
         bctx.beginPath(); bctx.arc(x, y, size, 0, Math.PI * 2); bctx.fill();
         bmctx.beginPath(); bmctx.arc(x, y, size, 0, Math.PI * 2); bmctx.fill();
+        domPoints.push({ x, y, size });
       }
       bctx.restore(); bmctx.restore();
 
@@ -493,6 +501,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             targetMask.fillStyle = '#FFFFFF';
             targetMask.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
             targetMask.fill();
+            // 记录 band 星点（生成时坐标）
+            bandPts[bandIndex].push({ x: ox + jx, y: oy + jy, size });
             if (structureColoring) { target.globalAlpha = 1; }
           }
         }
@@ -508,6 +518,14 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       bandMaskLayersRef.current = bandMasks;
       nearLayerRef.current = null;
       farLayerRef.current = null;
+      domStarPointsRef.current = domPoints;
+      // 展平 band 点并附上 band 画布尺寸
+      const flattened: Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = [];
+      for(let i=0;i<BAND_COUNT;i++){
+        const bw = bands[i].width; const bh = bands[i].height;
+        for(const p of bandPts[i]) flattened.push({ x:p.x, y:p.y, size:p.size, band:i, bw, bh });
+      }
+      bandStarPointsRef.current = flattened;
     };
 
     const drawFrame = (time: number) => {
@@ -668,8 +686,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
-      {/* 简化交互：点击附近星点先亮后还原，仅此一层（使用星点掩膜） */}
-      <ClickGlowOverlay baseCanvasRef={canvasRef} starMaskRef={starMaskCompositeRef} config={glowCfg} />
+      {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
+      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={bandStarPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
