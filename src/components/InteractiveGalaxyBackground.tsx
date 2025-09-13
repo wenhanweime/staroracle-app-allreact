@@ -695,10 +695,13 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onMouseMove={handleMouseMove}
       />
       <GalaxyLightweight
+          params={params}
+          palette={palette}
           structureColoring={structureColoring}
           armCount={defaultParams.armCount}
           scale={params.galaxyScale}
           onBandPointsReady={(pts)=>{ domBandPointsRef.current = pts }}
+          onBgPointsReady={(pts)=>{ domStarPointsRef.current = pts }}
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
       <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />

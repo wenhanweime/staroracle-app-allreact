@@ -31,7 +31,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       const w = rect.width, h = rect.height
-      const factor = config?.radiusFactor ?? 0.035
+      const factor = config?.radiusFactor ?? 0.0175
       const minR = config?.minRadius ?? 30
       const R = Math.max(minR, Math.min(w,h) * factor)
       const pts = pointsRef.current || []
@@ -56,11 +56,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       // 选择点击半径内的点
       const inRange = all.filter(p=>{ const dx=p.x - x, dy=p.y - y; return dx*dx+dy*dy <= R*R })
       if(!inRange.length) return
-      // 固定数量采样：每次点击在 [50,100] 之间（不超过候选）
-      // 固定半径内“均匀随机”挑选目标数量（不靠近中心收缩范围）
-      const minCount = 50, maxCount = 100
-      const want = Math.floor(minCount + Math.random() * (maxCount - minCount + 1))
-      const target = Math.min(inRange.length, want)
+      // 固定数量采样：每次点击固定 30 颗（不超过候选）
+      const target = Math.min(inRange.length, 30)
       // Fisher-Yates 部分洗牌，获取前 target 个随机索引
       const idxs = Array.from({length: inRange.length}, (_,i)=>i)
       for(let i=0;i<target;i++){
@@ -84,7 +81,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
     }
     root.addEventListener('click', handleClick)
     return ()=> root.removeEventListener('click', handleClick)
-  }, [pointsRef, config])
+  }, [pointsRef, bandPointsRef, rotateEnabled, scale, config])
 
   return (
     <div ref={rootRef} className="absolute inset-0 pointer-events-auto z-10">
