@@ -700,7 +700,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           scale={params.galaxyScale}
           onBandPointsReady={(pts)=>{ domBandPointsRef.current = pts }}
         />
-      )}
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
       <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
       {debugControls && (
