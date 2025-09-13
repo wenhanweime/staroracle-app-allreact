@@ -282,8 +282,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
   useEffect(() => {
     // Coarse pointer (mobile): skip heavy Canvas pipeline, DOM mode will render below
-    const isCoarse = typeof window!=='undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
-    if (isCoarse) return;
+    return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -695,8 +694,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
-      {typeof window!=='undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches && (
-        <GalaxyLightweight
+      <GalaxyLightweight
           structureColoring={structureColoring}
           armCount={defaultParams.armCount}
           scale={params.galaxyScale}
@@ -704,7 +702,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         />
       )}
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
-      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef.current.length? domBandPointsRef : bandStarPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
+      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
