@@ -290,30 +290,45 @@ export function generateStarField(opts:{
 
 // 网格法（接近最早 Canvas 管线的结构分布，力求 1:1 形态）
 export function generateStarFieldGrid(opts:{
-  w:number; h:number; scale:number; rings?:number; seed?:number;
+  w:number; h:number; dpr:number; scale:number; rings?:number; seed?:number;
   params: GalaxyParams; palette: Palette; structureColoring:boolean
 }): StarOut[] {
-  const { w, h, scale, params: p, palette: pal, structureColoring } = opts
+  const { w, h, dpr, scale, params: p, palette: pal, structureColoring } = opts
   const rng = seeded(opts.seed ?? 0xA17C9E3)
-  const cx = w/2, cy = h/2
-  const maxR = Math.min(w,h) * 0.4 // 与旧版保持一致
+  // 视口 CSS 尺寸与设备像素尺寸
+  const wDev = Math.floor(w * Math.max(1, dpr || 1))
+  const hDev = Math.floor(h * Math.max(1, dpr || 1))
+  // 旧版：overscan 以 device 像素为基准，但网格循环在 CSS 单位中进行（除以 DPR）
+  const scaleLocal = Math.max(0.01, scale || 1)
+  const minOV = Math.max(Math.SQRT2 + 0.1, (1/scaleLocal) + 0.2)
+  const OV = Math.max(1, minOV)
+  const oWDev = Math.floor(wDev * OV)
+  const oHDev = Math.floor(hDev * OV)
+  const oWCss = oWDev / Math.max(1, dpr || 1)
+  const oHCss = oHDev / Math.max(1, dpr || 1)
+  const oCxCss = oWCss / 2
+  const oCyCss = oHCss / 2
+  // 与旧版一致：maxRadius 使用设备像素
+  const maxRDev = Math.min(wDev, hDev) * 0.4
   const decay = radialDecayFn(p)
   const rings = Math.max(3, Math.min(16, opts.rings ?? 10))
-  const step = 1.0 // 与旧版 getStep() 对齐
+  const step = 1.0 // 与旧版 getStep() 对齐（在 CSS 像素坐标系下）
 
   // 目标星数：与早期实现一致的数量级，避免 DOM 节点爆炸
   const target = Math.max(600, Math.min(1800, Math.floor((w*h)/3500)))
   const reservoir: StarOut[] = []
   let accepted = 0
-  for (let x = 0; x < w; x += step){
-    for (let y = 0; y < h; y += step){
-      const dx = x - cx
-      const dy = y - cy
+  for (let x = 0; x < oWCss; x += step){
+    for (let y = 0; y < oHCss; y += step){
+      // 接受/拒绝密度计算：旧版在 CSS 像素坐标下计算 radius
+      const dx = x - oCxCss
+      const dy = y - oCyCss
       const radius = Math.hypot(dx, dy)
       if (radius < 3) continue
 
-      const baseDecay = decay(radius, maxR)
-      const armInfo = getArmInfo(x, y, cx, cy, maxR, p)
+      const baseDecay = decay(radius, maxRDev) // 旧版传入 maxRadius（设备像素）
+      // 最近臂信息：传 CSS 坐标与设备像素 maxRadius，与旧版一致
+      const armInfo = getArmInfo(x, y, oCxCss, oCyCss, maxRDev, p)
       const { density: armDensity, size: baseSize, profile } = calculateArmDensityProfile(armInfo, p)
 
       let density:number
@@ -349,8 +364,11 @@ export function generateStarFieldGrid(opts:{
         ox += (rng() - 0.5) * step
         oy += (rng() - 0.5) * step
 
-        const rNow = Math.hypot(ox - cx, oy - cy)
-        const ring = Math.min(rings-1, Math.max(0, Math.floor((rNow/maxR) * rings)))
+        // 按旧版：ring 基于设备像素下的半径与 maxRDev
+        const dxDev = (ox * Math.max(1, dpr||1)) - (oWDev/2)
+        const dyDev = (oy * Math.max(1, dpr||1)) - (oHDev/2)
+        const rNowDev = Math.hypot(dxDev, dyDev)
+        const ring = Math.min(rings-1, Math.max(0, Math.floor((rNowDev/maxRDev) * rings)))
         let color = '#FFFFFF'
         if (structureColoring){
           if (radius < p.coreRadius) color = pal.core
@@ -359,7 +377,8 @@ export function generateStarFieldGrid(opts:{
           else if (profile > 0.25) color = pal.armEdge
           else color = pal.dust
         }
-        const cand: StarOut = { x: ox, y: oy, r: rNow, size, ring, color }
+        // 输出坐标：CSS 像素
+        const cand: StarOut = { x: ox, y: oy, r: rNowDev, size, ring, color }
         accepted++
         if (reservoir.length < target){
           reservoir.push(cand)

@@ -35,7 +35,8 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const w = dims.w, h = dims.h; if(!w||!h) return {stars:[], ringCount:0, bgStars:[]}
     const p: GalaxyParams = { ...params, armCount: armCount||params.armCount }
     const pal: Palette = palette
-    const arr = generateStarFieldGrid({ w, h, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring })
+    const dpr = (window.devicePixelRatio || 1)
+    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
