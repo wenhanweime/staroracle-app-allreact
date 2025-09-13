@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { generateStarFieldGrid, GalaxyParams, Palette } from '../utils/galaxyModel'
+import { UNIFORM_DEG_PER_MS, fullRotationSeconds } from '../utils/rotationConfig'
 
 interface LayerAlpha { core:number; ridge:number; armBright:number; armEdge:number; dust:number; outer:number }
 
@@ -64,10 +65,9 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
   }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady, onBgPointsReady, params, palette, layerAlpha])
 
   // CSS 动画：每个 ring 不同速度（与半径相关的差速旋转）
-  const ringDur = (idx:number)=>{
-    const base = 80 // 秒，外圈更慢，内圈更快
-    const rc = Math.max(1, ringCount)
-    return `${Math.max(12, base*(0.25 + idx/rc))}s`
+  const ringDur = (_idx:number)=>{
+    // 统一速度：所有环相同周期，与 DOM 脉冲叠加保持一致
+    return `${fullRotationSeconds()}s`
   }
 
   return (

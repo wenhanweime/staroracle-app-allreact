@@ -1,5 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { UNIFORM_DEG_PER_MS } from '../utils/rotationConfig'
 
 interface GlowConfig {
   pickProb?: number
@@ -38,11 +39,10 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const bpts = bandPointsRef?.current || []
       const BAND_COUNT = Math.max(1, bpts.reduce((m,p)=> Math.max(m, p.band+1), 1))
       const cx = w/2, cy = h/2
-      const baseDegPerMs = 0.00025
       const now = performance.now()
       const transformed = bpts.map(p=>{
-        const rMid = (p.band + 0.5) / BAND_COUNT
-        const omegaDegPerMs = rotateEnabled ? (baseDegPerMs / (0.25 + rMid)) : 0
+        // 统一旋转速度：所有环使用相同角速度，与 CSS 动画保持一致
+        const omegaDegPerMs = rotateEnabled ? UNIFORM_DEG_PER_MS : 0
         const angle = omegaDegPerMs * now * (Math.PI/180)
         const bcx = p.bw/2, bcy = p.bh/2
         const rx = p.x - bcx
