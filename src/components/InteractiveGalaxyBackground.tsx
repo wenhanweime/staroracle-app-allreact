@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import HotspotOverlay from './HotspotOverlay';
 import VoronoiOverlay from './VoronoiOverlay';
 import GalaxyDOMPulseOverlay from './GalaxyDOMPulseOverlay';
+import GalaxyLightweight from './GalaxyLightweight';
 import { useGalaxyStore } from '../store/useGalaxyStore';
 import { useGalaxyGridStore } from '../store/useGalaxyGridStore';
 import { useStarStore } from '../store/useStarStore';
@@ -242,6 +243,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const bgMaskRef = useRef<HTMLCanvasElement | null>(null);
   const bandMaskLayersRef = useRef<HTMLCanvasElement[] | null>(null);
   const starMaskCompositeRef = useRef<HTMLCanvasElement | null>(null);
+  const domBandPointsRef = useRef<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>>([]);
   const [params, setParams] = useState(defaultParams);
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; }, [params]);
@@ -279,6 +281,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   useEffect(() => { layerAlphaRef.current = layerAlpha; }, [layerAlpha]);
 
   useEffect(() => {
+    // Coarse pointer (mobile): skip heavy Canvas pipeline, DOM mode will render below
+    const isCoarse = typeof window!=='undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+    if (isCoarse) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d');
@@ -690,8 +695,16 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onClick={handleClick}
         onMouseMove={handleMouseMove}
       />
+      {typeof window!=='undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches && (
+        <GalaxyLightweight
+          structureColoring={structureColoring}
+          armCount={defaultParams.armCount}
+          scale={params.galaxyScale}
+          onBandPointsReady={(pts)=>{ domBandPointsRef.current = pts }}
+        />
+      )}
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
-      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={bandStarPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
+      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef.current.length? domBandPointsRef : bandStarPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
