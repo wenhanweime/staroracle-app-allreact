@@ -37,8 +37,23 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const p: GalaxyParams = { ...params, armCount: armCount||params.armCount }
     const pal: Palette = palette
     const dpr = (window.devicePixelRatio || 1)
-    const fullDensity = true
-    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring, fullDensity })
+    const isMobile = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Math.min(w,h) < 820
+    // Mobile comfort preset: fewer stars, slightly larger dots
+    const sizeScale = isMobile ? 1.18 : 1.0
+    const densityScale = isMobile ? 0.62 : 1.0
+    const p2: GalaxyParams = {
+      ...p,
+      armStarSizeMultiplier: (p.armStarSizeMultiplier || 1) * sizeScale,
+      interArmStarSizeMultiplier: (p.interArmStarSizeMultiplier || 1) * sizeScale,
+      backgroundStarSizeMultiplier: (p.backgroundStarSizeMultiplier || 1) * (isMobile ? 1.12 : 1.0),
+      backgroundDensity: (p.backgroundDensity || 0) * (isMobile ? 0.66 : 1.0),
+    }
+    // Compute an explicit star cap for mobile to reduce DOM nodes
+    const area = w*h
+    const baseTarget = Math.max(600, Math.min(1800, Math.floor(area/3500)))
+    const starCap = isMobile ? Math.max(400, Math.floor(baseTarget * 0.55)) : undefined
+    const fullDensity = !isMobile
+    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p2, palette: pal, structureColoring, fullDensity, densityScale, starCap })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
@@ -50,14 +65,14 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const reduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const seed = 0xBADC0DE
     let rand = (function(seed:number){ let t=seed>>>0; return ()=>{ t += 0x6D2B79F5; let r=Math.imul(t^(t>>>15),1|t); r^=r+Math.imul(r^(r>>>7),61|r); return ((r^(r>>>14))>>>0)/4294967296 } })(seed)
-    const bgCount = Math.floor((w*h) * (p.backgroundDensity || 0) * (reduced ? 0.6 : 1))
+    const bgCount = Math.floor((w*h) * (p2.backgroundDensity || 0) * (reduced ? 0.6 : 1) * (isMobile ? 0.85 : 1))
     const bg: Array<{x:number;y:number;size:number}> = []
     for(let i=0;i<bgCount;i++){
       const x = rand()*w
       const y = rand()*h
       const r1 = rand(), r2 = rand()
-      let size = r1 < 0.85 ? 0.8 : (r2 < 0.9 ? 1.2 : (p.backgroundSizeVariation||2.0))
-      size *= (p.backgroundStarSizeMultiplier || 1.0)
+      let size = r1 < 0.85 ? 0.8 : (r2 < 0.9 ? 1.2 : (p2.backgroundSizeVariation||2.0))
+      size *= (p2.backgroundStarSizeMultiplier || 1.0)
       bg.push({ x,y,size })
     }
     onBgPointsReady && onBgPointsReady(bg)

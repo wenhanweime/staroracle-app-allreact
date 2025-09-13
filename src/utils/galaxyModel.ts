@@ -291,9 +291,10 @@ export function generateStarField(opts:{
 // 网格法（接近最早 Canvas 管线的结构分布，力求 1:1 形态）
 export function generateStarFieldGrid(opts:{
   w:number; h:number; dpr:number; scale:number; rings?:number; seed?:number;
-  params: GalaxyParams; palette: Palette; structureColoring:boolean; fullDensity?: boolean
+  params: GalaxyParams; palette: Palette; structureColoring:boolean; fullDensity?: boolean;
+  densityScale?: number; starCap?: number;
 }): StarOut[] {
-  const { w, h, dpr, scale, params: p, palette: pal, structureColoring, fullDensity } = opts
+  const { w, h, dpr, scale, params: p, palette: pal, structureColoring, fullDensity, densityScale, starCap } = opts
   const rng = seeded(opts.seed ?? 0xA17C9E3)
   // 视口 CSS 尺寸与设备像素尺寸
   const wDev = Math.floor(w * Math.max(1, dpr || 1))
@@ -349,6 +350,7 @@ export function generateStarFieldGrid(opts:{
       }
 
       density *= 0.8 + rng()*0.4 // 旧版的随机浮动
+      if (densityScale && densityScale > 0) density *= densityScale
       if (rng() < density){
         let ox = x, oy = y
         if (profile > 0.001){
@@ -395,7 +397,7 @@ export function generateStarFieldGrid(opts:{
         const offY = (oHCss - h) / 2
         const cand: StarOut = { x: ox - offX, y: oy - offY, r: rNowDev, size, ring, color }
         accepted++
-        const cap = fullDensity ? Number.POSITIVE_INFINITY : target
+        const cap = (typeof starCap === 'number') ? Math.max(0, Math.floor(starCap)) : (fullDensity ? Number.POSITIVE_INFINITY : target)
         if (reservoir.length < cap){
           reservoir.push(cand)
         } else {
