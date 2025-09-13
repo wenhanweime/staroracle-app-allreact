@@ -395,7 +395,7 @@ export function generateStarFieldGrid(opts:{
         const offY = (oHCss - h) / 2
         const cand: StarOut = { x: ox - offX, y: oy - offY, r: rNowDev, size, ring, color }
         accepted++
-        const cap = fullDensity ? Number.POSITIVE_INFINITY : target
+        const cap = fullDensity ? Math.min(target * 4, 6000) : target
         if (reservoir.length < cap){
           reservoir.push(cand)
         } else {
