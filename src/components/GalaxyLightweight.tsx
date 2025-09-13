@@ -53,7 +53,15 @@ const GalaxyLightweight: React.FC<Props> = ({ structureColoring=true, armCount=5
     }
     return { stars: arr.map(s=>({x:s.x,y:s.y,size:s.size,color:s.color, ring:s.ring} as any)), ringCount: rings }
   }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady])
-return (
+
+  // CSS 动画：每个 ring 不同速度（与半径相关的差速旋转）
+  const ringDur = (idx:number)=>{
+    const base = 80 // 秒，外圈更慢，内圈更快
+    const rc = Math.max(1, ringCount)
+    return `${Math.max(12, base*(0.25 + idx/rc))}s`
+  }
+
+  return (
     <div ref={rootRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
       {Array.from({length:ringCount}).map((_,ri)=> (
         <div key={ri}
