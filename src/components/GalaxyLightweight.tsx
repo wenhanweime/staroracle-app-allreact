@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { generateStarField, GalaxyParams, Palette } from '../utils/galaxyModel'
+import { generateStarFieldGrid, GalaxyParams, Palette } from '../utils/galaxyModel'
 
 interface LayerAlpha { core:number; ridge:number; armBright:number; armEdge:number; dust:number; outer:number }
 
@@ -35,7 +35,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const w = dims.w, h = dims.h; if(!w||!h) return {stars:[], ringCount:0, bgStars:[]}
     const p: GalaxyParams = { ...params, armCount: armCount||params.armCount }
     const pal: Palette = palette
-    const arr = generateStarField({ w, h, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring })
+    const arr = generateStarFieldGrid({ w, h, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []

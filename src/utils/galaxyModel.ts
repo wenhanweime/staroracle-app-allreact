@@ -287,3 +287,78 @@ export function generateStarField(opts:{
   }
   return stars
 }
+
+// 网格法（接近最早 Canvas 管线的结构分布，力求 1:1 形态）
+export function generateStarFieldGrid(opts:{
+  w:number; h:number; scale:number; rings?:number; seed?:number;
+  params: GalaxyParams; palette: Palette; structureColoring:boolean
+}): StarOut[] {
+  const { w, h, scale, params: p, palette: pal, structureColoring } = opts
+  const rng = seeded(opts.seed ?? 0xA17C9E3)
+  const cx = w/2, cy = h/2
+  const maxR = Math.min(w,h) * 0.4 // 与旧版保持一致
+  const decay = radialDecayFn(p)
+  const rings = Math.max(3, Math.min(16, opts.rings ?? 10))
+  const step = 1.0 // 与旧版 getStep() 对齐
+
+  const stars: StarOut[] = []
+  for (let x = 0; x < w; x += step){
+    for (let y = 0; y < h; y += step){
+      const dx = x - cx
+      const dy = y - cy
+      const radius = Math.hypot(dx, dy)
+      if (radius < 3) continue
+
+      const baseDecay = decay(radius, maxR)
+      const armInfo = getArmInfo(x, y, cx, cy, maxR, p)
+      const { density: armDensity, size: baseSize, profile } = calculateArmDensityProfile(armInfo, p)
+
+      let density:number
+      let size:number
+      if (radius < p.coreRadius){
+        const coreProfile = Math.exp(-Math.pow(radius / p.coreRadius, 1.5))
+        density = p.coreDensity * coreProfile * baseDecay
+        size = (p.coreSizeMin + rng() * (p.coreSizeMax - p.coreSizeMin)) * p.armStarSizeMultiplier
+      } else {
+        const n = noise2D(x * p.densityNoiseScale, y * p.densityNoiseScale)
+        let modulation = 1.0 - p.densityNoiseStrength * (0.5 * (1.0 - n))
+        if (modulation < 0.0) modulation = 0.0
+        density = armDensity * baseDecay * modulation
+        size = baseSize
+      }
+
+      density *= 0.8 + rng()*0.4 // 旧版的随机浮动
+      if (rng() < density){
+        let ox = x, oy = y
+        if (profile > 0.001){
+          const pitchAngle = Math.atan(1 / p.spiralB)
+          const jitterAngle = armInfo.theta + pitchAngle + Math.PI/2
+          const r1 = rng() || 1e-6
+          const r2 = rng()
+          const gaussian = Math.sqrt(-2.0 * Math.log(r1)) * Math.cos(2.0*Math.PI*r2)
+          const chaos = 1 + (p.jitterChaos||0) * noise2D(x*(p.jitterChaosScale||0.02), y*(p.jitterChaosScale||0.02))
+          const randomMix = 0.7 + 0.6*rng()
+          const jitterAmount = p.jitterStrength * chaos * randomMix * profile * gaussian
+          ox += jitterAmount * Math.cos(jitterAngle)
+          oy += jitterAmount * Math.sin(jitterAngle)
+        }
+        // 轻微破格抖动以打破网格感
+        ox += (rng() - 0.5) * step
+        oy += (rng() - 0.5) * step
+
+        const rNow = Math.hypot(ox - cx, oy - cy)
+        const ring = Math.min(rings-1, Math.max(0, Math.floor((rNow/maxR) * rings)))
+        let color = '#FFFFFF'
+        if (structureColoring){
+          if (radius < p.coreRadius) color = pal.core
+          else if (profile > 0.7) color = pal.ridge
+          else if (profile > 0.5) color = pal.armBright
+          else if (profile > 0.25) color = pal.armEdge
+          else color = pal.dust
+        }
+        stars.push({ x: ox, y: oy, r: rNow, size, ring, color })
+      }
+    }
+  }
+  return stars
+}
