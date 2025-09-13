@@ -38,10 +38,11 @@ const GalaxyLightweight: React.FC<Props> = ({ structureColoring=true, armCount=5
       const t = i / count
       // radius biased towards center
       const r = Math.pow(Math.random(), 0.6) * maxR
-      const angle = Math.log(Math.max(r, 8)/8) / 0.29 + (arm * 2*Math.PI/armCount)
+      const a = Math.log(Math.max(r, 8)/8) / 0.29
+      const theta = (arm * 2*Math.PI/armCount) - a
       const jitter = (noise2D(i*0.37, i*0.91)-0.5) * 12
-      const x = cx + (r*Math.cos(angle) + jitter)
-      const y = cy + (r*Math.sin(angle) + jitter)
+      const x = cx + (r*Math.cos(theta) + jitter)
+      const y = cy + (r*Math.sin(theta) + jitter)
       const ring = Math.min(rings-1, Math.max(0, Math.floor((r/maxR) * rings)))
       const profile = Math.exp(-0.5 * Math.pow((r/maxR)/0.8, 2))
       const baseSize = 0.7 + Math.random()*1.3
