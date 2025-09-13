@@ -292,9 +292,9 @@ export function generateStarField(opts:{
 export function generateStarFieldGrid(opts:{
   w:number; h:number; dpr:number; scale:number; rings?:number; seed?:number;
   params: GalaxyParams; palette: Palette; structureColoring:boolean; fullDensity?: boolean;
-  densityScale?: number; starCap?: number;
+  densityScale?: number; starCap?: number; densityArmScale?: number; densityInterScale?: number;
 }): StarOut[] {
-  const { w, h, dpr, scale, params: p, palette: pal, structureColoring, fullDensity, densityScale, starCap } = opts
+  const { w, h, dpr, scale, params: p, palette: pal, structureColoring, fullDensity, densityScale, starCap, densityArmScale, densityInterScale } = opts
   const rng = seeded(opts.seed ?? 0xA17C9E3)
   // 视口 CSS 尺寸与设备像素尺寸
   const wDev = Math.floor(w * Math.max(1, dpr || 1))
@@ -351,6 +351,12 @@ export function generateStarFieldGrid(opts:{
 
       density *= 0.8 + rng()*0.4 // 旧版的随机浮动
       if (densityScale && densityScale > 0) density *= densityScale
+      // 可选：区别对待臂与臂间密度缩放，保持臂形态
+      if (radius >= p.coreRadius){
+        const isArm = (armInfo.distance / dprN) < (armInfo.armWidth / dprN) * 0.5 || (profile > 0.1)
+        if (isArm && densityArmScale && densityArmScale > 0) density *= densityArmScale
+        if (!isArm && densityInterScale && densityInterScale > 0) density *= densityInterScale
+      }
       if (rng() < density){
         let ox = x, oy = y
         if (profile > 0.001){

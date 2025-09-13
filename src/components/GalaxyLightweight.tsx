@@ -38,22 +38,24 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const pal: Palette = palette
     const dpr = (window.devicePixelRatio || 1)
     const isMobile = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Math.min(w,h) < 820
-    // Mobile comfort preset: fewer stars, slightly larger dots
-    const sizeScale = isMobile ? 1.18 : 1.0
-    const densityScale = isMobile ? 0.62 : 1.0
+    // Mobile comfort v2: increase visibility of arms while keeping total lighter
+    const sizeScale = isMobile ? 1.32 : 1.0
+    const densityScale = isMobile ? 0.85 : 1.0
+    const densityArmScale = isMobile ? 1.15 : 1.0
+    const densityInterScale = isMobile ? 0.70 : 1.0
     const p2: GalaxyParams = {
       ...p,
       armStarSizeMultiplier: (p.armStarSizeMultiplier || 1) * sizeScale,
       interArmStarSizeMultiplier: (p.interArmStarSizeMultiplier || 1) * sizeScale,
-      backgroundStarSizeMultiplier: (p.backgroundStarSizeMultiplier || 1) * (isMobile ? 1.12 : 1.0),
-      backgroundDensity: (p.backgroundDensity || 0) * (isMobile ? 0.66 : 1.0),
+      backgroundStarSizeMultiplier: (p.backgroundStarSizeMultiplier || 1) * (isMobile ? 1.18 : 1.0),
+      backgroundDensity: (p.backgroundDensity || 0) * (isMobile ? 0.80 : 1.0),
     }
     // Compute an explicit star cap for mobile to reduce DOM nodes
     const area = w*h
     const baseTarget = Math.max(600, Math.min(1800, Math.floor(area/3500)))
-    const starCap = isMobile ? Math.max(400, Math.floor(baseTarget * 0.55)) : undefined
+    const starCap = isMobile ? Math.max(500, Math.floor(baseTarget * 0.80)) : undefined
     const fullDensity = !isMobile
-    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p2, palette: pal, structureColoring, fullDensity, densityScale, starCap })
+    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p2, palette: pal, structureColoring, fullDensity, densityScale, starCap, densityArmScale, densityInterScale })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
