@@ -31,7 +31,7 @@ const ClickGlowOverlay: React.FC<Props> = ({ baseCanvasRef, starMaskRef, config 
   useEffect(()=>{
     const c = canvasRef.current; if(!c) return
     const onResize = ()=>{
-      const DPR = Math.min(window.devicePixelRatio||1,2)
+      const DPR = (window.devicePixelRatio || 1)
       const w = window.innerWidth, h = window.innerHeight
       c.width = Math.floor(w*DPR); c.height = Math.floor(h*DPR)
       c.style.width = w+'px'; c.style.height = h+'px'
@@ -47,7 +47,7 @@ const ClickGlowOverlay: React.FC<Props> = ({ baseCanvasRef, starMaskRef, config 
     const c = canvasRef.current; const base = baseCanvasRef.current
     if(!c || !base) return
     const ctx = c.getContext('2d')!
-    const DPR = Math.min(window.devicePixelRatio||1,2)
+    const DPR = (window.devicePixelRatio || 1)
     let raf = 0
 
     const render = (now:number)=>{

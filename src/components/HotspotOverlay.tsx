@@ -17,7 +17,7 @@ const HotspotOverlay: React.FC<Props> = ({ className }) => {
   useEffect(() => {
     const canvas = canvasRef.current
     if (!canvas) return
-    const DPR = Math.min(window.devicePixelRatio || 1, 2)
+    const DPR = (window.devicePixelRatio || 1)
     canvas.width = Math.floor(width * DPR)
     canvas.height = Math.floor(height * DPR)
     canvas.style.width = `${width}px`
@@ -28,7 +28,7 @@ const HotspotOverlay: React.FC<Props> = ({ className }) => {
     const canvas = canvasRef.current
     if (!canvas) return
     const ctx = canvas.getContext('2d')!
-    const DPR = Math.min(window.devicePixelRatio || 1, 2)
+    const DPR = (window.devicePixelRatio || 1)
 
     let raf = 0
     const render = () => {
