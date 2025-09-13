@@ -77,41 +77,41 @@ const hslToHex = (h:number,s:number,l:number) => { const {r,g,b}=hslToRgb(h,s,l)
 // Best visual defaults aligned to 3-arm design
 const defaultParams = {
    // 稳定版默认参数（对齐 tag：开始首页galaxy交互完整性之前的确定性版本）
-   coreDensity: 0.7,
-   coreRadius: 25,
-   coreSizeMin: 1.0,
-   coreSizeMax: 3.5,
-   armCount: 5,
-   armDensity: 0.6,
-   armBaseSizeMin: 0.7,
-   armBaseSizeMax: 2.0,
-   armHighlightSize: 5.0,
-   armHighlightProb: 0.01,
-   spiralA: 8,
-   spiralB: 0.29,
-   armWidthInner: 29,
-   armWidthOuter: 65,
-   armWidthGrowth: 2.5,
-   armTransitionSoftness: 5.2,
-   fadeStartRadius: 0.5,
-   fadeEndRadius: 1.3,
-   outerDensityMaintain: 0.10,
-   interArmDensity: 0.150,
-   interArmSizeMin: 0.6,
-   interArmSizeMax: 1.2,
-   radialDecay: 0.0015,
-   backgroundDensity: 0.00024,
-   backgroundSizeVariation: 2.0,
-   jitterStrength: 10,
-   densityNoiseScale: 0.018,
-   densityNoiseStrength: 0.8,
+   coreDensity: 0.7,// 核心密度  
+   coreRadius: 12,    // 核心半径
+   coreSizeMin: 1.0, // 核心星星大小最小
+   coreSizeMax: 3.5, // 核心星星大小最大
+   armCount: 5, // 旋臂数量
+   armDensity: 0.6, // 旋臂密度
+   armBaseSizeMin: 0.7, // 旋臂星星大小最小
+   armBaseSizeMax: 2.0, // 旋臂星星大小最大
+   armHighlightSize: 5.0, // 旋臂星星高亮大小
+   armHighlightProb: 0.01, // 旋臂星星高亮概率
+   spiralA: 8, // 螺旋基准
+   spiralB: 0.29, // 螺旋紧密度
+   armWidthInner: 29, // 旋臂宽度内侧
+   armWidthOuter: 65, // 旋臂宽度外侧
+   armWidthGrowth: 2.5, // 旋臂宽度增长
+   armTransitionSoftness: 5.2, // 旋臂过渡平滑度
+   fadeStartRadius: 0.5, // 淡化起始
+   fadeEndRadius: 1.3, // 淡化结束
+   outerDensityMaintain: 0.10, // 外围密度维持
+   interArmDensity: 0.150, // 旋臂间区域密度
+   interArmSizeMin: 0.6, // 旋臂间区域星星大小最小
+   interArmSizeMax: 1.2, // 旋臂间区域星星大小最大
+   radialDecay: 0.0015, // 径向衰减
+   backgroundDensity: 0.00024, // 背景星星密度
+   backgroundSizeVariation: 2.0, // 背景星星大小变异
+   jitterStrength: 10, // 垂直抖动强度
+   densityNoiseScale: 0.018, // 密度噪声缩放
+   densityNoiseStrength: 0.8, // 密度噪声强度
    // 抖动不规律（稳定版未使用，默认关闭）
-   jitterChaos: 0,
-   jitterChaosScale: 0,
-   armStarSizeMultiplier: 1.0,
-   interArmStarSizeMultiplier: 1.0,
+   jitterChaos: 0, // 抖动不规律
+   jitterChaosScale: 0, // 抖动不规律尺度
+   armStarSizeMultiplier: 1.0, // 旋臂星星大小倍数
+   interArmStarSizeMultiplier: 1.0, // 旋臂间区域星星大小倍数
    backgroundStarSizeMultiplier: 1.0,
-   galaxyScale: 0.68,
+   galaxyScale: 0.88, // 整体缩放（银河占屏比例）
    // 颜色波动（仅显示着色用，DOM 默认不启用）
    colorJitterHue: 10,
    colorJitterSat: 0.06,
