@@ -291,9 +291,9 @@ export function generateStarField(opts:{
 // 网格法（接近最早 Canvas 管线的结构分布，力求 1:1 形态）
 export function generateStarFieldGrid(opts:{
   w:number; h:number; dpr:number; scale:number; rings?:number; seed?:number;
-  params: GalaxyParams; palette: Palette; structureColoring:boolean
+  params: GalaxyParams; palette: Palette; structureColoring:boolean; fullDensity?: boolean
 }): StarOut[] {
-  const { w, h, dpr, scale, params: p, palette: pal, structureColoring } = opts
+  const { w, h, dpr, scale, params: p, palette: pal, structureColoring, fullDensity } = opts
   const rng = seeded(opts.seed ?? 0xA17C9E3)
   // 视口 CSS 尺寸与设备像素尺寸
   const wDev = Math.floor(w * Math.max(1, dpr || 1))
@@ -310,6 +310,8 @@ export function generateStarFieldGrid(opts:{
   const oCyCss = oHCss / 2
   // 与旧版一致：maxRadius 使用设备像素
   const maxRDev = Math.min(wDev, hDev) * 0.4
+  const dprN = Math.max(1, dpr || 1)
+  const maxRCss = maxRDev / dprN
   const decay = radialDecayFn(p)
   const rings = Math.max(3, Math.min(16, opts.rings ?? 10))
   const step = 1.0 // 与旧版 getStep() 对齐（在 CSS 像素坐标系下）
@@ -326,7 +328,8 @@ export function generateStarFieldGrid(opts:{
       const radius = Math.hypot(dx, dy)
       if (radius < 3) continue
 
-      const baseDecay = decay(radius, maxRDev) // 旧版传入 maxRadius（设备像素）
+      // 旧版：密度/衰减在 CSS 半径下，maxRadius 也用 CSS 单位（设备像素 / DPR）
+      const baseDecay = decay(radius, maxRCss)
       // 最近臂信息：传 CSS 坐标与设备像素 maxRadius，与旧版一致
       const armInfo = getArmInfo(x, y, oCxCss, oCyCss, maxRDev, p)
       const { density: armDensity, size: baseSize, profile } = calculateArmDensityProfile(armInfo, p)
@@ -365,26 +368,39 @@ export function generateStarFieldGrid(opts:{
         oy += (rng() - 0.5) * step
 
         // 按旧版：ring 基于设备像素下的半径与 maxRDev
-        const dxDev = (ox * Math.max(1, dpr||1)) - (oWDev/2)
-        const dyDev = (oy * Math.max(1, dpr||1)) - (oHDev/2)
+        const dxDev = (ox * dprN) - (oWDev/2)
+        const dyDev = (oy * dprN) - (oHDev/2)
         const rNowDev = Math.hypot(dxDev, dyDev)
         const ring = Math.min(rings-1, Math.max(0, Math.floor((rNowDev/maxRDev) * rings)))
         let color = '#FFFFFF'
         if (structureColoring){
-          if (radius < p.coreRadius) color = pal.core
-          else if (profile > 0.7) color = pal.ridge
-          else if (profile > 0.5) color = pal.armBright
-          else if (profile > 0.25) color = pal.armEdge
-          else color = pal.dust
+          if (radius < p.coreRadius) {
+            color = pal.core
+          } else {
+            const aw = armInfo.armWidth
+            const d = armInfo.distance
+            const dustOffset = 0.35 * aw
+            const dustHalf = 0.10 * aw * 0.5
+            const noiseLocal = noise2D(x * 0.05, y * 0.05)
+            const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf
+            if (inDust || noiseLocal < -0.2) color = pal.dust
+            else if (profile > 0.7) color = pal.ridge
+            else if (profile > 0.5) color = pal.armBright
+            else if (profile > 0.25) color = pal.armEdge
+            else color = pal.outer
+          }
         }
-        // 输出坐标：CSS 像素
-        const cand: StarOut = { x: ox, y: oy, r: rNowDev, size, ring, color }
+        // 输出坐标：CSS 像素，按 OV → 视口居中偏移
+        const offX = (oWCss - w) / 2
+        const offY = (oHCss - h) / 2
+        const cand: StarOut = { x: ox - offX, y: oy - offY, r: rNowDev, size, ring, color }
         accepted++
-        if (reservoir.length < target){
+        const cap = fullDensity ? Number.POSITIVE_INFINITY : target
+        if (reservoir.length < cap){
           reservoir.push(cand)
         } else {
           const j = Math.floor(rng() * accepted)
-          if (j < target) reservoir[j] = cand
+          if (j < cap) reservoir[j] = cand
         }
       }
     }

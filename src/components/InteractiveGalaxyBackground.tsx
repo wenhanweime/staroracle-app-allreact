@@ -76,48 +76,47 @@ const hslToHex = (h:number,s:number,l:number) => { const {r,g,b}=hslToRgb(h,s,l)
 
 // Best visual defaults aligned to 3-arm design
 const defaultParams = {
-   // 对齐你提供的默认参数（与 ref/galaxy_claude 初始配置一致）
-   coreDensity: 0.7, // 核心密度
-   coreRadius: 25, // 核心半径
-   coreSizeMin: 1.0, // 核心星星大小最小
-   coreSizeMax: 3.5, // 核心星星大小最大
-   armCount: 5, // 旋臂数量
-   armDensity: 3, // 旋臂密度
-   armBaseSizeMin: 0.7, // 旋臂星星基础大小最小
-   armBaseSizeMax: 2.0, // 旋臂星星大小最大
-   armHighlightSize: 5.0, // 旋臂星星高亮大小
-   armHighlightProb: 0.01, // 旋臂星星高亮概率
-   spiralA: 8, // 螺旋基准
-   spiralB: 0.29, // 螺旋紧密度
-   armWidthInner: 29, // 旋臂宽度内侧
-   armWidthOuter: 113, // 旋臂宽度外侧
-   armWidthGrowth: 2.5, // 旋臂宽度增长
-   armTransitionSoftness: 3, // 旋臂过渡平滑度
-   fadeStartRadius: 0.5, // 淡化起始
-   fadeEndRadius: 1.54, // 淡化结束
-   outerDensityMaintain: 0.10, // 外围密度维持
-   interArmDensity: 0.08, // 旋臂间区域密度
-   interArmSizeMin: 0.6, // 旋臂间区域星星大小最小
-   interArmSizeMax: 1.2, // 旋臂间区域星星大小最大
-   radialDecay: 0.0015, // 径向衰减  
-   backgroundDensity: 0.00045, // 背景星星密度
-   backgroundSizeVariation: 2.0, // 背景星星大小变异
-   jitterStrength: 17, // 垂直抖动强度
-   densityNoiseScale: 0.09, // 密度噪声缩放
-   densityNoiseStrength: 0.95, // 密度噪声强度
-   // 抖动不规律性（新增）
-   jitterChaos: 7,            // 为抖动引入低频噪声调制，提升不规律
-   jitterChaosScale: 1,       // 低频噪声的尺度（越小越大团）
-   armStarSizeMultiplier: 0.8, // 旋臂星星大小倍数
-   interArmStarSizeMultiplier: 1, // 旋臂间区域星星大小倍数
-   backgroundStarSizeMultiplier: 0.7, // 背景星星大小倍数
-   // 视图层整体缩放（围绕屏幕中心），用于控制银河占屏比例
-   galaxyScale: 0.6,
-   // 颜色波动（仅显示着色用）
-   colorJitterHue: 10,     // 色相抖动幅度（度）
-   colorJitterSat: 0.06,   // 饱和度抖动幅度（0..1）
-   colorJitterLight: 0.04, // 亮度抖动幅度（0..1）
-   colorNoiseScale: 0.05,  // 颜色噪声尺度
+   // 稳定版默认参数（对齐 tag：开始首页galaxy交互完整性之前的确定性版本）
+   coreDensity: 0.7,
+   coreRadius: 25,
+   coreSizeMin: 1.0,
+   coreSizeMax: 3.5,
+   armCount: 5,
+   armDensity: 0.6,
+   armBaseSizeMin: 0.7,
+   armBaseSizeMax: 2.0,
+   armHighlightSize: 5.0,
+   armHighlightProb: 0.01,
+   spiralA: 8,
+   spiralB: 0.29,
+   armWidthInner: 29,
+   armWidthOuter: 65,
+   armWidthGrowth: 2.5,
+   armTransitionSoftness: 5.2,
+   fadeStartRadius: 0.5,
+   fadeEndRadius: 1.3,
+   outerDensityMaintain: 0.10,
+   interArmDensity: 0.150,
+   interArmSizeMin: 0.6,
+   interArmSizeMax: 1.2,
+   radialDecay: 0.0015,
+   backgroundDensity: 0.00024,
+   backgroundSizeVariation: 2.0,
+   jitterStrength: 10,
+   densityNoiseScale: 0.018,
+   densityNoiseStrength: 0.8,
+   // 抖动不规律（稳定版未使用，默认关闭）
+   jitterChaos: 0,
+   jitterChaosScale: 0,
+   armStarSizeMultiplier: 1.0,
+   interArmStarSizeMultiplier: 1.0,
+   backgroundStarSizeMultiplier: 1.0,
+   galaxyScale: 0.68,
+   // 颜色波动（仅显示着色用，DOM 默认不启用）
+   colorJitterHue: 10,
+   colorJitterSat: 0.06,
+   colorJitterLight: 0.04,
+   colorNoiseScale: 0.05,
 };
 
 // 模块颜色默认值（结构着色用）
@@ -271,7 +270,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const rotateRef = useRef(rotateEnabled);
   useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
   // 结构着色开关：按星系结构分类上色（默认关闭，保持白星风格）
-  const [structureColoring, setStructureColoring] = useState(true);
+  const [structureColoring, setStructureColoring] = useState(false);
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);

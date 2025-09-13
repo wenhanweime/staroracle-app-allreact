@@ -36,7 +36,10 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const p: GalaxyParams = { ...params, armCount: armCount||params.armCount }
     const pal: Palette = palette
     const dpr = (window.devicePixelRatio || 1)
-    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring })
+    const isDesktop = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: fine)').matches
+    const area = w * h
+    const fullDensity = isDesktop && area <= 1600000 // 桌面中等分辨率下允许更高点数
+    const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring, fullDensity })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
@@ -44,14 +47,18 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       onBandPointsReady(out)
     }
     // 背景小星（不旋转）
-    const bgCount = Math.floor((w*h) * (p.backgroundDensity || 0))
+    // 背景小星（不旋转）：使用种子 RNG + reducedMotion 因子，与稳定版一致
+    const reduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    const seed = 0xBADC0DE
+    let rand = (function(seed:number){ let t=seed>>>0; return ()=>{ t += 0x6D2B79F5; let r=Math.imul(t^(t>>>15),1|t); r^=r+Math.imul(r^(r>>>7),61|r); return ((r^(r>>>14))>>>0)/4294967296 } })(seed)
+    const bgCount = Math.floor((w*h) * (p.backgroundDensity || 0) * (reduced ? 0.6 : 1))
     const bg: Array<{x:number;y:number;size:number}> = []
     for(let i=0;i<bgCount;i++){
-      const x = Math.random()*w
-      const y = Math.random()*h
-      const r1 = Math.random(), r2 = Math.random()
+      const x = rand()*w
+      const y = rand()*h
+      const r1 = rand(), r2 = rand()
       let size = r1 < 0.85 ? 0.8 : (r2 < 0.9 ? 1.2 : (p.backgroundSizeVariation||2.0))
-      size *= (p.backgroundStarSizeMultiplier || 0.7)
+      size *= (p.backgroundStarSizeMultiplier || 1.0)
       bg.push({ x,y,size })
     }
     onBgPointsReady && onBgPointsReady(bg)
@@ -67,6 +74,10 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
 
   return (
     <div ref={rootRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
+      {/* 缩放容器：仅缩放银河环，不缩放背景星 */}
+      <div
+        style={{ position:'absolute', inset:0, transformOrigin:'50% 50%', transform: `scale(${scale||1})` }}
+      >
       {Array.from({length:ringCount}).map((_,ri)=> (
         <div key={ri}
           style={{
@@ -87,6 +98,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
           ))}
         </div>
       ))}
+      </div>
       {/* 背景小星（不旋转） */}
       {bgStars && bgStars.map((b, i)=> (
         <div
