@@ -301,7 +301,10 @@ export function generateStarFieldGrid(opts:{
   const rings = Math.max(3, Math.min(16, opts.rings ?? 10))
   const step = 1.0 // 与旧版 getStep() 对齐
 
-  const stars: StarOut[] = []
+  // 目标星数：与早期实现一致的数量级，避免 DOM 节点爆炸
+  const target = Math.max(600, Math.min(1800, Math.floor((w*h)/3500)))
+  const reservoir: StarOut[] = []
+  let accepted = 0
   for (let x = 0; x < w; x += step){
     for (let y = 0; y < h; y += step){
       const dx = x - cx
@@ -356,9 +359,16 @@ export function generateStarFieldGrid(opts:{
           else if (profile > 0.25) color = pal.armEdge
           else color = pal.dust
         }
-        stars.push({ x: ox, y: oy, r: rNow, size, ring, color })
+        const cand: StarOut = { x: ox, y: oy, r: rNow, size, ring, color }
+        accepted++
+        if (reservoir.length < target){
+          reservoir.push(cand)
+        } else {
+          const j = Math.floor(rng() * accepted)
+          if (j < target) reservoir[j] = cand
+        }
       }
     }
   }
-  return stars
+  return reservoir
 }
