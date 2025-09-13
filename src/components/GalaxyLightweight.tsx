@@ -36,9 +36,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const p: GalaxyParams = { ...params, armCount: armCount||params.armCount }
     const pal: Palette = palette
     const dpr = (window.devicePixelRatio || 1)
-    const isDesktop = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: fine)').matches
-    const area = w * h
-    const fullDensity = isDesktop && area <= 1600000 // 桌面中等分辨率下允许更高点数
+    const fullDensity = true
     const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p, palette: pal, structureColoring, fullDensity })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     if (onBandPointsReady){

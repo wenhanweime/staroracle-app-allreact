@@ -330,8 +330,8 @@ export function generateStarFieldGrid(opts:{
 
       // 旧版：密度/衰减在 CSS 半径下，maxRadius 也用 CSS 单位（设备像素 / DPR）
       const baseDecay = decay(radius, maxRCss)
-      // 最近臂信息：传 CSS 坐标与设备像素 maxRadius，与旧版一致
-      const armInfo = getArmInfo(x, y, oCxCss, oCyCss, maxRDev, p)
+      // 最近臂信息：使用设备像素坐标（与旧版一致：x*DPR/y*DPR 与 oCenterDev/maxRDev 同单位）
+      const armInfo = getArmInfo(x * dprN, y * dprN, oWDev/2, oHDev/2, maxRDev, p)
       const { density: armDensity, size: baseSize, profile } = calculateArmDensityProfile(armInfo, p)
 
       let density:number
@@ -377,8 +377,8 @@ export function generateStarFieldGrid(opts:{
           if (radius < p.coreRadius) {
             color = pal.core
           } else {
-            const aw = armInfo.armWidth
-            const d = armInfo.distance
+            const aw = armInfo.armWidth / dprN
+            const d = armInfo.distance / dprN
             const dustOffset = 0.35 * aw
             const dustHalf = 0.10 * aw * 0.5
             const noiseLocal = noise2D(x * 0.05, y * 0.05)
@@ -395,7 +395,7 @@ export function generateStarFieldGrid(opts:{
         const offY = (oHCss - h) / 2
         const cand: StarOut = { x: ox - offX, y: oy - offY, r: rNowDev, size, ring, color }
         accepted++
-        const cap = fullDensity ? Math.min(target * 4, 6000) : target
+        const cap = fullDensity ? Number.POSITIVE_INFINITY : target
         if (reservoir.length < cap){
           reservoir.push(cand)
         } else {
