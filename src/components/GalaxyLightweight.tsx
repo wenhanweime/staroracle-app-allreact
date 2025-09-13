@@ -1,6 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
-
-type Star = { x:number; y:number; size:number; color:string; ring:number }
+import { buildGalaxyStars, GalaxyParams, Palette } from '../utils/galaxyModel'
 
 interface Props {
   structureColoring?: boolean
@@ -28,52 +27,33 @@ const GalaxyLightweight: React.FC<Props> = ({ structureColoring=true, armCount=5
 
   const {stars, ringCount} = useMemo(()=>{
     const w = dims.w, h = dims.h; if(!w||!h) return {stars:[], ringCount:0}
-    const cx = w/2, cy = h/2
-    const maxR = Math.min(w,h) * 0.4 * (scale||1)
-    const count = Math.max(600, Math.min(1200, Math.floor((w*h)/3500)))
-    const rings = 5
-    const arr: Star[] = []
-    for(let i=0;i<count;i++){
-      const arm = i % armCount
-      const t = i / count
-      // radius biased towards center
-      const r = Math.pow(Math.random(), 0.6) * maxR
-      const a = Math.log(Math.max(r, 8)/8) / 0.29
-      const theta = (arm * 2*Math.PI/armCount) - a
-      const jitter = (noise2D(i*0.37, i*0.91)-0.5) * 12
-      const x = cx + (r*Math.cos(theta) + jitter)
-      const y = cy + (r*Math.sin(theta) + jitter)
-      const ring = Math.min(rings-1, Math.max(0, Math.floor((r/maxR) * rings)))
-      const profile = Math.exp(-0.5 * Math.pow((r/maxR)/0.8, 2))
-      const baseSize = 0.7 + Math.random()*1.3
-      const size = baseSize * (1 + 1.2*profile)
-      let color = '#FFFFFF'
-      if (structureColoring){
-        // simple palette by radius/profile
-        if (r < maxR*0.12) color = '#FFF8DC' // core
-        else if (profile > 0.65) color = '#FBFBF3' // ridge
-        else if (profile > 0.4) color = '#ADD8E6' // armBright
-        else if (profile > 0.22) color = '#87CEEB' // armEdge
-        else color = '#13318B' // dust/outer
-      }
-      arr.push({ x, y, size, color, ring })
+    const p: GalaxyParams = {
+      coreDensity: 0.7, coreRadius: 25, coreSizeMin: 1.0, coreSizeMax: 3.5,
+      armCount: armCount||5, armDensity: 0.6, armBaseSizeMin: 0.7, armBaseSizeMax: 2.0,
+      armHighlightSize: 5.0, armHighlightProb: 0.01,
+      spiralA: 8, spiralB: 0.29,
+      armWidthInner: 29, armWidthOuter: 113, armWidthGrowth: 2.5,
+      armTransitionSoftness: 3,
+      fadeStartRadius: 0.5, fadeEndRadius: 1.54,
+      outerDensityMaintain: 0.10,
+      interArmDensity: 0.08, interArmSizeMin: 0.6, interArmSizeMax: 1.2,
+      radialDecay: 0.0015,
+      backgroundDensity: 0.00045, backgroundSizeVariation: 2.0,
+      jitterStrength: 17, densityNoiseScale: 0.09, densityNoiseStrength: 0.95,
+      jitterChaos: 7, jitterChaosScale: 1,
+      armStarSizeMultiplier: 0.8, interArmStarSizeMultiplier: 1, backgroundStarSizeMultiplier: 0.7,
     }
-    // 输出 band 点给脉冲层：band=rings，画布尺寸=w,h
+    const pal: Palette = { core:'#FFF8DC', ridge:'#FBFBF3', armBright:'#ADD8E6', armEdge:'#87CEEB', dust:'#13318B', outer:'#B0C4DE' }
+    const arr = buildGalaxyStars({ w, h, scale: scale||1, params: p, palette: pal, structureColoring })
+    const rings = 5
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
       for(const s of arr){ out.push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h }) }
       onBandPointsReady(out)
     }
-    return { stars: arr, ringCount: rings }
+    return { stars: arr.map(s=>({x:s.x,y:s.y,size:s.size,color:s.color, ring:s.ring} as any)), ringCount: rings }
   }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady])
-
-  // CSS 动画：每个 ring 不同速度
-  const ringDur = (idx:number)=>{
-    const base = 80 // 秒
-    return `${Math.max(12, base*(0.25 + idx/(Math.max(1, ringCount))))}s`
-  }
-
-  return (
+return (
     <div ref={rootRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
       {Array.from({length:ringCount}).map((_,ri)=> (
         <div key={ri}
