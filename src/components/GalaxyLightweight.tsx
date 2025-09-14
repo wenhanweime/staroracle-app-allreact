@@ -98,9 +98,12 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       interArmStarSizeMultiplier: (p.interArmStarSizeMultiplier || 1) * sizeScale,
       backgroundStarSizeMultiplier: (p.backgroundStarSizeMultiplier || 1) * (isMobile ? 1.20 : 1.0),
       backgroundDensity: (p.backgroundDensity || 0) * (isMobile ? 0.85 : 1.0),
-      // thicken arms slightly on mobile (device-pixel widths under DPR)
-      armWidthInner: isMobile ? Math.round((p.armWidthInner || 29) * 1.15) : p.armWidthInner,
-      armWidthOuter: isMobile ? Math.round((p.armWidthOuter || 65) * 1.22) : p.armWidthOuter,
+      // Thicken arms more on mobile (device-pixel widths under DPR)
+      armWidthInner: isMobile ? Math.round((p.armWidthInner || 29) * 1.35) : p.armWidthInner,
+      armWidthOuter: isMobile ? Math.round((p.armWidthOuter || 65) * 1.45) : p.armWidthOuter,
+      armTransitionSoftness: isMobile ? Math.max(1, (p.armTransitionSoftness || 5.2) * 1.25) : p.armTransitionSoftness,
+      // Increase vertical jitter (along arm normal) for mobile
+      jitterStrength: isMobile ? Math.max(8, Math.round((p.jitterStrength || 10) * 1.4)) : p.jitterStrength,
     }
     // Compute an explicit star cap for mobile to reduce DOM nodes
     const area = w*h
