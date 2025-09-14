@@ -86,31 +86,25 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const pal: Palette = palette
     const dpr = (window.devicePixelRatio || 1)
     const isMobile = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Math.min(w,h) < 820
-    // Mobile comfort v3: ensure visible spiral arms
-    const sizeScale = isMobile ? 1.40 : 1.0
-    // Double overall galaxy density; mobile keeps regional scaling to preserve arms
-    const densityScale = 2.0
-    const densityArmScale = isMobile ? 1.35 : 1.0
-    const densityInterScale = isMobile ? 0.80 : 1.0
-    const p2: GalaxyParams = {
+    // Strict parity mode to match baseline tag semantics (no mobile comfort scaling)
+    const strictParity = true
+    const sizeScale = strictParity ? 1.0 : (isMobile ? 1.40 : 1.0)
+    const densityScale = strictParity ? 1.0 : 2.0
+    const densityArmScale = strictParity ? 1.0 : (isMobile ? 1.35 : 1.0)
+    const densityInterScale = strictParity ? 1.0 : (isMobile ? 0.80 : 1.0)
+    const p2: GalaxyParams = strictParity ? p : {
       ...p,
       armStarSizeMultiplier: (p.armStarSizeMultiplier || 1) * sizeScale,
       interArmStarSizeMultiplier: (p.interArmStarSizeMultiplier || 1) * sizeScale,
       backgroundStarSizeMultiplier: (p.backgroundStarSizeMultiplier || 1) * (isMobile ? 1.20 : 1.0),
       backgroundDensity: (p.backgroundDensity || 0) * (isMobile ? 0.85 : 1.0),
-      // Double arm widths on mobile for strong visibility
       armWidthInner: isMobile ? Math.round((p.armWidthInner || 29) * 2.0) : p.armWidthInner,
       armWidthOuter: isMobile ? Math.round((p.armWidthOuter || 65) * 2.0) : p.armWidthOuter,
       armTransitionSoftness: isMobile ? Math.max(1, (p.armTransitionSoftness || 5.2) * 1.25) : p.armTransitionSoftness,
-      // Increase vertical jitter (along arm normal) for mobile
       jitterStrength: isMobile ? Math.max(8, Math.round((p.jitterStrength || 10) * 1.4)) : p.jitterStrength,
     }
-    // Compute an explicit star cap for mobile to reduce DOM nodes
-    const area = w*h
-    const baseTarget = Math.max(600, Math.min(1800, Math.floor(area/3500)))
-    // Raise mobile cap to allow ~2x stars overall (compared to previous comfort setting)
-    const starCap = isMobile ? Math.min(4000, Math.max(1800, Math.floor(baseTarget * 3.2))) : undefined
-    const fullDensity = !isMobile
+    const starCap = strictParity ? undefined : (isMobile ? (()=>{ const area=w*h; const baseTarget = Math.max(600, Math.min(1800, Math.floor(area/3500))); return Math.min(4000, Math.max(1800, Math.floor(baseTarget * 3.2))) })() : undefined)
+    const fullDensity = strictParity ? true : !isMobile
     const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p2, palette: pal, structureColoring, fullDensity, densityScale, starCap, densityArmScale, densityInterScale })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
     // Optional HSL jitter to approximate Canvas color variation
@@ -143,7 +137,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const reduced = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches
     const seed = 0xBADC0DE
     let rand = (function(seed:number){ let t=seed>>>0; return ()=>{ t += 0x6D2B79F5; let r=Math.imul(t^(t>>>15),1|t); r^=r+Math.imul(r^(r>>>7),61|r); return ((r^(r>>>14))>>>0)/4294967296 } })(seed)
-    const bgCount = Math.floor((w*h) * (p2.backgroundDensity || 0) * (reduced ? 0.6 : 1) * (isMobile ? 0.85 : 1))
+    const bgCount = Math.floor((w*h) * (p2.backgroundDensity || 0) * (reduced ? 0.6 : 1) * (strictParity ? 1 : (isMobile ? 0.85 : 1)))
     const bg: Array<{x:number;y:number;size:number}> = []
     for(let i=0;i<bgCount;i++){
       const x = rand()*w
