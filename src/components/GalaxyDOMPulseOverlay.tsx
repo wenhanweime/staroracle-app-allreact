@@ -56,23 +56,55 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       // 选择点击半径内的点
       const inRange = all.filter(p=>{ const dx=p.x - x, dy=p.y - y; return dx*dx+dy*dy <= R*R })
       if(!inRange.length) return
-      // 固定数量采样：每次点击固定 30 颗（不超过候选）
+      // 固定数量采样：每次点击固定 30 颗（不超过候选），并保证每种颜色都能被代表
       const target = Math.min(inRange.length, 30)
-      // Fisher-Yates 部分洗牌，获取前 target 个随机索引
-      const idxs = Array.from({length: inRange.length}, (_,i)=>i)
-      for(let i=0;i<target;i++){
-        const j = i + Math.floor(Math.random() * (inRange.length - i))
-        const tmp = idxs[i]; idxs[i] = idxs[j]; idxs[j] = tmp
+      // 分组：按颜色（无颜色归类为 '_grey'）
+      const groups = new Map<string, any[]>()
+      for(const p of inRange){
+        const c = ((p as any).color || '#CCCCCC').toLowerCase()
+        const key = c || '_grey'
+        if(!groups.has(key)) groups.set(key, [])
+        groups.get(key)!.push(p)
       }
+      // 将每组打乱
+      const shuffle = (arr:any[])=>{ for(let i=arr.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [arr[i],arr[j]]=[arr[j],arr[i]] } return arr }
+      for(const [k,arr] of groups) groups.set(k, shuffle(arr))
+      const colorKeys = Array.from(groups.keys()).filter(k=>k!=='_grey')
+      const greyKey = '_grey'
+      // 至少为每个有色组分配一个名额
       const chosen: Pulse[] = []
-      for(let k=0;k<target;k++){
-        const p = inRange[idxs[k]]
-        const durBase = (config?.durationMs ?? 1100)
-        const dur = durBase * (0.7 + 0.8*Math.random())
-        const delay = 0
-        const color = (p as any).color || '#CCCCCC'
-        chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay, color })
+      const basePerColor = 1
+      for(const key of colorKeys){
+        if (chosen.length >= target) break
+        const arr = groups.get(key) || []
+        if(arr.length){
+          const p = arr.shift()!
+          const durBase = (config?.durationMs ?? 1100)
+          const dur = durBase * (0.7 + 0.8*Math.random())
+          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: key })
+        }
       }
+      // 将剩余名额优先分配给有色组，再分配给灰色组
+      const fillFrom = (keys:string[])=>{
+        let idx = 0
+        while(chosen.length < target){
+          if (!keys.length) break
+          const key = keys[idx % keys.length]
+          const arr = groups.get(key) || []
+          if(arr.length){
+            const p = arr.shift()!
+            const durBase = (config?.durationMs ?? 1100)
+            const dur = durBase * (0.7 + 0.8*Math.random())
+            const color = key === greyKey ? '#CCCCCC' : key
+            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color })
+          }
+          idx++
+          // 防止死循环：如果所有数组都空了就退出
+          if (keys.every(k=> (groups.get(k)||[]).length===0)) break
+        }
+      }
+      fillFrom(colorKeys)
+      if (chosen.length < target && groups.has(greyKey)) fillFrom([greyKey])
       setPulses(prev => prev.concat(chosen))
       // 清理：在最长 dur 后移除这些 pulses
       const maxDur = Math.max(...chosen.map(c=>c.dur)) + 200
