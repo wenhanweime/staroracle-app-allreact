@@ -42,7 +42,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const sizeScale = isMobile ? 1.40 : 1.0
     const densityScale = isMobile ? 1.0 : 1.0
     const densityArmScale = isMobile ? 1.35 : 1.0
-    const densityInterScale = isMobile ? 0.65 : 1.0
+    const densityInterScale = isMobile ? 0.80 : 1.0
     const p2: GalaxyParams = {
       ...p,
       armStarSizeMultiplier: (p.armStarSizeMultiplier || 1) * sizeScale,
