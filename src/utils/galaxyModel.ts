@@ -391,10 +391,13 @@ export function generateStarFieldGrid(opts:{
             const dustHalf = 0.10 * aw * 0.5
             const noiseLocal = noise2D(x * 0.05, y * 0.05)
             const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf
+            const ridgeT = 0.6
+            const mainT = 0.45
+            const edgeT = 0.25
             if (inDust || noiseLocal < -0.2) color = pal.dust
-            else if (profile > 0.7) color = pal.ridge
-            else if (profile > 0.5) color = pal.armBright
-            else if (profile > 0.25) color = pal.armEdge
+            else if (profile > ridgeT) color = pal.ridge
+            else if (profile > mainT) color = pal.armBright
+            else if (profile > edgeT) color = pal.armEdge
             else color = pal.outer
           }
         }

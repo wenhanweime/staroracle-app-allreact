@@ -92,7 +92,7 @@ const defaultParams = {
    armWidthInner: 29, // 旋臂宽度内侧
    armWidthOuter: 65, // 旋臂宽度外侧
    armWidthGrowth: 2.5, // 旋臂宽度增长
-   armTransitionSoftness: 5.2, // 旋臂过渡平滑度
+   armTransitionSoftness: 3.8, // 旋臂过渡平滑度（更宽的臂脊）
    fadeStartRadius: 0.5, // 淡化起始
    fadeEndRadius: 1.3, // 淡化结束
    outerDensityMaintain: 0.10, // 外围密度维持

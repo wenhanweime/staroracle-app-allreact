@@ -131,6 +131,10 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       const jLig = (params.colorJitterLight ?? 0)
       colored = arr.map(s=>{
         const base = s.color || '#FFFFFF'
+        // 对 ridge（近白）不做抖动，保持纯白脊线
+        if (base && palette && base.toLowerCase() === (palette.ridge||'').toLowerCase()) {
+          return s
+        }
         const hsl = hexToHsl(base)
         const nh = (noise2D(s.x*scaleC, s.y*scaleC)*2-1)
         const ns = (noise2D(s.x*scaleC+31.7, s.y*scaleC+11.3)*2-1)
