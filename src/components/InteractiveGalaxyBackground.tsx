@@ -120,13 +120,14 @@ const defaultParams = {
 };
 
 // 模块颜色默认值（结构着色用）
+// 紫色主题调色板（参考主页右上角 Collection 的紫色：#8A5FBD 为主）
 const defaultPalette = {
-  core: '#FFF8DC',      // 核心黄白
-  ridge: '#FBFBF3',     // 螺旋臂脊线（最亮）(251,251,243)
-  armBright: '#ADD8E6', // 螺旋臂内部亮区
-  armEdge: '#87CEEB',   // 螺旋臂边缘
-  dust: '#13318B',      // 尘埃带 (19,49,139)
-  outer: '#B0C4DE',     // 臂间/外围
+  core: '#FFF8DC',      // 核心黄白（保持）
+  ridge: '#FBFBF3',     // 臂脊近白高亮（保持）
+  armBright: '#8A5FBD', // 臂内明亮紫（原蓝 -> 紫）
+  armEdge: '#9E7AD7',   // 臂边淡紫
+  dust: '#5B3A8E',      // 尘埃带深紫
+  outer: '#B79BEA',     // 臂间/外围淡紫
 };
 // 分层透明度（仅用于显示着色，不影响算法/密度）
 const defaultLayerAlpha = {
