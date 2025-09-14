@@ -103,6 +103,11 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       armTransitionSoftness: isMobile ? Math.max(1, (p.armTransitionSoftness || 5.2) * 1.25) : p.armTransitionSoftness,
       jitterStrength: isMobile ? Math.max(8, Math.round((p.jitterStrength || 10) * 1.4)) : p.jitterStrength,
     }
+    // 全端提升旋臂星点尺寸（仅臂区 multiplier），不影响臂间与背景
+    p2 = {
+      ...p2,
+      armStarSizeMultiplier: (p2.armStarSizeMultiplier || 1) * 1.2,
+    }
     // iOS 专项提升：增加臂间星点尺寸（更易见）
     const isIOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
     if (isIOS) {
