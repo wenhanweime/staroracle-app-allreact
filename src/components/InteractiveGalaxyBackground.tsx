@@ -268,8 +268,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     noiseFactor: 0.08,
     edgeAlphaThresh: 8,
     edgeExponent: 1.1,
-    radiusFactor: 0.0175,
-    minRadius: 30,
+    // 点击高亮范围缩小一半（半径减半）
+    radiusFactor: 0.00875,
+    minRadius: 15,
     durationMs: 1100,
     ease: 'sine' as 'sine' | 'cubic',
   });
