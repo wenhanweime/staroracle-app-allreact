@@ -92,6 +92,7 @@ const defaultParams = {
    armWidthInner: 29, // 旋臂宽度内侧
    armWidthOuter: 65, // 旋臂宽度外侧
    armWidthGrowth: 2.5, // 旋臂宽度增长
+   armWidthScale: 1.0, // 旋臂整体宽度比例
    armTransitionSoftness: 3.8, // 旋臂过渡平滑度（更宽的臂脊）
    fadeStartRadius: 0.5, // 淡化起始
    fadeEndRadius: 1.3, // 淡化结束
@@ -887,6 +888,7 @@ const ArmTuner: React.FC<{ params: typeof defaultParams; onApply: React.Dispatch
             </div>
           </div>
           {([
+            {k:'armWidthScale',min:0.5,max:3,step:0.05,label:'臂宽整体比例'},
             {k:'armWidthInner',min:5,max:200,step:1,label:'内侧宽度'},
             {k:'armWidthOuter',min:20,max:320,step:1,label:'外侧宽度'},
             {k:'armWidthGrowth',min:1,max:3,step:0.1,label:'宽度增长'},

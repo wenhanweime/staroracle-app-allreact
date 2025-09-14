@@ -16,6 +16,7 @@ export interface GalaxyParams {
   armWidthInner: number
   armWidthOuter: number
   armWidthGrowth: number
+  armWidthScale?: number
   armTransitionSoftness: number
   fadeStartRadius: number
   fadeEndRadius: number
@@ -66,7 +67,10 @@ export const noise2D = (x:number,y:number)=>{
 
 export function getArmWidth(radius:number, maxRadius:number, p:GalaxyParams){
   const progress = Math.min(radius / (maxRadius * 0.8), 1)
-  return p.armWidthInner + (p.armWidthOuter - p.armWidthInner) * Math.pow(progress, p.armWidthGrowth)
+  const s = (p.armWidthScale ?? 1)
+  const inner = p.armWidthInner * s
+  const outer = p.armWidthOuter * s
+  return inner + (outer - inner) * Math.pow(progress, p.armWidthGrowth)
 }
 
 export function getFadeFactor(radius:number, maxRadius:number, p:GalaxyParams){
