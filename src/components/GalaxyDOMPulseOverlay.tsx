@@ -12,13 +12,13 @@ interface GlowConfig {
 
 interface Props {
   pointsRef: React.RefObject<Array<{x:number;y:number;size:number}>>
-  bandPointsRef?: React.RefObject<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>>
+  bandPointsRef?: React.RefObject<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string}>>
   scale?: number
   rotateEnabled?: boolean
   config?: GlowConfig
 }
 
-type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number }
+type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string }
 
 const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config }) => {
   const [pulses, setPulses] = useState<Pulse[]>([])
@@ -49,9 +49,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
         const ry = p.y - bcy
         const sx = cx + (rx*Math.cos(angle) - ry*Math.sin(angle)) * (scale||1)
         const sy = cy + (rx*Math.sin(angle) + ry*Math.cos(angle)) * (scale||1)
-        return { x: sx, y: sy, size: p.size }
+        return { x: sx, y: sy, size: p.size, color: p.color }
       })
-      const all = pts.concat(transformed)
+      const all = (pts as any[]).concat(transformed)
       if(!all.length) return
       // 选择点击半径内的点
       const inRange = all.filter(p=>{ const dx=p.x - x, dy=p.y - y; return dx*dx+dy*dy <= R*R })
@@ -70,7 +70,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
         const durBase = (config?.durationMs ?? 1100)
         const dur = durBase * (0.7 + 0.8*Math.random())
         const delay = 0
-        chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay })
+        const color = (p as any).color || '#CCCCCC'
+        chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay, color })
       }
       setPulses(prev => prev.concat(chosen))
       // 清理：在最长 dur 后移除这些 pulses
@@ -94,13 +95,13 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             transition={{ duration: p.dur/1000, delay: p.delay/1000, ease: 'easeOut' }}
             style={{ position:'absolute', left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}
           >
-            {/* 核心白点 */}
+            {/* 高亮点（颜色跟随被选星点） */}
             <div style={{
               width: `${Math.max(1.5, p.size*2)}px`,
               height: `${Math.max(1.5, p.size*2)}px`,
               borderRadius: '50%',
-              background: 'white',
-              boxShadow: '0 0 6px rgba(255,255,255,0.9), 0 0 12px rgba(255,255,255,0.6)'
+              background: p.color || '#CCCCCC',
+              boxShadow: `0 0 6px ${(p.color||'#CCCCCC')}CC, 0 0 12px ${(p.color||'#CCCCCC')}99`
             }}/>
           </motion.div>
         ))}

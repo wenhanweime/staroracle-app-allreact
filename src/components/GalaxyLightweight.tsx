@@ -148,8 +148,8 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     }
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
-      for(const s of arr){ out.push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h }) }
-      onBandPointsReady(out)
+      for(const s of arr){ (out as any).push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h, color: (s as any).color }) }
+      onBandPointsReady(out as any)
     }
     // 背景小星（不旋转）
     // 背景小星（不旋转）：使用种子 RNG + reducedMotion 因子，与稳定版一致
