@@ -403,12 +403,19 @@ export function generateStarFieldGrid(opts:{
             } else if (profile > ridgeT) {
               color = pal.ridge
             } else if (profile > mainT) {
-              // 臂内：以噪声门控方式点缀 HII（紫红）结，避免满臂染色
+              // 臂内：以噪声门控 + 概率门控的方式定义 HII（紫红）结
               const knot1 = noise2D(x * 0.03 + 11.7, y * 0.03 - 7.9)
               const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
-              // 提高 HII 点缀概率：阈值放宽，目标约 5–8% 的臂内点呈紫红
-              const isHII = (knot1 > 0.60 && knot2 > 0.20)
-              color = isHII ? '#F08CD3' : pal.armBright
+              // 增强占比（约提升到臂内的 ~60%，约为之前的10倍级）
+              const randish = (noise2D(x * 0.013 - 19.3, y * 0.013 + 23.1) + 1) * 0.5 // 0..1
+              const isHII = (knot1 > 0.60 && knot2 > 0.20) || (randish > 0.40)
+              if (isHII) {
+                color = '#F08CD3'
+                // 紫红结稍大一些，增强可见度
+                size = size * 1.3
+              } else {
+                color = pal.armBright
+              }
             } else if (profile > edgeT) {
               color = pal.armEdge
             } else {
