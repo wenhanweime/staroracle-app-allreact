@@ -92,7 +92,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const densityScale = strictParity ? 1.0 : 2.0
     const densityArmScale = strictParity ? 1.0 : (isMobile ? 1.35 : 1.0)
     const densityInterScale = strictParity ? 1.0 : (isMobile ? 0.80 : 1.0)
-    const p2: GalaxyParams = strictParity ? p : {
+    let p2: GalaxyParams = strictParity ? p : {
       ...p,
       armStarSizeMultiplier: (p.armStarSizeMultiplier || 1) * sizeScale,
       interArmStarSizeMultiplier: (p.interArmStarSizeMultiplier || 1) * sizeScale,
@@ -102,6 +102,16 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       armWidthOuter: isMobile ? Math.round((p.armWidthOuter || 65) * 2.0) : p.armWidthOuter,
       armTransitionSoftness: isMobile ? Math.max(1, (p.armTransitionSoftness || 5.2) * 1.25) : p.armTransitionSoftness,
       jitterStrength: isMobile ? Math.max(8, Math.round((p.jitterStrength || 10) * 1.4)) : p.jitterStrength,
+    }
+    // iOS 专项提升：增加臂间星点尺寸（更易见）
+    const isIOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
+    if (isIOS) {
+      p2 = {
+        ...p2,
+        interArmStarSizeMultiplier: (p2.interArmStarSizeMultiplier || 1) * 1.35,
+        interArmSizeMin: Math.max(0.4, (p2.interArmSizeMin || 0.6) * 1.25),
+        interArmSizeMax: Math.max((p2.interArmSizeMin || 0.6), (p2.interArmSizeMax || 1.2) * 1.25),
+      }
     }
     const starCap = strictParity ? undefined : (isMobile ? (()=>{ const area=w*h; const baseTarget = Math.max(600, Math.min(1800, Math.floor(area/3500))); return Math.min(4000, Math.max(1800, Math.floor(baseTarget * 3.2))) })() : undefined)
     const fullDensity = strictParity ? true : !isMobile
