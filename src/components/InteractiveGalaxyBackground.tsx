@@ -707,7 +707,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       {/* 旋臂宽度快速调节开关与面板（可随时显示/隐藏） */}
       <ArmTuner
         params={params}
-        onChange={setParams}
+        onApply={setParams}
+        onReset={()=> setParams(defaultParams)}
       />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
@@ -858,8 +859,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 export default InteractiveGalaxyBackground;
 
 // 轻量旋臂调节面板（可折叠）
-const ArmTuner: React.FC<{ params: typeof defaultParams; onChange: React.Dispatch<React.SetStateAction<typeof defaultParams>> }>=({params, onChange})=>{
+const ArmTuner: React.FC<{ params: typeof defaultParams; onApply: React.Dispatch<React.SetStateAction<typeof defaultParams>>; onReset?: ()=>void }>=({params, onApply, onReset})=>{
   const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<typeof defaultParams>(params)
+  // 当打开时同步当前参数为草稿，避免频繁重算
+  useEffect(()=>{ if(open) setDraft(params) }, [open])
   return (
     <>
       <button
@@ -868,10 +872,18 @@ const ArmTuner: React.FC<{ params: typeof defaultParams; onChange: React.Dispatc
         aria-label="切换旋臂调节面板"
       >{open ? '隐藏臂宽调节' : '臂宽调节'}</button>
       {open && (
-        <div className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg">
+        <div
+          className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg"
+          onClick={(e)=> e.stopPropagation()}
+          onMouseDown={(e)=> e.stopPropagation()}
+          onPointerDown={(e)=> e.stopPropagation()}
+        >
           <div className="flex items-center justify-between mb-2">
             <strong className="text-sm">旋臂与抖动调节</strong>
-            <button className="text-xs opacity-70 hover:opacity-100" onClick={()=>setOpen(false)}>完成</button>
+            <div className="flex items-center gap-2">
+              <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onApply(draft); setOpen(false) }}>应用</button>
+              <button className="text-xs px-2 py-0.5 rounded bg-white/5 hover:bg-white/15" onClick={()=>{ setOpen(false) }}>取消</button>
+            </div>
           </div>
           {([
             {k:'armWidthInner',min:5,max:200,step:1,label:'内侧宽度'},
@@ -883,19 +895,22 @@ const ArmTuner: React.FC<{ params: typeof defaultParams; onChange: React.Dispatc
             <div key={k as string} className="mb-2">
               <label className="text-xs flex justify-between">
                 <span>{label}</span>
-                <span className="opacity-80">{(params as any)[k]}</span>
+                <span className="opacity-80">{(draft as any)[k]}</span>
               </label>
               <input
                 type="range"
                 min={min}
                 max={max}
                 step={step}
-                value={(params as any)[k] as any}
-                onChange={(e)=>{ const v = Number(e.target.value); onChange(prev=> ({...prev, [k]: v} as typeof prev)); }}
+                value={(draft as any)[k] as any}
+                onChange={(e)=>{ const v = Number(e.target.value); setDraft(prev=> ({...prev, [k]: v} as typeof prev)); }}
                 className="w-full"
               />
             </div>
           ))}
+          <div className="mt-2 flex justify-end">
+            <button className="text-xs opacity-80 hover:opacity-100" onClick={()=>{ onReset && onReset() }}>重置默认</button>
+          </div>
         </div>
       )}
     </>
