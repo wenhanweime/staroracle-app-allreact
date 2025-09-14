@@ -368,8 +368,8 @@ export function generateStarFieldGrid(opts:{
           const chaos = 1 + (p.jitterChaos||0) * noise2D(x*(p.jitterChaosScale||0.02), y*(p.jitterChaosScale||0.02))
           const randomMix = 0.7 + 0.6*rng()
           const jitterAmount = p.jitterStrength * chaos * randomMix * profile * gaussian
-          ox += jitterAmount * Math.cos(jitterAngle)
-          oy += jitterAmount * Math.sin(jitterAngle)
+          ox += (jitterAmount * Math.cos(jitterAngle)) / dprN
+          oy += (jitterAmount * Math.sin(jitterAngle)) / dprN
         }
         // 轻微破格抖动以打破网格感
         ox += (rng() - 0.5) * step
