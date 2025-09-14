@@ -398,11 +398,21 @@ export function generateStarFieldGrid(opts:{
             const ridgeT = 0.6
             const mainT = 0.45
             const edgeT = 0.25
-            if (inDust || noiseLocal < -0.2) color = pal.dust
-            else if (profile > ridgeT) color = pal.ridge
-            else if (profile > mainT) color = pal.armBright
-            else if (profile > edgeT) color = pal.armEdge
-            else color = pal.outer
+            if (inDust || noiseLocal < -0.2) {
+              color = pal.dust
+            } else if (profile > ridgeT) {
+              color = pal.ridge
+            } else if (profile > mainT) {
+              // 臂内：以噪声门控方式点缀 HII（紫红）结，避免满臂染色
+              const knot1 = noise2D(x * 0.03 + 11.7, y * 0.03 - 7.9)
+              const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
+              const isHII = (knot1 > 0.62 && knot2 > 0.35)
+              color = isHII ? '#F08CD3' : pal.armBright
+            } else if (profile > edgeT) {
+              color = pal.armEdge
+            } else {
+              color = pal.outer
+            }
           }
         }
         // 输出坐标：CSS 像素，按 OV → 视口居中偏移

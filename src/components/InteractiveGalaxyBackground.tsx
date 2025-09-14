@@ -113,31 +113,31 @@ const defaultParams = {
    interArmStarSizeMultiplier: 1.0, // 旋臂间区域星星大小倍数
    backgroundStarSizeMultiplier: 1.0,
    galaxyScale: 0.88, // 整体缩放（银河占屏比例）
-  // 颜色波动（电影级梦幻：更柔和的抖动）
-  colorJitterHue: 6,
-  colorJitterSat: 0.04,
-  colorJitterLight: 0.06,
-  colorNoiseScale: 0.045,
+  // 颜色波动（写实：轻微即可）
+  colorJitterHue: 5,
+  colorJitterSat: 0.035,
+  colorJitterLight: 0.05,
+  colorNoiseScale: 0.05,
 };
 
 // 模块颜色默认值（结构着色用）
-// 电影级梦幻配色（白脊+淡紫臂+深靛尘+冷灰臂间+暖核）
+// 天体物理写实配色（白脊+蓝臂+紫红HII+黑尘+暖核+灰蓝臂间）
 const defaultPalette = {
-  core: '#FFE8C6',     // 暖核：象牙金
-  ridge: '#F7F4FF',    // 臂脊：淡雅近白（带一丝薰衣草）
-  armBright: '#CDB7FF',// 臂内：柔和淡紫
-  armEdge: '#A9A1FF',  // 臂边：梦幻长春花
-  dust: '#1F1747',     // 尘埃：深靛紫（更暗更克制）
-  outer: '#DDE3F7',    // 臂间/外围：去饱和冷灰蓝
+  core: '#FFD39B',     // 暖核：金象牙（老年群）
+  ridge: '#F7FAFF',    // 臂脊：冷白近白（年轻骨架）
+  armBright: '#A7C7FF',// 臂内：淡蓝（OB/年轻星群）
+  armEdge: '#9BD4FF',  // 臂边：青蓝
+  dust: '#1A1426',     // 尘埃：接近黑的深靛/棕黑
+  outer: '#B0C4DE',    // 臂间/外围：冷灰蓝
 };
 // 分层透明度（仅用于显示着色，不影响算法/密度）
 const defaultLayerAlpha = {
   core: 1.0,
   ridge: 0.98,
-  armBright: 0.88,
-  armEdge: 0.80,
-  dust: 0.55,
-  outer: 0.72,
+  armBright: 0.90,
+  armEdge: 0.85,
+  dust: 0.45,
+  outer: 0.78,
 };
 
 const getArmWidth = (radius: number, maxRadius: number, p = defaultParams) => {
