@@ -245,7 +245,17 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const bandMaskLayersRef = useRef<HTMLCanvasElement[] | null>(null);
   const starMaskCompositeRef = useRef<HTMLCanvasElement | null>(null);
   const domBandPointsRef = useRef<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>>([]);
-  const [params, setParams] = useState(defaultParams);
+  const isIOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
+  const initialParams = isIOS ? {
+    ...defaultParams,
+    armWidthScale: 2.9,
+    armWidthInner: 29,
+    armWidthOuter: 65,
+    armWidthGrowth: 2.5,
+    armTransitionSoftness: 7,
+    jitterStrength: 25,
+  } : defaultParams
+  const [params, setParams] = useState(initialParams);
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; }, [params]);
   // 星点默认使用偏灰白，避免纯白饱和（为交互提亮留余量）
@@ -706,12 +716,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
       <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
-      {/* 旋臂宽度快速调节开关与面板（可随时显示/隐藏） */}
-      <ArmTuner
-        params={params}
-        onApply={setParams}
-        onReset={()=> setParams(defaultParams)}
-      />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
@@ -859,63 +863,3 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 };
 
 export default InteractiveGalaxyBackground;
-
-// 轻量旋臂调节面板（可折叠）
-const ArmTuner: React.FC<{ params: typeof defaultParams; onApply: React.Dispatch<React.SetStateAction<typeof defaultParams>>; onReset?: ()=>void }>=({params, onApply, onReset})=>{
-  const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<typeof defaultParams>(params)
-  // 当打开时同步当前参数为草稿，避免频繁重算
-  useEffect(()=>{ if(open) setDraft(params) }, [open])
-  return (
-    <>
-      <button
-        className="fixed bottom-24 right-4 z-40 px-2 py-1 rounded bg-black/60 text-white text-xs border border-white/10 hover:bg-black/70"
-        onClick={()=> setOpen(v=>!v)}
-        aria-label="切换旋臂调节面板"
-      >{open ? '隐藏臂宽调节' : '臂宽调节'}</button>
-      {open && (
-        <div
-          className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg"
-          onClick={(e)=> e.stopPropagation()}
-          onMouseDown={(e)=> e.stopPropagation()}
-          onPointerDown={(e)=> e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <strong className="text-sm">旋臂与抖动调节</strong>
-            <div className="flex items-center gap-2">
-              <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onApply(draft); setOpen(false) }}>应用</button>
-              <button className="text-xs px-2 py-0.5 rounded bg-white/5 hover:bg-white/15" onClick={()=>{ setOpen(false) }}>取消</button>
-            </div>
-          </div>
-          {([
-            {k:'armWidthScale',min:0.5,max:3,step:0.05,label:'臂宽整体比例'},
-            {k:'armWidthInner',min:5,max:200,step:1,label:'内侧宽度'},
-            {k:'armWidthOuter',min:20,max:320,step:1,label:'外侧宽度'},
-            {k:'armWidthGrowth',min:1,max:3,step:0.1,label:'宽度增长'},
-            {k:'armTransitionSoftness',min:1,max:100,step:0.5,label:'过渡平缓度'},
-            {k:'jitterStrength',min:0,max:60,step:1,label:'垂直抖动强度'},
-          ] as Array<{k: keyof typeof defaultParams, min:number, max:number, step:number, label:string}>).map(({k,min,max,step,label})=> (
-            <div key={k as string} className="mb-2">
-              <label className="text-xs flex justify-between">
-                <span>{label}</span>
-                <span className="opacity-80">{(draft as any)[k]}</span>
-              </label>
-              <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={(draft as any)[k] as any}
-                onChange={(e)=>{ const v = Number(e.target.value); setDraft(prev=> ({...prev, [k]: v} as typeof prev)); }}
-                className="w-full"
-              />
-            </div>
-          ))}
-          <div className="mt-2 flex justify-end">
-            <button className="text-xs opacity-80 hover:opacity-100" onClick={()=>{ onReset && onReset() }}>重置默认</button>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}
