@@ -88,7 +88,8 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const isMobile = (typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(pointer: coarse)').matches) || Math.min(w,h) < 820
     // Mobile comfort v3: ensure visible spiral arms
     const sizeScale = isMobile ? 1.40 : 1.0
-    const densityScale = isMobile ? 1.0 : 1.0
+    // Double overall galaxy density; mobile keeps regional scaling to preserve arms
+    const densityScale = 2.0
     const densityArmScale = isMobile ? 1.35 : 1.0
     const densityInterScale = isMobile ? 0.80 : 1.0
     const p2: GalaxyParams = {
@@ -104,7 +105,8 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     // Compute an explicit star cap for mobile to reduce DOM nodes
     const area = w*h
     const baseTarget = Math.max(600, Math.min(1800, Math.floor(area/3500)))
-    const starCap = isMobile ? Math.min(2200, Math.max(1200, Math.floor(baseTarget * 1.6))) : undefined
+    // Raise mobile cap to allow ~2x stars overall (compared to previous comfort setting)
+    const starCap = isMobile ? Math.min(4000, Math.max(1800, Math.floor(baseTarget * 3.2))) : undefined
     const fullDensity = !isMobile
     const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p2, palette: pal, structureColoring, fullDensity, densityScale, starCap, densityArmScale, densityInterScale })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
