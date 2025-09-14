@@ -21,6 +21,54 @@ const noise2D = (x:number,y:number)=>{
   return t - Math.floor(t)
 }
 
+// Color helpers for HSL jitter
+const clamp01 = (v:number)=> Math.max(0, Math.min(1, v))
+const hexToRgb = (hex:string)=>{
+  const h = hex.replace('#','')
+  const full = h.length===3? h.split('').map(c=>c+c).join('') : h
+  const num = parseInt(full,16)
+  return { r: (num>>16)&255, g: (num>>8)&255, b: num&255 }
+}
+const rgbToHsl = (r:number,g:number,b:number)=>{
+  r/=255; g/=255; b/=255
+  const max = Math.max(r,g,b), min = Math.min(r,g,b)
+  let h=0,s=0; const l=(max+min)/2
+  if (max!==min){
+    const d = max-min
+    s = l>0.5? d/(2-max-min) : d/(max+min)
+    switch(max){
+      case r: h=(g-b)/d+(g<b?6:0); break
+      case g: h=(b-r)/d+2; break
+      default: h=(r-g)/d+4
+    }
+    h/=6
+  }
+  return { h:h*360, s, l }
+}
+const hslToRgb = (h:number,s:number,l:number)=>{
+  h/=360
+  const hue2rgb=(p:number,q:number,t:number)=>{
+    if(t<0) t+=1; if(t>1) t-=1
+    if(t<1/6) return p+(q-p)*6*t
+    if(t<1/2) return q
+    if(t<2/3) return p+(q-p)*(2/3-t)*6
+    return p
+  }
+  let r:number,g:number,b:number
+  if(s===0){ r=g=b=l }
+  else{
+    const q = l<0.5? l*(1+s) : l+s-l*s
+    const p = 2*l - q
+    r = hue2rgb(p,q,h+1/3)
+    g = hue2rgb(p,q,h)
+    b = hue2rgb(p,q,h-1/3)
+  }
+  return { r:Math.round(r*255), g:Math.round(g*255), b:Math.round(b*255) }
+}
+const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('')
+const hexToHsl = (hex:string)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHsl(r,g,b) }
+const hslToHex = (h:number,s:number,l:number)=>{ const {r,g,b}=hslToRgb(h,s,l); return rgbToHex(r,g,b) }
+
 const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady }) => {
   const rootRef = useRef<HTMLDivElement|null>(null)
   const [dims, setDims] = useState({w:0,h:0})
@@ -60,6 +108,26 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
     const fullDensity = !isMobile
     const arr = generateStarFieldGrid({ w, h, dpr, scale: scale||1, rings: 10, params: p2, palette: pal, structureColoring, fullDensity, densityScale, starCap, densityArmScale, densityInterScale })
     const rings = (arr.length ? (Math.max(...arr.map(s=>s.ring)) + 1) : 0)
+    // Optional HSL jitter to approximate Canvas color variation
+    let colored = arr as any
+    if (structureColoring && arr.length){
+      const scaleC = (params.colorNoiseScale ?? 0.05)
+      const jHue = (params.colorJitterHue ?? 0)
+      const jSat = (params.colorJitterSat ?? 0)
+      const jLig = (params.colorJitterLight ?? 0)
+      colored = arr.map(s=>{
+        const base = s.color || '#FFFFFF'
+        const hsl = hexToHsl(base)
+        const nh = (noise2D(s.x*scaleC, s.y*scaleC)*2-1)
+        const ns = (noise2D(s.x*scaleC+31.7, s.y*scaleC+11.3)*2-1)
+        const nl = (noise2D(s.x*scaleC+77.1, s.y*scaleC+59.9)*2-1)
+        const h = (hsl.h + nh*jHue + 360) % 360
+        const s1 = clamp01(hsl.s + ns*jSat)
+        const l1 = clamp01(hsl.l + nl*jLig)
+        const hex = hslToHex(h, s1, l1)
+        return { ...s, color: hex }
+      })
+    }
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
       for(const s of arr){ out.push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h }) }
@@ -81,7 +149,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       bg.push({ x,y,size })
     }
     onBgPointsReady && onBgPointsReady(bg)
-    return { stars: arr.map(s=>({x:s.x,y:s.y,size:s.size,color:s.color, ring:s.ring} as any)), ringCount: rings, bgStars: bg }
+    return { stars: colored.map((s:any)=>({x:s.x,y:s.y,size:s.size,color:s.color, ring:s.ring})), ringCount: rings, bgStars: bg }
   }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady, onBgPointsReady, params, palette, layerAlpha])
 
   // CSS 动画：每个 ring 不同速度（与半径相关的差速旋转）
