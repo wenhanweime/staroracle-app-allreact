@@ -717,6 +717,14 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
       <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
+      {/* 调色面板（可开关），用于快速调整与开关结构着色 */}
+      <PaletteTuner
+        palette={palette}
+        onApply={setPalette}
+        onReset={()=> setPalette(defaultPalette)}
+        structureColoring={structureColoring}
+        onToggleColoring={setStructureColoring}
+      />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
           <div className="flex items-center justify-between mb-2">
@@ -864,3 +872,63 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 };
 
 export default InteractiveGalaxyBackground;
+
+// 轻量调色面板（可折叠）
+const PaletteTuner: React.FC<{
+  palette: typeof defaultPalette;
+  onApply: (next: typeof defaultPalette)=>void;
+  onReset?: ()=>void;
+  structureColoring: boolean;
+  onToggleColoring: (v:boolean)=>void;
+}> = ({ palette, onApply, onReset, structureColoring, onToggleColoring }) => {
+  const [open, setOpen] = useState(false)
+  const [draft, setDraft] = useState<typeof defaultPalette>(palette)
+  useEffect(()=>{ if(open) setDraft(palette) }, [open])
+  return (
+    <>
+      <button
+        className="fixed bottom-20 right-4 z-40 px-2 py-1 rounded bg-black/60 text-white text-xs border border-white/10 hover:bg-black/70"
+        onClick={()=> setOpen(v=>!v)}
+      >{open ? '隐藏调色' : '调色'}</button>
+      {open && (
+        <div
+          className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg"
+          onClick={(e)=> e.stopPropagation()}
+          onMouseDown={(e)=> e.stopPropagation()}
+          onPointerDown={(e)=> e.stopPropagation()}
+        >
+          <div className="flex items-center justify-between mb-2">
+            <strong className="text-sm">结构着色与调色</strong>
+            <div className="flex items-center gap-2">
+              <label className="text-xs flex items-center gap-1"> 
+                <input type="checkbox" checked={structureColoring} onChange={e=> onToggleColoring(e.target.checked)} /> 启用
+              </label>
+              <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onApply(draft); setOpen(false) }}>应用</button>
+              <button className="text-xs px-2 py-0.5 rounded bg-white/5 hover:bg-white/15" onClick={()=> setOpen(false)}>取消</button>
+            </div>
+          </div>
+          {([
+            {k:'core', label:'核心'},
+            {k:'ridge', label:'臂脊'},
+            {k:'armBright', label:'臂内'},
+            {k:'armEdge', label:'臂边'},
+            {k:'dust', label:'尘埃'},
+            {k:'outer', label:'臂间/外围'},
+          ] as Array<{k:keyof typeof defaultPalette,label:string}>).map(({k,label}) => (
+            <div key={k as string} className="mb-2 flex items-center justify-between gap-2"> 
+              <span className="text-xs w-16">{label}</span>
+              <input type="color" value={(draft as any)[k]}
+                onChange={(e)=>{ const v = e.target.value; setDraft(prev => ({...prev, [k]: v})); }} />
+              <input type="text" value={(draft as any)[k]}
+                onChange={(e)=>{ const v = e.target.value; setDraft(prev => ({...prev, [k]: v})); }}
+                className="flex-1 bg-transparent border border-white/10 rounded px-1 text-xs" />
+            </div>
+          ))}
+          <div className="mt-2 flex justify-end">
+            <button className="text-xs opacity-80 hover:opacity-100" onClick={()=>{ onReset && onReset() }}>重置默认</button>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
