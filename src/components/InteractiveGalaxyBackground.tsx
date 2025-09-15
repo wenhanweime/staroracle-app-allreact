@@ -884,15 +884,18 @@ const PaletteTuner: React.FC<{
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<typeof defaultPalette>(palette)
   useEffect(()=>{ if(open) setDraft(palette) }, [open])
+  const isiOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
   return (
     <>
       <button
         className="fixed bottom-20 right-4 z-40 px-2 py-1 rounded bg-black/60 text-white text-xs border border-white/10 hover:bg-black/70"
+        style={ isiOS ? { bottom: 'calc(9rem + env(safe-area-inset-bottom, 0px))' } : undefined }
         onClick={()=> setOpen(v=>!v)}
       >{open ? '隐藏调色' : '调色'}</button>
       {open && (
         <div
           className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg"
+          style={ isiOS ? { bottom: 'calc(12rem + env(safe-area-inset-bottom, 0px))' } : undefined }
           onClick={(e)=> e.stopPropagation()}
           onMouseDown={(e)=> e.stopPropagation()}
           onPointerDown={(e)=> e.stopPropagation()}
