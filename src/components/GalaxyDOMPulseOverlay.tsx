@@ -20,6 +20,16 @@ interface Props {
 
 type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string }
 
+// Helpers: hex -> rgb and lighten by mixing with white
+const hexToRgb = (hex:string)=>{
+  const h = hex.replace('#','')
+  const full = h.length===3 ? h.split('').map(c=>c+c).join('') : h
+  const num = parseInt(full,16)
+  return { r:(num>>16)&255, g:(num>>8)&255, b:num&255 }
+}
+const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('')
+const lighten = (hex:string, t:number)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHex(r + (255-r)*t, g + (255-g)*t, b + (255-b)*t) }
+
 const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config }) => {
   const [pulses, setPulses] = useState<Pulse[]>([])
   const rootRef = useRef<HTMLDivElement|null>(null)
@@ -127,14 +137,36 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             transition={{ duration: p.dur/1000, delay: p.delay/1000, ease: 'easeOut' }}
             style={{ position:'absolute', left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}
           >
-            {/* 高亮点（颜色跟随被选星点） */}
-            <div style={{
-              width: `${Math.max(1.5, p.size*2)}px`,
-              height: `${Math.max(1.5, p.size*2)}px`,
-              borderRadius: '50%',
-              background: p.color || '#CCCCCC',
-              boxShadow: `0 0 6px ${(p.color||'#CCCCCC')}CC, 0 0 12px ${(p.color||'#CCCCCC')}99`
-            }}/>
+            {/* 超亮高亮点：彩色大光晕 + 白色小核心 */}
+            {(()=>{
+              const base = (p.color || '#CCCCCC')
+              const hi = lighten(base, 0.65) // 显著提亮
+              const coreSize = Math.max(2, p.size * 1.4)
+              const haloSize = Math.max(coreSize*2.2, p.size * 3.2)
+              const haloPx = Math.ceil(haloSize*0.6)
+              const haloPx2 = Math.ceil(haloSize*0.9)
+              const corePx1 = Math.ceil(coreSize*3)
+              const corePx2 = Math.ceil(coreSize*6)
+              return (
+                <div style={{ position:'relative', left: 0, top: 0 }}>
+                  {/* 彩色大光晕 */}
+                  <div style={{
+                    position:'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                    width: `${haloSize}px`, height: `${haloSize}px`, borderRadius:'50%',
+                    background: hi,
+                    opacity: 0.9,
+                    boxShadow: `0 0 ${haloPx}px ${hi}, 0 0 ${haloPx2}px ${hi}`
+                  }}/>
+                  {/* 明亮白色核心 */}
+                  <div style={{
+                    position:'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
+                    width: `${coreSize}px`, height: `${coreSize}px`, borderRadius:'50%',
+                    background: '#FFFFFF',
+                    boxShadow: `0 0 ${corePx1}px #FFFFFF, 0 0 ${corePx2}px ${hi}`
+                  }}/>
+                </div>
+              )
+            })()}
           </motion.div>
         ))}
       </AnimatePresence>
