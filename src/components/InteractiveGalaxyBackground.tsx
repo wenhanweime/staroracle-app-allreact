@@ -287,6 +287,25 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);
+  // 载入保存的默认配置（若存在），覆盖初始 palette/params/structureColoring
+  useEffect(() => {
+    try {
+      const sp = localStorage.getItem('galaxy.default.palette')
+      const sparams = localStorage.getItem('galaxy.default.params')
+      const scolor = localStorage.getItem('galaxy.default.structureColoring')
+      if (sp) {
+        const obj = JSON.parse(sp)
+        setPalette((prev)=> ({ ...prev, ...obj }))
+      }
+      if (sparams) {
+        const obj = JSON.parse(sparams)
+        setParams((prev)=> ({ ...prev, ...obj }))
+      }
+      if (scolor) {
+        setStructureColoring(JSON.parse(scolor))
+      }
+    } catch {}
+  }, [])
   // 每层透明度（仅显示层）
   const [layerAlpha, setLayerAlpha] = useState<typeof defaultLayerAlpha>(defaultLayerAlpha);
   const layerAlphaRef = useRef(layerAlpha);
@@ -724,6 +743,13 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onReset={()=> setPalette(defaultPalette)}
         structureColoring={structureColoring}
         onToggleColoring={setStructureColoring}
+        onSaveDefaults={()=>{
+          try {
+            localStorage.setItem('galaxy.default.palette', JSON.stringify(paletteRef.current))
+            localStorage.setItem('galaxy.default.params', JSON.stringify(paramsRef.current))
+            localStorage.setItem('galaxy.default.structureColoring', JSON.stringify(structureColoring))
+          } catch {}
+        }}
       />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
@@ -880,7 +906,8 @@ const PaletteTuner: React.FC<{
   onReset?: ()=>void;
   structureColoring: boolean;
   onToggleColoring: (v:boolean)=>void;
-}> = ({ palette, onApply, onReset, structureColoring, onToggleColoring }) => {
+  onSaveDefaults: ()=>void;
+}> = ({ palette, onApply, onReset, structureColoring, onToggleColoring, onSaveDefaults }) => {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<typeof defaultPalette>(palette)
   useEffect(()=>{ if(open) setDraft(palette) }, [open])
@@ -903,9 +930,10 @@ const PaletteTuner: React.FC<{
           <div className="flex items-center justify-between mb-2">
             <strong className="text-sm">结构着色与调色</strong>
             <div className="flex items-center gap-2">
-              <label className="text-xs flex items-center gap-1"> 
+              <label className="text-xs flex items-center gap-1">
                 <input type="checkbox" checked={structureColoring} onChange={e=> onToggleColoring(e.target.checked)} /> 启用
               </label>
+              <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onSaveDefaults(); }}>设为默认</button>
               <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onApply(draft); setOpen(false) }}>应用</button>
               <button className="text-xs px-2 py-0.5 rounded bg-white/5 hover:bg-white/15" onClick={()=> setOpen(false)}>取消</button>
             </div>
