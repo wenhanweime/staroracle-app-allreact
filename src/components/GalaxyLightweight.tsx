@@ -132,7 +132,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       colored = arr.map(s=>{
         const base = s.color || '#FFFFFF'
         // 对 ridge（近白）不做抖动，保持纯白脊线
-        if (base && palette && base.toLowerCase() === (palette.ridge||'').toLowerCase()) {
+        if (base && palette && (base.toLowerCase() === (palette.ridge||'').toLowerCase() || base.toLowerCase() === '#f08cd3')) {
           return s
         }
         const hsl = hexToHsl(base)

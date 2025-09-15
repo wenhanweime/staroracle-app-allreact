@@ -403,18 +403,18 @@ export function generateStarFieldGrid(opts:{
             } else if (profile > ridgeT) {
               color = pal.ridge
             } else if (profile > mainT) {
-              // 臂内：以噪声门控 + 概率门控的方式定义 HII（紫红）结
+              // 臂内：固定占比 + 噪声门控，靠近臂脊权重更高（写实的 HII 串珠状分布）
+              const nearBoost = profile > 0.65 ? 0.15 : (profile > 0.55 ? 0.05 : -0.10)
+              const baseShare = Math.min(0.9, Math.max(0.0, 0.35 + nearBoost)) // 目标 ~35%，脊附近更高
+              const r01 = (noise2D(x * 0.017 - 19.3, y * 0.017 + 23.1) + 1) * 0.5 // 0..1
               const knot1 = noise2D(x * 0.03 + 11.7, y * 0.03 - 7.9)
               const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
-              // 增强占比（约提升到臂内的 ~60%，约为之前的10倍级）
-              const randish = (noise2D(x * 0.013 - 19.3, y * 0.013 + 23.1) + 1) * 0.5 // 0..1
-              const isHII = (knot1 > 0.60 && knot2 > 0.20) || (randish > 0.40)
+              const isHII = (r01 < baseShare) || (knot1 > 0.60 && knot2 > 0.20)
               if (isHII) {
-                color = '#F08CD3'
-                // 紫红结稍大一些，增强可见度
-                size = size * 1.3
+                color = '#F08CD3' // 品红/紫红 HII
+                size = size * 1.6  // HII 稍大，提升可见度
               } else {
-                color = pal.armBright
+                color = pal.armBright // 臂内蓝
               }
             } else if (profile > edgeT) {
               color = pal.armEdge
