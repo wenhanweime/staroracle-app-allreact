@@ -146,13 +146,14 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             {/* 超亮高亮点：彩色大光晕 + 白色小核心 */}
             {(()=>{
               const base = ((p as any).litColor || p.color || '#CCCCCC')
-              const hi = lighten(base, 0.65) // 显著提亮
-              const coreSize = Math.max(2, p.size * 1.4)
-              const haloSize = Math.max(coreSize*2.2, p.size * 3.2)
-              const haloPx = Math.ceil(haloSize*0.6)
-              const haloPx2 = Math.ceil(haloSize*0.9)
-              const corePx1 = Math.ceil(coreSize*3)
-              const corePx2 = Math.ceil(coreSize*6)
+              // 减少提亮幅度，保留高亮区的色相（避免看起来变白）
+              const hi = lighten(base, 0.2)
+              const coreSize = Math.max(1.5, p.size * 1.1) // 缩小白色核心，降低“泛白”覆盖
+              const haloSize = Math.max(coreSize*2.6, p.size * 3.6) // 扩大彩色光晕影响半径
+              const haloPx = Math.ceil(haloSize*0.7)
+              const haloPx2 = Math.ceil(haloSize*1.0)
+              const corePx1 = Math.ceil(coreSize*2.5)
+              const corePx2 = Math.ceil(coreSize*5.0)
               return (
                 <div style={{ position:'relative', left: 0, top: 0 }}>
                   {/* 彩色大光晕 */}
