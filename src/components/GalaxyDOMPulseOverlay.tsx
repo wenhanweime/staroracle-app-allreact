@@ -19,7 +19,7 @@ interface Props {
   onLight?: ()=>void
 }
 
-type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string }
+type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string; litColor?: string }
 
 // Helpers: hex -> rgb and lighten by mixing with white
 const hexToRgb = (hex:string)=>{
@@ -94,7 +94,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           const p = arr.shift()!
           const durBase = (config?.durationMs ?? 1100)
           const dur = durBase * (0.7 + 0.8*Math.random())
-          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: key })
+          const baseColor = (p as any).color || key
+          const lit = (p as any).litColor || undefined
+          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: baseColor, litColor: lit })
         }
       }
       // 将剩余名额优先分配给有色组，再分配给灰色组
@@ -108,8 +110,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             const p = arr.shift()!
             const durBase = (config?.durationMs ?? 1100)
             const dur = durBase * (0.7 + 0.8*Math.random())
-            const color = key === greyKey ? '#CCCCCC' : key
-            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color })
+            const baseColor = (p as any).color || (key === greyKey ? '#CCCCCC' : key)
+            const lit = (p as any).litColor || undefined
+            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: baseColor, litColor: lit })
           }
           idx++
           // 防止死循环：如果所有数组都空了就退出
