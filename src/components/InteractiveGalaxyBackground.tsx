@@ -754,7 +754,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           onBgPointsReady={(pts)=>{ domStarPointsRef.current = pts }}
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
-      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} onLight={handleLight} />
+      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
       {/* 调色面板（可开关），用于快速调整与开关结构着色 */}
       <PaletteTuner
         palette={palette}
