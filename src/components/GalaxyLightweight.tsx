@@ -190,7 +190,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
     }
     onBgPointsReady && onBgPointsReady(bg)
     return { stars: colored.map((s:any)=>({x:s.x,y:s.y,size:s.size,color:s.color, ring:s.ring})), ringCount: rings, bgStars: bg }
-  }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady, onBgPointsReady, params, palette, layerAlpha])
+  }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady, onBgPointsReady, params, palette, litPalette, layerAlpha])
 
   // CSS 动画：每个 ring 不同速度（与半径相关的差速旋转）
   const ringDur = (_idx:number)=>{
