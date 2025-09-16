@@ -7,6 +7,7 @@ interface LayerAlpha { core:number; ridge:number; armBright:number; armEdge:numb
 interface Props {
   params: GalaxyParams
   palette: Palette
+  litPalette?: Palette
   layerAlpha?: LayerAlpha
   structureColoring?: boolean
   armCount?: number
@@ -69,7 +70,7 @@ const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Ma
 const hexToHsl = (hex:string)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHsl(r,g,b) }
 const hslToHex = (h:number,s:number,l:number)=>{ const {r,g,b}=hslToRgb(h,s,l); return rgbToHex(r,g,b) }
 
-const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady }) => {
+const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady }) => {
   const rootRef = useRef<HTMLDivElement|null>(null)
   const [dims, setDims] = useState({w:0,h:0})
   useEffect(()=>{
@@ -147,8 +148,29 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, layerAlpha, struc
       })
     }
     if (onBandPointsReady){
-      const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = []
-      for(const s of arr){ (out as any).push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h, color: (s as any).color }) }
+      const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}> = []
+      // 建立从基础 palette 颜色 -> litPalette 颜色的映射（严格比较，arr 内颜色尚未抖动）
+      const palMap: Record<string,string> = {}
+      const entries: Array<[keyof Palette, string]> = [
+        ['core', (palette as any).core],
+        ['ridge', (palette as any).ridge],
+        ['armBright', (palette as any).armBright],
+        ['armEdge', (palette as any).armEdge],
+        ['dust', (palette as any).dust],
+        ['outer', (palette as any).outer],
+      ]
+      for (const [k, v] of entries){
+        const base = (v||'').toLowerCase()
+        const lit = ((litPalette as any)?.[k] || v || '').toLowerCase()
+        if (base && lit) palMap[base] = lit
+      }
+      // HII 专色（若存在）
+      palMap['#f08cd3'] = '#f08cd3'
+      for(const s of arr){
+        const base = ((s as any).color || '').toLowerCase()
+        const lit = palMap[base]
+        out.push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h, color: (s as any).color, litColor: lit })
+      }
       onBandPointsReady(out as any)
     }
     // 背景小星（不旋转）

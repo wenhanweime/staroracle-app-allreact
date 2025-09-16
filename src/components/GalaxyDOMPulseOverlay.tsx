@@ -12,10 +12,11 @@ interface GlowConfig {
 
 interface Props {
   pointsRef: React.RefObject<Array<{x:number;y:number;size:number}>>
-  bandPointsRef?: React.RefObject<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string}>>
+  bandPointsRef?: React.RefObject<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>>
   scale?: number
   rotateEnabled?: boolean
   config?: GlowConfig
+  onLight?: ()=>void
 }
 
 type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string }
@@ -30,7 +31,7 @@ const hexToRgb = (hex:string)=>{
 const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('')
 const lighten = (hex:string, t:number)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHex(r + (255-r)*t, g + (255-g)*t, b + (255-b)*t) }
 
-const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config }) => {
+const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight }) => {
   const [pulses, setPulses] = useState<Pulse[]>([])
   const rootRef = useRef<HTMLDivElement|null>(null)
 
@@ -38,6 +39,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
     const root = rootRef.current
     if(!root) return
     const handleClick = (e: MouseEvent)=>{
+      // 通知父组件触发“点亮”模式（如切换到亮色调色板）
+      try { onLight && onLight() } catch {}
       const rect = root.getBoundingClientRect()
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
@@ -59,7 +62,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
         const ry = p.y - bcy
         const sx = cx + (rx*Math.cos(angle) - ry*Math.sin(angle)) * (scale||1)
         const sy = cy + (rx*Math.sin(angle) + ry*Math.cos(angle)) * (scale||1)
-        return { x: sx, y: sy, size: p.size, color: p.color }
+        return { x: sx, y: sy, size: p.size, color: p.color, litColor: (p as any).litColor }
       })
       const all = (pts as any[]).concat(transformed)
       if(!all.length) return
@@ -139,7 +142,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           >
             {/* 超亮高亮点：彩色大光晕 + 白色小核心 */}
             {(()=>{
-              const base = (p.color || '#CCCCCC')
+              const base = ((p as any).litColor || p.color || '#CCCCCC')
               const hi = lighten(base, 0.65) // 显著提亮
               const coreSize = Math.max(2, p.size * 1.4)
               const haloSize = Math.max(coreSize*2.2, p.size * 3.2)

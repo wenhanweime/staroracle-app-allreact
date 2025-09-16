@@ -287,6 +287,24 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);
+  // Lit palette（点亮时短暂切换的高亮配色）
+  const litPaletteDefault: typeof defaultPalette = {
+    core: '#FFE2B0',
+    ridge: '#FFFFFF',
+    armBright: '#2E5BFF',
+    armEdge: '#5A8BFF',
+    dust: '#0A0815',
+    outer: '#9CB1E8',
+  }
+  const litTimerRef = useRef<number|undefined>(undefined as any)
+  const handleLight = () => {
+    // 切换到亮色调色板一小段时间，再恢复当前调色
+    try { if (litTimerRef.current) window.clearTimeout(litTimerRef.current) } catch {}
+    const prev = paletteRef.current
+    setPalette(litPaletteDefault)
+    const dur = (glowCfg.durationMs ?? 1100) + 200
+    litTimerRef.current = window.setTimeout(()=>{ setPalette(prev) }, dur)
+  }
   // 载入保存的默认配置（若存在），覆盖初始 palette/params/structureColoring
   useEffect(() => {
     try {
@@ -728,6 +746,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       <GalaxyLightweight
           params={params}
           palette={palette}
+          litPalette={litPaletteDefault}
           structureColoring={structureColoring}
           armCount={defaultParams.armCount}
           scale={params.galaxyScale}
@@ -735,7 +754,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           onBgPointsReady={(pts)=>{ domStarPointsRef.current = pts }}
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
-      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
+      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} onLight={handleLight} />
       {/* 调色面板（可开关），用于快速调整与开关结构着色 */}
       <PaletteTuner
         palette={palette}
