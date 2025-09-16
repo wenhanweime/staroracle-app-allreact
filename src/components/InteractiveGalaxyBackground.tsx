@@ -287,7 +287,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);
-  // Lit palette（点亮时短暂切换的高亮配色）
+  // Lit palette（点亮时的高亮配色，可独立调节与保存）
   const litPaletteDefault: typeof defaultPalette = {
     core: '#FFE2B0',
     ridge: '#FFFFFF',
@@ -296,24 +296,23 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     dust: '#0A0815',
     outer: '#9CB1E8',
   }
-  const litTimerRef = useRef<number|undefined>(undefined as any)
-  const handleLight = () => {
-    // 切换到亮色调色板一小段时间，再恢复当前调色
-    try { if (litTimerRef.current) window.clearTimeout(litTimerRef.current) } catch {}
-    const prev = paletteRef.current
-    setPalette(litPaletteDefault)
-    const dur = (glowCfg.durationMs ?? 1100) + 200
-    litTimerRef.current = window.setTimeout(()=>{ setPalette(prev) }, dur)
-  }
-  // 载入保存的默认配置（若存在），覆盖初始 palette/params/structureColoring
+  const [litPalette, setLitPalette] = useState<typeof defaultPalette>(litPaletteDefault)
+  const litPaletteRef = useRef(litPalette)
+  useEffect(()=>{ litPaletteRef.current = litPalette }, [litPalette])
+  // 载入保存的默认配置（若存在），覆盖初始 palette/litPalette/params/structureColoring
   useEffect(() => {
     try {
       const sp = localStorage.getItem('galaxy.default.palette')
+      const spl = localStorage.getItem('galaxy.default.palette.lit')
       const sparams = localStorage.getItem('galaxy.default.params')
       const scolor = localStorage.getItem('galaxy.default.structureColoring')
       if (sp) {
         const obj = JSON.parse(sp)
         setPalette((prev)=> ({ ...prev, ...obj }))
+      }
+      if (spl) {
+        const obj = JSON.parse(spl)
+        setLitPalette((prev)=> ({ ...prev, ...obj }))
       }
       if (sparams) {
         const obj = JSON.parse(sparams)
@@ -746,7 +745,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       <GalaxyLightweight
           params={params}
           palette={palette}
-          litPalette={litPaletteDefault}
+          litPalette={litPalette}
           structureColoring={structureColoring}
           armCount={defaultParams.armCount}
           scale={params.galaxyScale}
@@ -769,6 +768,25 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             localStorage.setItem('galaxy.default.structureColoring', JSON.stringify(structureColoring))
           } catch {}
         }}
+        buttonLabel="调色"
+        title="结构着色与调色（基础）"
+        iosButtonBottomRem={9}
+        iosPanelBottomRem={12}
+      />
+      {/* 点亮配色面板 */}
+      <PaletteTuner
+        palette={litPalette}
+        onApply={setLitPalette}
+        onReset={()=> setLitPalette(litPaletteDefault)}
+        structureColoring={structureColoring}
+        onToggleColoring={setStructureColoring}
+        onSaveDefaults={()=>{
+          try { localStorage.setItem('galaxy.default.palette.lit', JSON.stringify(litPaletteRef.current)) } catch {}
+        }}
+        buttonLabel="高亮配色"
+        title="高亮配色（点亮区域）"
+        iosButtonBottomRem={12}
+        iosPanelBottomRem={15}
       />
       {debugControls && (
         <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
@@ -926,7 +944,11 @@ const PaletteTuner: React.FC<{
   structureColoring: boolean;
   onToggleColoring: (v:boolean)=>void;
   onSaveDefaults: ()=>void;
-}> = ({ palette, onApply, onReset, structureColoring, onToggleColoring, onSaveDefaults }) => {
+  buttonLabel?: string;
+  title?: string;
+  iosButtonBottomRem?: number;
+  iosPanelBottomRem?: number;
+}> = ({ palette, onApply, onReset, structureColoring, onToggleColoring, onSaveDefaults, buttonLabel='调色', title='结构着色与调色', iosButtonBottomRem=9, iosPanelBottomRem=12 }) => {
   const [open, setOpen] = useState(false)
   const [draft, setDraft] = useState<typeof defaultPalette>(palette)
   useEffect(()=>{ if(open) setDraft(palette) }, [open])
@@ -935,19 +957,19 @@ const PaletteTuner: React.FC<{
     <>
       <button
         className="fixed bottom-20 right-4 z-40 px-2 py-1 rounded bg-black/60 text-white text-xs border border-white/10 hover:bg-black/70"
-        style={ isiOS ? { bottom: 'calc(9rem + env(safe-area-inset-bottom, 0px))' } : undefined }
+        style={ isiOS ? { bottom: `calc(${iosButtonBottomRem}rem + env(safe-area-inset-bottom, 0px))` } : undefined }
         onClick={()=> setOpen(v=>!v)}
-      >{open ? '隐藏调色' : '调色'}</button>
+      >{open ? `隐藏${buttonLabel}` : buttonLabel}</button>
       {open && (
         <div
           className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg"
-          style={ isiOS ? { bottom: 'calc(12rem + env(safe-area-inset-bottom, 0px))' } : undefined }
+          style={ isiOS ? { bottom: `calc(${iosPanelBottomRem}rem + env(safe-area-inset-bottom, 0px))` } : undefined }
           onClick={(e)=> e.stopPropagation()}
           onMouseDown={(e)=> e.stopPropagation()}
           onPointerDown={(e)=> e.stopPropagation()}
         >
           <div className="flex items-center justify-between mb-2">
-            <strong className="text-sm">结构着色与调色</strong>
+            <strong className="text-sm">{title}</strong>
             <div className="flex items-center gap-2">
               <label className="text-xs flex items-center gap-1">
                 <input type="checkbox" checked={structureColoring} onChange={e=> onToggleColoring(e.target.checked)} /> 启用
