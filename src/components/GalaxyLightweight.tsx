@@ -149,26 +149,13 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
     }
     if (onBandPointsReady){
       const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}> = []
-      // 建立从基础 palette 颜色 -> litPalette 颜色的映射（严格比较，arr 内颜色尚未抖动）
-      const palMap: Record<string,string> = {}
-      const entries: Array<[keyof Palette, string]> = [
-        ['core', (palette as any).core],
-        ['ridge', (palette as any).ridge],
-        ['armBright', (palette as any).armBright],
-        ['armEdge', (palette as any).armEdge],
-        ['dust', (palette as any).dust],
-        ['outer', (palette as any).outer],
-      ]
-      for (const [k, v] of entries){
-        const base = (v||'').toLowerCase()
-        const lit = ((litPalette as any)?.[k] || v || '').toLowerCase()
-        if (base && lit) palMap[base] = lit
-      }
-      // HII 专色（若存在）
-      palMap['#f08cd3'] = '#f08cd3'
       for(const s of arr){
-        const base = ((s as any).color || '').toLowerCase()
-        const lit = palMap[base]
+        const layer = (s as any).layer as (keyof Palette | 'hii' | undefined)
+        let lit: string | undefined = undefined
+        if (layer && litPalette) {
+          if (layer === 'hii') lit = '#F08CD3'
+          else lit = (litPalette as any)[layer]
+        }
         out.push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h, color: (s as any).color, litColor: lit })
       }
       onBandPointsReady(out as any)

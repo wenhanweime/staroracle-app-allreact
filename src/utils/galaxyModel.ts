@@ -46,7 +46,7 @@ export interface Palette {
   outer: string
 }
 
-export interface StarOut { x:number; y:number; r:number; size:number; ring:number; color:string }
+export interface StarOut { x:number; y:number; r:number; size:number; ring:number; color:string; layer?: string }
 
 // Deterministic RNG
 export function seeded(seed: number){
@@ -385,9 +385,10 @@ export function generateStarFieldGrid(opts:{
         const rNowDev = Math.hypot(dxDev, dyDev)
         const ring = Math.min(rings-1, Math.max(0, Math.floor((rNowDev/maxRDev) * rings)))
         let color = '#FFFFFF'
+        let layer: string | undefined = undefined
         if (structureColoring){
           if (radius < p.coreRadius) {
-            color = pal.core
+            color = pal.core; layer = 'core'
           } else {
             const aw = armInfo.armWidth / dprN
             const d = armInfo.distance / dprN
@@ -399,9 +400,9 @@ export function generateStarFieldGrid(opts:{
             const mainT = 0.45
             const edgeT = 0.25
             if (inDust || noiseLocal < -0.2) {
-              color = pal.dust
+              color = pal.dust; layer = 'dust'
             } else if (profile > ridgeT) {
-              color = pal.ridge
+              color = pal.ridge; layer = 'ridge'
             } else if (profile > mainT) {
               // 臂内：固定占比 + 噪声门控，靠近臂脊权重更高（写实的 HII 串珠状分布）
               const nearBoost = profile > 0.65 ? 0.15 : (profile > 0.55 ? 0.05 : -0.10)
@@ -411,22 +412,22 @@ export function generateStarFieldGrid(opts:{
               const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
               const isHII = (r01 < baseShare) || (knot1 > 0.60 && knot2 > 0.20)
               if (isHII) {
-                color = '#F08CD3' // 品红/紫红 HII
+                color = '#F08CD3'; layer = 'hii' // 品红/紫红 HII
                 size = size * 1.6  // HII 稍大，提升可见度
               } else {
-                color = pal.armBright // 臂内蓝
+                color = pal.armBright; layer = 'armBright' // 臂内蓝
               }
             } else if (profile > edgeT) {
-              color = pal.armEdge
+              color = pal.armEdge; layer = 'armEdge'
             } else {
-              color = pal.outer
+              color = pal.outer; layer = 'outer'
             }
           }
         }
         // 输出坐标：CSS 像素，按 OV → 视口居中偏移
         const offX = (oWCss - w) / 2
         const offY = (oHCss - h) / 2
-        const cand: StarOut = { x: ox - offX, y: oy - offY, r: rNowDev, size, ring, color }
+        const cand: StarOut = { x: ox - offX, y: oy - offY, r: rNowDev, size, ring, color, layer }
         accepted++
         const cap = (typeof starCap === 'number') ? Math.max(0, Math.floor(starCap)) : (fullDensity ? Number.POSITIVE_INFINITY : target)
         if (reservoir.length < cap){
