@@ -384,44 +384,82 @@ export function generateStarFieldGrid(opts:{
         const dyDev = (oy * dprN) - (oHDev/2)
         const rNowDev = Math.hypot(dxDev, dyDev)
         const ring = Math.min(rings-1, Math.max(0, Math.floor((rNowDev/maxRDev) * rings)))
-        let color = '#FFFFFF'
-        let layer: string | undefined = undefined
-        if (structureColoring){
-          if (radius < p.coreRadius) {
-            color = pal.core; layer = 'core'
-          } else {
-            const aw = armInfo.armWidth / dprN
-            const d = armInfo.distance / dprN
-            const dustOffset = 0.35 * aw
-            const dustHalf = 0.10 * aw * 0.5
-            const noiseLocal = noise2D(x * 0.05, y * 0.05)
-            const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf
-            const ridgeT = 0.6
-            const mainT = 0.45
-            const edgeT = 0.25
-            if (inDust || noiseLocal < -0.2) {
-              color = pal.dust; layer = 'dust'
-            } else if (profile > ridgeT) {
-              color = pal.ridge; layer = 'ridge'
-            } else if (profile > mainT) {
-              // 臂内：固定占比 + 噪声门控，靠近臂脊权重更高（写实的 HII 串珠状分布）
-              const nearBoost = profile > 0.65 ? 0.15 : (profile > 0.55 ? 0.05 : -0.10)
-              const baseShare = Math.min(0.9, Math.max(0.0, 0.35 + nearBoost)) // 目标 ~35%，脊附近更高
-              const r01 = (noise2D(x * 0.017 - 19.3, y * 0.017 + 23.1) + 1) * 0.5 // 0..1
-              const knot1 = noise2D(x * 0.03 + 11.7, y * 0.03 - 7.9)
-              const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
-              const isHII = (r01 < baseShare) || (knot1 > 0.60 && knot2 > 0.20)
-              if (isHII) {
-                color = '#F08CD3'; layer = 'hii' // 品红/紫红 HII
-                size = size * 1.6  // HII 稍大，提升可见度
-              } else {
-                color = pal.armBright; layer = 'armBright' // 臂内蓝
-              }
-            } else if (profile > edgeT) {
-              color = pal.armEdge; layer = 'armEdge'
-            } else {
-              color = pal.outer; layer = 'outer'
+        let layer: 'core' | 'ridge' | 'armBright' | 'armEdge' | 'dust' | 'outer' | 'hii'
+        if (radius < p.coreRadius) {
+          layer = 'core'
+        } else {
+          const aw = armInfo.armWidth / dprN
+          const d = armInfo.distance / dprN
+          const dustOffset = 0.35 * aw
+          const dustHalf = 0.10 * aw * 0.5
+          const noiseLocal = noise2D(x * 0.05, y * 0.05)
+          const inDust = armInfo.inArm && Math.abs(d - dustOffset) <= dustHalf
+          const ridgeT = 0.6
+          const mainT = 0.45
+          const edgeT = 0.25
+          if (inDust || noiseLocal < -0.2) {
+            layer = 'dust'
+          } else if (profile > ridgeT) {
+            layer = 'ridge'
+          } else if (profile > mainT) {
+            // 臂内：固定占比 + 噪声门控，靠近臂脊权重更高（写实的 HII 串珠状分布）
+            const nearBoost = profile > 0.65 ? 0.15 : (profile > 0.55 ? 0.05 : -0.10)
+            const baseShare = Math.min(0.9, Math.max(0.0, 0.35 + nearBoost)) // 目标 ~35%，脊附近更高
+            const r01 = (noise2D(x * 0.017 - 19.3, y * 0.017 + 23.1) + 1) * 0.5 // 0..1
+            const knot1 = noise2D(x * 0.03 + 11.7, y * 0.03 - 7.9)
+            const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
+            const isHII = (r01 < baseShare) || (knot1 > 0.60 && knot2 > 0.20)
+            layer = isHII ? 'hii' : 'armBright'
+            if (isHII) {
+              size = size * 1.6  // HII 稍大，提升可见度
             }
+          } else if (profile > edgeT) {
+            layer = 'armEdge'
+          } else {
+            layer = 'outer'
+          }
+        }
+
+        let color: string
+        if (structureColoring) {
+          switch (layer) {
+            case 'core':
+              color = pal.core
+              break
+            case 'ridge':
+              color = pal.ridge
+              break
+            case 'armBright':
+              color = pal.armBright
+              break
+            case 'armEdge':
+              color = pal.armEdge
+              break
+            case 'dust':
+              color = pal.dust
+              break
+            case 'outer':
+              color = pal.outer
+              break
+            case 'hii':
+              color = '#F08CD3'
+              break
+            default:
+              color = '#FFFFFF'
+          }
+        } else {
+          switch (layer) {
+            case 'dust':
+              color = '#1E1A2A'
+              break
+            case 'outer':
+              color = '#A8A8A8'
+              break
+            case 'ridge':
+              color = '#F0F0F0'
+              break
+            default:
+              color = '#D4D4D4'
           }
         }
         // 输出坐标：CSS 像素，按 OV → 视口居中偏移

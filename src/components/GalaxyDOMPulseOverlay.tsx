@@ -69,11 +69,15 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       // 选择点击半径内的点
       const inRange = all.filter(p=>{ const dx=p.x - x, dy=p.y - y; return dx*dx+dy*dy <= R*R })
       if(!inRange.length) return
+      // 优先挑选带 litColor 的星点，确保高亮时能呈现彩色
+      const coloredRange = inRange.filter(p=> !!(p as any).litColor)
+      const fallbackRange = inRange.filter(p=> !(p as any).litColor)
+      const source = coloredRange.length ? coloredRange : inRange
       // 固定数量采样：每次点击固定 30 颗（不超过候选），并保证每种颜色都能被代表
-      const target = Math.min(inRange.length, 30)
+      const target = Math.min(source.length, 30)
       // 分组：按颜色（无颜色归类为 '_grey'）
       const groups = new Map<string, any[]>()
-      for(const p of inRange){
+      for(const p of source){
         const c = ((p as any).color || '#CCCCCC').toLowerCase()
         const key = c || '_grey'
         if(!groups.has(key)) groups.set(key, [])
@@ -96,7 +100,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           const dur = durBase * (0.7 + 0.8*Math.random())
           const baseColor = (p as any).color || key
           const lit = (p as any).litColor || undefined
-          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: baseColor, litColor: lit })
+          const color = lit || baseColor
+          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color, litColor: lit })
         }
       }
       // 将剩余名额优先分配给有色组，再分配给灰色组
@@ -110,8 +115,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             const p = arr.shift()!
             const durBase = (config?.durationMs ?? 1100)
             const dur = durBase * (0.7 + 0.8*Math.random())
-            const baseColor = (p as any).color || (key === greyKey ? '#CCCCCC' : key)
             const lit = (p as any).litColor || undefined
+            const baseColor = lit || (p as any).color || (key === greyKey ? '#CCCCCC' : key)
             chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: baseColor, litColor: lit })
           }
           idx++
@@ -121,6 +126,16 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       }
       fillFrom(colorKeys)
       if (chosen.length < target && groups.has(greyKey)) fillFrom([greyKey])
+      // 如果仍未达到目标数量且彩色不足，使用无 litColor 的点补齐，但标记为灰
+      if (chosen.length < target && coloredRange.length && fallbackRange.length){
+        const remain = target - chosen.length
+        const filler = shuffle([...fallbackRange]).slice(0, remain)
+        filler.forEach(p=>{
+          const durBase = (config?.durationMs ?? 1100)
+          const dur = durBase * (0.7 + 0.8*Math.random())
+          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: '#CCCCCC' })
+        })
+      }
       setPulses(prev => prev.concat(chosen))
       // 清理：在最长 dur 后移除这些 pulses
       const maxDur = Math.max(...chosen.map(c=>c.dur)) + 200
@@ -143,35 +158,19 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             transition={{ duration: p.dur/1000, delay: p.delay/1000, ease: 'easeOut' }}
             style={{ position:'absolute', left: p.x, top: p.y, transform: 'translate(-50%, -50%)' }}
           >
-            {/* 超亮高亮点：彩色大光晕 + 白色小核心 */}
             {(()=>{
-              const base = ((p as any).litColor || p.color || '#CCCCCC')
-              // 减少提亮幅度，保留高亮区的色相（避免看起来变白）
-              const hi = lighten(base, 0.2)
-              const coreSize = Math.max(1.5, p.size * 1.1) // 缩小白色核心，降低“泛白”覆盖
-              const haloSize = Math.max(coreSize*2.6, p.size * 3.6) // 扩大彩色光晕影响半径
-              const haloPx = Math.ceil(haloSize*0.7)
-              const haloPx2 = Math.ceil(haloSize*1.0)
-              const corePx1 = Math.ceil(coreSize*2.5)
-              const corePx2 = Math.ceil(coreSize*5.0)
+              const base = p.litColor || p.color || '#CCCCCC'
+              const glow1 = lighten(base, 0.12)
+              const glow2 = lighten(base, 0.25)
+              const size = Math.max(1.5, p.size * 2)
               return (
-                <div style={{ position:'relative', left: 0, top: 0 }}>
-                  {/* 彩色大光晕 */}
-                  <div style={{
-                    position:'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-                    width: `${haloSize}px`, height: `${haloSize}px`, borderRadius:'50%',
-                    background: hi,
-                    opacity: 0.9,
-                    boxShadow: `0 0 ${haloPx}px ${hi}, 0 0 ${haloPx2}px ${hi}`
-                  }}/>
-                  {/* 明亮白色核心 */}
-                  <div style={{
-                    position:'absolute', left: '50%', top: '50%', transform: 'translate(-50%, -50%)',
-                    width: `${coreSize}px`, height: `${coreSize}px`, borderRadius:'50%',
-                    background: '#FFFFFF',
-                    boxShadow: `0 0 ${corePx1}px #FFFFFF, 0 0 ${corePx2}px ${hi}`
-                  }}/>
-                </div>
+                <div style={{
+                  width: `${size}px`,
+                  height: `${size}px`,
+                  borderRadius: '50%',
+                  background: base,
+                  boxShadow: `0 0 6px ${glow1}CC, 0 0 12px ${glow2}99`
+                }}/>
               )
             })()}
           </motion.div>
