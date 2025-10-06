@@ -4,6 +4,16 @@ import { UNIFORM_DEG_PER_MS, fullRotationSeconds } from '../utils/rotationConfig
 
 interface LayerAlpha { core:number; ridge:number; armBright:number; armEdge:number; dust:number; outer:number }
 
+interface PersistentHighlight {
+  id: string
+  band: number
+  x: number
+  y: number
+  size: number
+  color?: string
+  litColor?: string
+}
+
 interface Props {
   params: GalaxyParams
   palette: Palette
@@ -12,8 +22,9 @@ interface Props {
   structureColoring?: boolean
   armCount?: number
   scale?: number
-  onBandPointsReady?: (pts: Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>)=>void
+  onBandPointsReady?: (pts: Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>)=>void
   onBgPointsReady?: (pts: Array<{x:number;y:number;size:number}>)=>void
+  persistentHighlights?: PersistentHighlight[]
 }
 
 // Simple noise
@@ -70,7 +81,7 @@ const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Ma
 const hexToHsl = (hex:string)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHsl(r,g,b) }
 const hslToHex = (h:number,s:number,l:number)=>{ const {r,g,b}=hslToRgb(h,s,l); return rgbToHex(r,g,b) }
 
-const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady }) => {
+const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady, persistentHighlights = [] }) => {
   const rootRef = useRef<HTMLDivElement|null>(null)
   const [dims, setDims] = useState({w:0,h:0})
   useEffect(()=>{
@@ -147,30 +158,48 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
         return { ...s, color: hex }
       })
     }
+    const entries: Array<[keyof Palette, string]> = [
+      ['core', (palette as any).core],
+      ['ridge', (palette as any).ridge],
+      ['armBright', (palette as any).armBright],
+      ['armEdge', (palette as any).armEdge],
+      ['dust', (palette as any).dust],
+      ['outer', (palette as any).outer],
+    ]
+    const palMap: Record<string,string> = {}
+    for (const [k, v] of entries){
+      const base = (v||'').toLowerCase()
+      const lit = ((litPalette as any)?.[k] || v || '').toLowerCase()
+      if (base && lit) palMap[base] = lit
+    }
+    palMap['#f08cd3'] = '#f08cd3'
+
+    const stars = colored.map((s:any, idx:number)=>{
+      const base = ((s as any).color || '').toLowerCase()
+      const lit = palMap[base] || (s as any).color
+      return {
+        id: `s-${idx}`,
+        x: s.x,
+        y: s.y,
+        size: s.size,
+        color: s.color,
+        ring: s.ring,
+        litColor: lit
+      }
+    })
+
     if (onBandPointsReady){
-      const out:Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}> = []
-      // 建立从基础 palette 颜色 -> litPalette 颜色的映射（严格比较，arr 内颜色尚未抖动）
-      const palMap: Record<string,string> = {}
-      const entries: Array<[keyof Palette, string]> = [
-        ['core', (palette as any).core],
-        ['ridge', (palette as any).ridge],
-        ['armBright', (palette as any).armBright],
-        ['armEdge', (palette as any).armEdge],
-        ['dust', (palette as any).dust],
-        ['outer', (palette as any).outer],
-      ]
-      for (const [k, v] of entries){
-        const base = (v||'').toLowerCase()
-        const lit = ((litPalette as any)?.[k] || v || '').toLowerCase()
-        if (base && lit) palMap[base] = lit
-      }
-      // HII 专色（若存在）
-      palMap['#f08cd3'] = '#f08cd3'
-      for(const s of arr){
-        const base = ((s as any).color || '').toLowerCase()
-        const lit = palMap[base]
-        out.push({ x:s.x, y:s.y, size:s.size, band:s.ring, bw: w, bh: h, color: (s as any).color, litColor: lit })
-      }
+      const out = stars.map(s => ({
+        id: s.id,
+        x: s.x,
+        y: s.y,
+        size: s.size,
+        band: s.ring,
+        bw: w,
+        bh: h,
+        color: s.color,
+        litColor: s.litColor
+      }))
       onBandPointsReady(out as any)
     }
     // 背景小星（不旋转）
@@ -189,7 +218,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
       bg.push({ x,y,size })
     }
     onBgPointsReady && onBgPointsReady(bg)
-    return { stars: colored.map((s:any)=>({x:s.x,y:s.y,size:s.size,color:s.color, ring:s.ring})), ringCount: rings, bgStars: bg }
+    return { stars, ringCount: rings, bgStars: bg }
   }, [dims.w, dims.h, armCount, scale, structureColoring, onBandPointsReady, onBgPointsReady, params, palette, layerAlpha])
 
   // CSS 动画：每个 ring 不同速度（与半径相关的差速旋转）
@@ -212,8 +241,8 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
             animation: `glx-rot ${ringDur(ri)} linear infinite`
           }}
         >
-          {stars.filter(s=>s.ring===ri).map((s,idx)=> (
-            <div key={ri+'-'+idx}
+          {stars.filter(s=>s.ring===ri).map((s)=> (
+            <div key={s.id}
               style={{
                 position:'absolute', left: s.x, top: s.y, transform:'translate(-50%,-50%)',
                 width: `${s.size}px`, height: `${s.size}px`, borderRadius:'50%',
@@ -221,6 +250,25 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
                 boxShadow: `0 0 6px ${s.color}AA, 0 0 12px ${s.color}66`,
                 opacity: 0.95
               }}/>
+          ))}
+          {persistentHighlights.filter(h=>h.band===ri).map(h => (
+            <div
+              key={`hl-${h.id}`}
+              style={{
+                position:'absolute',
+                left: h.x,
+                top: h.y,
+                transform:'translate(-50%,-50%)',
+                width: `${Math.max(h.size * 2.2, 3.2)}px`,
+                height: `${Math.max(h.size * 2.2, 3.2)}px`,
+                borderRadius:'50%',
+                background: `radial-gradient(circle, rgba(255, 250, 255, 1) 0%, rgba(242, 224, 255, 0.96) 45%, rgba(205, 170, 255, 0.58) 100%)`,
+                boxShadow: `0 0 24px rgba(248, 238, 255, 0.9), 0 0 56px rgba(190, 150, 255, 0.55)`,
+                opacity: 1,
+                pointerEvents: 'none',
+                transition: 'opacity 0.35s ease'
+              }}
+            />
           ))}
         </div>
       ))}

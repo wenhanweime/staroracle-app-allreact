@@ -12,14 +12,23 @@ interface GlowConfig {
 
 interface Props {
   pointsRef: React.RefObject<Array<{x:number;y:number;size:number}>>
-  bandPointsRef?: React.RefObject<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>>
+  bandPointsRef?: React.RefObject<Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>>
   scale?: number
   rotateEnabled?: boolean
   config?: GlowConfig
   onLight?: ()=>void
+  onPersistHighlights?: (points: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>) => void
 }
 
-type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string }
+type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string; source?: { type:'band' | 'bg'; data: any } }
+type Candidate = {
+  x:number
+  y:number
+  size:number
+  color?: string
+  litColor?: string
+  __source: { type:'band' | 'bg'; data: any }
+}
 
 // Helpers: hex -> rgb and lighten by mixing with white
 const hexToRgb = (hex:string)=>{
@@ -31,9 +40,19 @@ const hexToRgb = (hex:string)=>{
 const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('')
 const lighten = (hex:string, t:number)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHex(r + (255-r)*t, g + (255-g)*t, b + (255-b)*t) }
 
-const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight }) => {
+const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight, onPersistHighlights }) => {
   const [pulses, setPulses] = useState<Pulse[]>([])
   const rootRef = useRef<HTMLDivElement|null>(null)
+  const highlightTimerRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (highlightTimerRef.current) {
+        clearTimeout(highlightTimerRef.current)
+        highlightTimerRef.current = null
+      }
+    }
+  }, [])
 
   useEffect(()=>{
     const root = rootRef.current
@@ -50,10 +69,17 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const R = Math.max(minR, Math.min(w,h) * factor)
       const pts = pointsRef.current || []
       const bpts = bandPointsRef?.current || []
-      const BAND_COUNT = Math.max(1, bpts.reduce((m,p)=> Math.max(m, p.band+1), 1))
       const cx = w/2, cy = h/2
       const now = performance.now()
-      const transformed = bpts.map(p=>{
+      const bgCandidates: Candidate[] = (pts as any[]).map((p:any)=>({
+        x: p.x,
+        y: p.y,
+        size: p.size,
+        color: p.color || '#CCCCCC',
+        litColor: p.litColor,
+        __source: { type: 'bg', data: p }
+      }))
+      const transformed: Candidate[] = bpts.map(p=>{
         // 统一旋转速度：所有环使用相同角速度，与 CSS 动画保持一致
         const omegaDegPerMs = rotateEnabled ? UNIFORM_DEG_PER_MS : 0
         const angle = omegaDegPerMs * now * (Math.PI/180)
@@ -62,9 +88,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
         const ry = p.y - bcy
         const sx = cx + (rx*Math.cos(angle) - ry*Math.sin(angle)) * (scale||1)
         const sy = cy + (rx*Math.sin(angle) + ry*Math.cos(angle)) * (scale||1)
-        return { x: sx, y: sy, size: p.size, color: p.color, litColor: (p as any).litColor }
+        return { x: sx, y: sy, size: p.size, color: p.color, litColor: (p as any).litColor, __source: { type: 'band', data: p } }
       })
-      const all = (pts as any[]).concat(transformed)
+      const all: Candidate[] = bgCandidates.concat(transformed)
       if(!all.length) return
       // 选择点击半径内的点
       const inRange = all.filter(p=>{ const dx=p.x - x, dy=p.y - y; return dx*dx+dy*dy <= R*R })
@@ -92,9 +118,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
         const arr = groups.get(key) || []
         if(arr.length){
           const p = arr.shift()!
-          const durBase = (config?.durationMs ?? 1100)
-          const dur = durBase * (0.7 + 0.8*Math.random())
-          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: key })
+          const durBase = (config?.durationMs ?? 850)
+          const dur = durBase * (0.45 + 0.4*Math.random())
+          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: key, source: p.__source })
         }
       }
       // 将剩余名额优先分配给有色组，再分配给灰色组
@@ -106,10 +132,10 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           const arr = groups.get(key) || []
           if(arr.length){
             const p = arr.shift()!
-            const durBase = (config?.durationMs ?? 1100)
-            const dur = durBase * (0.7 + 0.8*Math.random())
+            const durBase = (config?.durationMs ?? 850)
+            const dur = durBase * (0.45 + 0.4*Math.random())
             const color = key === greyKey ? '#CCCCCC' : key
-            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color })
+            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color, source: p.__source })
           }
           idx++
           // 防止死循环：如果所有数组都空了就退出
@@ -119,6 +145,41 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       fillFrom(colorKeys)
       if (chosen.length < target && groups.has(greyKey)) fillFrom([greyKey])
       setPulses(prev => prev.concat(chosen))
+      if (onPersistHighlights) {
+        const bandSelected = chosen
+          .map(c => c.source)
+          .filter((src): src is { type:'band'; data:any } => !!src && src.type === 'band')
+          .map(src => src.data)
+          .filter(Boolean)
+        const unique = new Map<string, any>()
+        for (const pt of bandSelected) {
+          if (pt && pt.id && !unique.has(pt.id)) {
+            unique.set(pt.id, pt)
+          }
+        }
+        const limited = Array.from(unique.values()).slice(0, 12)
+        if (highlightTimerRef.current) {
+          clearTimeout(highlightTimerRef.current)
+          highlightTimerRef.current = null
+        }
+        if (limited.length) {
+          const payload = limited.map((p:any) => ({
+            id: p.id,
+            band: p.band,
+            x: p.x,
+            y: p.y,
+            size: p.size,
+            color: p.color,
+            litColor: p.litColor
+          }))
+          const longestDur = Math.max(...chosen.map(c => c.dur), 0)
+          const delay = Math.max(0, longestDur - 80)
+          highlightTimerRef.current = window.setTimeout(() => {
+            onPersistHighlights(payload)
+            highlightTimerRef.current = null
+          }, delay)
+        }
+      }
       // 清理：在最长 dur 后移除这些 pulses
       const maxDur = Math.max(...chosen.map(c=>c.dur)) + 200
       setTimeout(()=>{
@@ -127,7 +188,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
     }
     root.addEventListener('click', handleClick)
     return ()=> root.removeEventListener('click', handleClick)
-  }, [pointsRef, bandPointsRef, rotateEnabled, scale, config])
+  }, [pointsRef, bandPointsRef, rotateEnabled, scale, config, onPersistHighlights])
 
   return (
     <div ref={rootRef} className="absolute inset-0 pointer-events-auto z-10">

@@ -11,6 +11,7 @@ const Constellation: React.FC = () => {
   const { 
     constellation, 
     activeStarId, 
+    highlightedStarId,
     viewStar, 
     setIsAsking,
     drawInspirationCard,
@@ -561,6 +562,7 @@ const Constellation: React.FC = () => {
         const pixelX = (star.x / 100) * dimensions.width;
         const pixelY = (star.y / 100) * dimensions.height;
         const isActive = star.id === activeStarId;
+        const isHighlighted = isActive || star.id === highlightedStarId;
         
         // Find connected stars
         const connectedStars = connections
@@ -580,6 +582,7 @@ const Constellation: React.FC = () => {
             brightness={star.brightness}
             isSpecial={star.isSpecial || hasStrongConnections}
             isActive={isActive}
+            isHighlighted={isHighlighted}
             onClick={() => handleStarClick(star.id)}
             tags={star.tags}
             category={star.primary_category} // Updated to use primary_category

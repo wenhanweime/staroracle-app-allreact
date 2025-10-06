@@ -19,6 +19,7 @@ interface StarPosition {
 interface StarState {
   constellation: Constellation;
   activeStarId: string | null;
+  highlightedStarId: string | null;
   isAsking: boolean;
   isLoading: boolean; // New state to track loading during star creation
   pendingStarPosition: StarPosition | null;
@@ -58,6 +59,7 @@ export const useStarStore = create<StarState>((set, get) => {
   return {
     constellation: generateEmptyConstellation(),
     activeStarId: null, // 确保初始状态为null
+    highlightedStarId: null,
     isAsking: false,
     isLoading: false, // Initialize loading state as false
     pendingStarPosition: null,
@@ -122,6 +124,7 @@ export const useStarStore = create<StarState>((set, get) => {
           connections: constellation.connections, // Keep existing connections for now
         },
         activeStarId: newStar.id, // Show the star being created
+        highlightedStarId: newStar.id,
         isAsking: false,
         pendingStarPosition: null,
         lastCreatedStarId: newStar.id,
@@ -247,7 +250,10 @@ export const useStarStore = create<StarState>((set, get) => {
     },
     
     viewStar: (id: string | null) => {
-      set({ activeStarId: id });
+      set(state => ({
+        activeStarId: id,
+        highlightedStarId: id ?? state.highlightedStarId,
+      }));
       console.log(`👁️ Viewing star: ${id}`);
     },
     
@@ -300,6 +306,7 @@ export const useStarStore = create<StarState>((set, get) => {
           connections: allConnections,
         },
         activeStarId: null, // 清除活动星星ID，避免阻止按钮点击
+        highlightedStarId: null,
         hasTemplate: true,
         templateInfo: {
           name: template.chineseName,
@@ -314,6 +321,7 @@ export const useStarStore = create<StarState>((set, get) => {
       set({
         constellation: generateEmptyConstellation(),
         activeStarId: null,
+        highlightedStarId: null,
         hasTemplate: false,
         templateInfo: null,
       });

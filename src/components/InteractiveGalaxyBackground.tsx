@@ -211,6 +211,21 @@ const calculateArmDensityProfile = (armInfo: ReturnType<typeof getArmInfo>, p = 
   return { density: totalDensity, size, profile };
 };
 
+const areHighlightListsEqual = (
+  a: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>,
+  b: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>
+) => {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+    const pa = a[i];
+    const pb = b[i];
+    if (pa.id !== pb.id || pa.band !== pb.band) return false;
+    if (pa.x !== pb.x || pa.y !== pb.y || pa.size !== pb.size) return false;
+    if (pa.color !== pb.color || pa.litColor !== pb.litColor) return false;
+  }
+  return true;
+};
+
 const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = ({
   quality = 'auto',
   reducedMotion = false,
@@ -244,7 +259,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const bgMaskRef = useRef<HTMLCanvasElement | null>(null);
   const bandMaskLayersRef = useRef<HTMLCanvasElement[] | null>(null);
   const starMaskCompositeRef = useRef<HTMLCanvasElement | null>(null);
-  const domBandPointsRef = useRef<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>>([]);
+  const domBandPointsRef = useRef<Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>>([]);
   const isIOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
   const initialParams = isIOS ? {
     ...defaultParams,
@@ -271,7 +286,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     // 点击高亮范围缩小一半（半径减半）
     radiusFactor: 0.00875,
     minRadius: 15,
-    durationMs: 1100,
+    durationMs: 850,
     ease: 'sine' as 'sine' | 'cubic',
   });
   // 闪烁调试参数（用于 ClickGlowOverlay）
@@ -299,6 +314,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [litPalette, setLitPalette] = useState<typeof defaultPalette>(litPaletteDefault)
   const litPaletteRef = useRef(litPalette)
   useEffect(()=>{ litPaletteRef.current = litPalette }, [litPalette])
+  const [persistentHighlights, setPersistentHighlights] = useState<Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>>([])
   // 载入保存的默认配置（若存在），覆盖初始 palette/litPalette/params/structureColoring
   useEffect(() => {
     try {
@@ -751,9 +767,34 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           scale={params.galaxyScale}
           onBandPointsReady={(pts)=>{ domBandPointsRef.current = pts }}
           onBgPointsReady={(pts)=>{ domStarPointsRef.current = pts }}
+          persistentHighlights={persistentHighlights}
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
-      <GalaxyDOMPulseOverlay pointsRef={domStarPointsRef} bandPointsRef={domBandPointsRef} scale={params.galaxyScale} rotateEnabled={rotateEnabled} config={glowCfg} />
+      <GalaxyDOMPulseOverlay
+        pointsRef={domStarPointsRef}
+        bandPointsRef={domBandPointsRef}
+        scale={params.galaxyScale}
+        rotateEnabled={rotateEnabled}
+        config={glowCfg}
+        onPersistHighlights={(points) => {
+          if (!points.length) return
+          setPersistentHighlights(prev => {
+            const map = new Map<string, typeof points[number]>()
+            prev.forEach(item => map.set(item.id, item))
+            points.forEach(item => {
+              if (map.has(item.id)) {
+                map.delete(item.id)
+              }
+              map.set(item.id, item)
+            })
+            const merged = Array.from(map.values())
+            if (areHighlightListsEqual(prev, merged)) {
+              return prev
+            }
+            return merged
+          })
+        }}
+      />
       {/* 调色面板（可开关），用于快速调整与开关结构着色 */}
       <PaletteTuner
         palette={palette}
