@@ -748,6 +748,14 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     hoverHs(e.clientX, e.clientY)
   };
 
+  const handleBandPointsReady = React.useCallback((pts: Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>) => {
+    domBandPointsRef.current = pts;
+  }, []);
+
+  const handleBgPointsReady = React.useCallback((pts: Array<{x:number;y:number;size:number}>) => {
+    domStarPointsRef.current = pts;
+  }, []);
+
   return (
     <>
       <canvas
@@ -765,8 +773,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           structureColoring={structureColoring}
           armCount={defaultParams.armCount}
           scale={params.galaxyScale}
-          onBandPointsReady={(pts)=>{ domBandPointsRef.current = pts }}
-          onBgPointsReady={(pts)=>{ domStarPointsRef.current = pts }}
+          onBandPointsReady={handleBandPointsReady}
+          onBgPointsReady={handleBgPointsReady}
           persistentHighlights={persistentHighlights}
         />
       {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
