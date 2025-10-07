@@ -259,14 +259,14 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
                 left: h.x,
                 top: h.y,
                 transform:'translate(-50%,-50%)',
-                width: `${Math.max(h.size * 2.2, 3.2)}px`,
-                height: `${Math.max(h.size * 2.2, 3.2)}px`,
+                width: `${Math.max(h.size, 2.6)}px`,
+                height: `${Math.max(h.size, 2.6)}px`,
                 borderRadius:'50%',
-                background: `radial-gradient(circle, rgba(255, 250, 255, 1) 0%, rgba(242, 224, 255, 0.96) 45%, rgba(205, 170, 255, 0.58) 100%)`,
-                boxShadow: `0 0 24px rgba(248, 238, 255, 0.9), 0 0 56px rgba(190, 150, 255, 0.55)`,
-                opacity: 1,
+                background: `radial-gradient(circle, rgba(247, 240, 255, 0.95) 0%, rgba(205, 180, 255, 0.65) 70%, rgba(140, 110, 220, 0.25) 100%)`,
+                boxShadow: `0 0 16px rgba(200, 170, 255, 0.65), 0 0 34px rgba(150, 120, 235, 0.4)`,
+                opacity: 0.98,
                 pointerEvents: 'none',
-                transition: 'opacity 0.35s ease'
+                transition: 'opacity 0.3s ease'
               }}
             />
           ))}

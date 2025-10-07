@@ -56,8 +56,8 @@ const Star: React.FC<StarProps> = ({
         className={`star-container ${isActive ? 'pulse' : ''} ${isSpecial ? 'special twinkle' : ''} ${isHighlighted ? 'highlighted' : ''}`}
         initial={{ opacity: 0, scale: 0 }}
         animate={{ 
-          opacity: isGrowing ? 1 : Math.min(1, brightness + (isHighlighted ? 0.2 : 0)),
-          scale: isGrowing ? 2 : isHighlighted ? 1.22 : 1,
+          opacity: isGrowing ? 1 : brightness,
+          scale: isGrowing ? 2 : 1,
         }}
         whileHover={{ scale: isGrowing ? 2 : 1.5, opacity: 1 }}
         whileTap={{ scale: 0.9 }}
@@ -68,9 +68,9 @@ const Star: React.FC<StarProps> = ({
           justifyContent: 'center',
           alignItems: 'center',
           boxShadow: isHighlighted
-            ? '0 0 22px rgba(255, 238, 255, 0.85), 0 0 48px rgba(208, 170, 255, 0.6)'
+            ? '0 0 20px rgba(215, 180, 255, 0.65), 0 0 38px rgba(150, 110, 235, 0.4)'
             : 'none',
-          transition: 'box-shadow 0.35s ease, transform 0.3s ease, opacity 0.3s ease',
+          transition: 'box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease',
         }}
       >
         {/* 3. 星星核心：实际的星星视觉效果 */}
@@ -79,15 +79,13 @@ const Star: React.FC<StarProps> = ({
           style={{
             width: '100%',
             height: '100%',
-            background: isHighlighted
-              ? 'radial-gradient(circle, rgba(255, 248, 255, 1) 0%, rgba(238, 216, 255, 0.96) 45%, rgba(210, 174, 255, 0.7) 100%)'
-              : 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,236,255,0.9) 50%, rgba(210,210,255,0.3) 100%)',
+            background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,236,255,0.9) 50%, rgba(210,210,255,0.3) 100%)',
             borderRadius: '50%',
             filter: isActive || isHighlighted ? 'blur(0)' : 'blur(1px)',
             boxShadow: isHighlighted
-              ? '0 0 22px rgba(242, 226, 255, 0.9), 0 0 46px rgba(186, 150, 255, 0.55)'
+              ? '0 0 18px rgba(205, 176, 255, 0.75), 0 0 34px rgba(150, 120, 235, 0.5)'
               : '0 0 8px rgba(255, 255, 255, 0.45)',
-            transition: 'background 0.35s ease, box-shadow 0.35s ease, filter 0.3s ease',
+            transition: 'box-shadow 0.3s ease, filter 0.3s ease',
           }}
         />
         
