@@ -32,6 +32,7 @@ interface StarState {
   activeStarId: string | null;
   highlightedStarId: string | null;
   galaxyHighlights: Record<string, { color: string }>;
+  galaxyHighlightColor: string;
   isAsking: boolean;
   isLoading: boolean; // New state to track loading during star creation
   pendingStarPosition: StarPosition | null;
@@ -50,7 +51,8 @@ interface StarState {
   applyTemplate: (template: ConstellationTemplate) => void;
   clearConstellation: () => void;
   updateStarTags: (starId: string, newTags: string[]) => void;
-  setGalaxyHighlights: (entries: Array<{ starId: string; color: string }>) => void;
+  setGalaxyHighlights: (entries: Array<{ starId: string; color?: string }>) => void;
+  setGalaxyHighlightColor: (color: string) => void;
 }
 
 // Generate initial empty constellation
@@ -74,6 +76,7 @@ export const useStarStore = create<StarState>((set, get) => {
     activeStarId: null, // 确保初始状态为null
     highlightedStarId: null,
     galaxyHighlights: {},
+    galaxyHighlightColor: '#FFE2B0',
     isAsking: false,
     isLoading: false, // Initialize loading state as false
     pendingStarPosition: null,
@@ -284,14 +287,20 @@ export const useStarStore = create<StarState>((set, get) => {
     },
 
     setGalaxyHighlights: (entries) => {
+      const fallback = get().galaxyHighlightColor;
       const next: Record<string, { color: string }> = {};
       entries.forEach(({ starId, color }) => {
-        next[starId] = { color: normalizeHighlightHex(color) };
+        const resolved = color ?? fallback;
+        next[starId] = { color: normalizeHighlightHex(resolved) };
       });
       set({ galaxyHighlights: next });
       if (typeof window !== 'undefined') {
         (window as any).__galaxyHighlights = next;
       }
+    },
+
+    setGalaxyHighlightColor: (color) => {
+      set({ galaxyHighlightColor: normalizeHighlightHex(color) });
     },
     
     regenerateConnections: () => {

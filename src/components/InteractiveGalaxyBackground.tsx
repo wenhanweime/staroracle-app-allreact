@@ -253,6 +253,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const constellationStars = useStarStore(state => state.constellation.stars);
   const constellationHighlights = useStarStore(state => state.galaxyHighlights);
   const setGalaxyHighlights = useStarStore(state => state.setGalaxyHighlights);
+  const setGalaxyHighlightColor = useStarStore(state => state.setGalaxyHighlightColor);
   const setGridSize = useGalaxyGridStore(s=>s.setCanvasSize)
   const genSites = useGalaxyGridStore(s=>s.generateSites)
   const currentQualityRef = useRef<Exclude<Quality, 'auto'>>('mid');
@@ -801,26 +802,53 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     domStarPointsRef.current = pts;
   }, []);
 
-  const highlightFallback = React.useMemo(() => litPaletteRef.current?.core ?? '#FFE2B0', [litPaletteRef.current]);
+  const highlightFallback = React.useMemo(() => normalizeHex(litPalette.core ?? '#FFE2B0') ?? '#FFE2B0', [litPalette.core]);
+  useEffect(() => {
+    setGalaxyHighlightColor(highlightFallback);
+  }, [highlightFallback, setGalaxyHighlightColor]);
+
+  const paletteLitMap = React.useMemo(() => {
+    const map = new Map<string, string>();
+    const entries: Array<[keyof typeof defaultPalette, string]> = [
+      ['core', palette.core],
+      ['ridge', palette.ridge],
+      ['armBright', palette.armBright],
+      ['armEdge', palette.armEdge],
+      ['dust', palette.dust],
+      ['outer', palette.outer],
+    ];
+    entries.forEach(([key, base]) => {
+      const normalizedBase = normalizeHex(base);
+      const litValue = normalizeHex((litPalette as any)[key] ?? base);
+      if (normalizedBase && litValue) {
+        map.set(normalizedBase, litValue);
+      }
+    });
+    map.set('#F08CD3', highlightFallback);
+    map.set('#F08CD3'.toLowerCase(), highlightFallback);
+    return map;
+  }, [palette, litPalette, highlightFallback]);
 
   const mapHighlightsToStars = React.useCallback((points: Array<{id?:string;x:number;y:number;color?:string;litColor?:string}>) => {
     const matches: Array<{ starId: string; color: string }> = [];
     const mapping = backgroundIdToStarIdRef.current;
-    const fallbackColor = litPaletteRef.current?.core ?? '#FFE2B0';
+    const fallbackColor = highlightFallback;
     points.forEach(pt => {
       if (!pt?.id) return;
       const starId = mapping[pt.id];
       if (!starId) return;
       const highlight = constellationHighlights[starId]?.color;
-      const sourceColor = normalizeHex(highlight ?? fallbackColor) ?? fallbackColor;
+      const baseColor = normalizeHex(pt.color ?? '');
+      const mappedLit = baseColor ? paletteLitMap.get(baseColor) : undefined;
+      const sourceColor = normalizeHex(highlight ?? mappedLit ?? pt.litColor ?? fallbackColor) ?? fallbackColor;
       matches.push({ starId, color: sourceColor });
     });
     if (typeof window !== 'undefined') {
       (window as any).__galaxyMappedHighlights = matches;
     }
     return matches;
-  }, [constellationHighlights]);
-  const resolveBandHighlight = React.useCallback((bandId?: string, _source?: { color?: string; litColor?: string }) => {
+  }, [constellationHighlights, highlightFallback]);
+  const resolveBandHighlight = React.useCallback((bandId?: string, source?: { color?: string; litColor?: string }) => {
     if (bandId) {
       const starId = backgroundIdToStarIdRef.current[bandId];
       if (starId) {
@@ -830,20 +858,28 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         }
       }
     }
-    return litPaletteRef.current?.core ?? '#FFE2B0';
-  }, [constellationHighlights]);
+    const baseColor = normalizeHex(source?.color ?? '');
+    if (baseColor && paletteLitMap.has(baseColor)) {
+      return paletteLitMap.get(baseColor)!;
+    }
+    const litSource = normalizeHex(source?.litColor ?? '');
+    if (litSource) {
+      return litSource;
+    }
+    return highlightFallback;
+  }, [constellationHighlights, highlightFallback, paletteLitMap]);
 
   const colorizeBandPoints = React.useCallback((points: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>) => {
     return points.map(point => {
       const resolved = resolveBandHighlight(point.id, point);
-      const normalized = normalizeHex(resolved) ?? (litPaletteRef.current?.core ?? '#FFE2B0');
+      const normalized = normalizeHex(resolved) ?? highlightFallback;
       return {
         ...point,
         color: normalized,
         litColor: normalized,
       };
     });
-  }, [resolveBandHighlight]);
+  }, [resolveBandHighlight, highlightFallback]);
 
   return (
     <>

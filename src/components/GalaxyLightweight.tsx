@@ -80,6 +80,30 @@ const hslToRgb = (h:number,s:number,l:number)=>{
 const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('')
 const hexToHsl = (hex:string)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHsl(r,g,b) }
 const hslToHex = (h:number,s:number,l:number)=>{ const {r,g,b}=hslToRgb(h,s,l); return rgbToHex(r,g,b) }
+const normalizeHex = (hex: unknown) => {
+  if (!hex && hex !== 0) return '#FFFFFF'
+  let value = typeof hex === 'string' ? hex.trim() : String(hex).trim()
+  if (!value.startsWith('#')) return '#FFFFFF'
+  if (value.length === 4) {
+    value = `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`
+  }
+  if (value.length !== 7) return '#FFFFFF'
+  return value.toUpperCase()
+}
+const hexToRgba = (hex:string, alpha:number)=>{
+  const {r,g,b} = hexToRgb(normalizeHex(hex))
+  const a = Math.max(0, Math.min(1, alpha))
+  return `rgba(${r}, ${g}, ${b}, ${a})`
+}
+const lighten = (hex:string, amount:number)=>{
+  const {r,g,b} = hexToRgb(normalizeHex(hex))
+  const clamp = (v:number)=> Math.max(0, Math.min(255, Math.round(v)))
+  const mix = (channel:number)=> clamp(channel + (255 - channel) * amount)
+  return rgbToHex(mix(r), mix(g), mix(b))
+}
+const lightenToRgba = (hex:string, amount:number, alpha:number)=>{
+  return hexToRgba(lighten(hex, amount), alpha)
+}
 
 const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady, persistentHighlights = [] }) => {
   const rootRef = useRef<HTMLDivElement|null>(null)
@@ -168,15 +192,18 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
     ]
     const palMap: Record<string,string> = {}
     for (const [k, v] of entries){
-      const base = (v||'').toLowerCase()
-      const lit = ((litPalette as any)?.[k] || v || '').toLowerCase()
+      const base = normalizeHex(v)
+      const lit = normalizeHex((litPalette as any)?.[k] || v)
       if (base && lit) palMap[base] = lit
     }
-    palMap['#f08cd3'] = '#f08cd3'
+    const litCore = normalizeHex((litPalette as any)?.core || palette.core || '#FFE2B0')
+    palMap['#F08CD3'] = litCore
+    palMap['#f08cd3'] = litCore
 
     const stars = colored.map((s:any, idx:number)=>{
-      const base = ((s as any).color || '').toLowerCase()
-      const lit = palMap[base] || (s as any).color
+      const original = arr[idx] as any
+      const baseOriginal = normalizeHex(original?.color || (s as any).color || '')
+      const lit = baseOriginal ? (palMap[baseOriginal] || normalizeHex((litPalette as any)?.core || baseOriginal)) : normalizeHex((litPalette as any)?.core || '#FFE2B0')
       return {
         id: `s-${idx}`,
         x: s.x,
@@ -251,25 +278,32 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
                 opacity: 0.95
               }}/>
           ))}
-          {persistentHighlights.filter(h=>h.band===ri).map(h => (
-            <div
-              key={`hl-${h.id}`}
-              style={{
-                position:'absolute',
-                left: h.x,
-                top: h.y,
-                transform:'translate(-50%,-50%)',
-                width: `${Math.max(h.size, 2.6)}px`,
-                height: `${Math.max(h.size, 2.6)}px`,
-                borderRadius:'50%',
-                background: `radial-gradient(circle, rgba(247, 240, 255, 0.95) 0%, rgba(205, 180, 255, 0.65) 70%, rgba(140, 110, 220, 0.25) 100%)`,
-                boxShadow: `0 0 16px rgba(200, 170, 255, 0.65), 0 0 34px rgba(150, 120, 235, 0.4)`,
-                opacity: 0.98,
-                pointerEvents: 'none',
-                transition: 'opacity 0.3s ease'
-              }}
-            />
-          ))}
+          {persistentHighlights.filter(h=>h.band===ri).map(h => {
+            const baseColor = normalizeHex(h.color || h.litColor || '#FFE2B0')
+            const coreRgba = hexToRgba(baseColor, 0.96)
+            const haloInner = hexToRgba(baseColor, 0.52)
+            const haloOuter = hexToRgba(baseColor, 0.18)
+            const edgeGlow = hexToRgba(baseColor, 0.36)
+            return (
+              <div
+                key={`hl-${h.id}`}
+                style={{
+                  position:'absolute',
+                  left: h.x,
+                  top: h.y,
+                  transform:'translate(-50%,-50%)',
+                  width: `${Math.max(h.size, 2.6)}px`,
+                  height: `${Math.max(h.size, 2.6)}px`,
+                  borderRadius:'50%',
+                  background: `radial-gradient(circle, ${coreRgba} 0%, ${haloInner} 62%, ${haloOuter} 100%)`,
+                  boxShadow: `0 0 18px ${edgeGlow}, 0 0 36px ${haloOuter}`,
+                  opacity: 0.98,
+                  pointerEvents: 'none',
+                  transition: 'opacity 0.3s ease'
+                }}
+              />
+            )
+          })}
         </div>
       ))}
       </div>

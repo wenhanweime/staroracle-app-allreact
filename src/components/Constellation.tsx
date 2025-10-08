@@ -7,8 +7,6 @@ const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia 
 import Star from './Star';
 import StarRayIcon from './StarRayIcon';
 
-const DEFAULT_HIGHLIGHT_COLOR = '#FFE2B0';
-
 const Constellation: React.FC = () => {
   const { 
     constellation, 
@@ -20,7 +18,8 @@ const Constellation: React.FC = () => {
     pendingStarPosition,
     isLoading,
     lastCreatedStarId,
-    setGalaxyHighlights
+    setGalaxyHighlights,
+    galaxyHighlightColor
   } = useStarStore();
   
   // 添加聊天状态检查
@@ -60,16 +59,16 @@ const Constellation: React.FC = () => {
   const handleStarClick = (id: string) => {
     playSound('starClick');
     viewStar(id);
-    setGalaxyHighlights([{ starId: id, color: DEFAULT_HIGHLIGHT_COLOR }]);
+    setGalaxyHighlights([{ starId: id, color: galaxyHighlightColor }]);
   };
 
   useEffect(() => {
     if (activeStarId) {
-      setGalaxyHighlights([{ starId: activeStarId, color: DEFAULT_HIGHLIGHT_COLOR }]);
+      setGalaxyHighlights([{ starId: activeStarId, color: galaxyHighlightColor }]);
     } else {
       setGalaxyHighlights([]);
     }
-  }, [activeStarId, setGalaxyHighlights]);
+  }, [activeStarId, setGalaxyHighlights, galaxyHighlightColor]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
