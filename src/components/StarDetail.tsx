@@ -124,7 +124,7 @@ const StarDetail: React.FC = () => {
           exit={{ opacity: 0 }}
         >
           <motion.div
-            className="absolute inset-0 bg-black bg-opacity-70 backdrop-blur-sm"
+            className="absolute inset-0 bg-black bg-opacity-10 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}

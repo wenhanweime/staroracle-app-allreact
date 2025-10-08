@@ -24,6 +24,17 @@ const noise2D = (x: number, y: number) => {
   return fract(t) * 2 - 1; // [-1, 1]
 };
 
+const normalizeHex = (hex: unknown) => {
+  if (!hex && hex !== 0) return '#FFFFFF';
+  let value = typeof hex === 'string' ? hex.trim() : String(hex).trim();
+  if (!value.startsWith('#')) return '#FFFFFF';
+  if (value.length === 4) {
+    value = `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+  }
+  if (value.length !== 7) return '#FFFFFF';
+  return value.toUpperCase();
+};
+
 // 颜色辅助：HEX ↔ HSL（仅用于显示着色的颜色抖动，不影响算法）
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
 const hexToRgb = (hex: string) => {
@@ -239,6 +250,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const hoverHs = useGalaxyStore(s=>s.hoverAt)
   const clickHs = useGalaxyStore(s=>s.clickAt)
   const drawInspirationCard = useStarStore(s=>s.drawInspirationCard)
+  const constellationStars = useStarStore(state => state.constellation.stars);
+  const constellationHighlights = useStarStore(state => state.galaxyHighlights);
+  const setGalaxyHighlights = useStarStore(state => state.setGalaxyHighlights);
   const setGridSize = useGalaxyGridStore(s=>s.setCanvasSize)
   const genSites = useGalaxyGridStore(s=>s.generateSites)
   const currentQualityRef = useRef<Exclude<Quality, 'auto'>>('mid');
@@ -306,9 +320,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const litPaletteDefault: typeof defaultPalette = {
     core: '#FFE2B0',
     ridge: '#FFFFFF',
-    armBright: '#2E5BFF',
+    armBright: '#0056d6',
     armEdge: '#5A8BFF',
-    dust: '#0A0815',
+    dust: '#0042a9',
     outer: '#9CB1E8',
   }
   const [litPalette, setLitPalette] = useState<typeof defaultPalette>(litPaletteDefault)
@@ -748,13 +762,88 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     hoverHs(e.clientX, e.clientY)
   };
 
+  const backgroundIdToStarIdRef = React.useRef<Record<string, string>>({});
+
   const handleBandPointsReady = React.useCallback((pts: Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>) => {
     domBandPointsRef.current = pts;
-  }, []);
+    if (typeof window === 'undefined') return;
+    if (!constellationStars.length) return;
+    const width = window.innerWidth || 1;
+    const height = window.innerHeight || 1;
+    const mapping: Record<string, string> = {};
+    const used = new Set<string>();
+    pts.forEach(pt => {
+      let nearest: string | null = null;
+      let nearestDist = Infinity;
+      for (const star of constellationStars) {
+        const sx = (star.x / 100) * width;
+        const sy = (star.y / 100) * height;
+        const dx = sx - pt.x;
+        const dy = sy - pt.y;
+        const dist = dx * dx + dy * dy;
+        if (dist < nearestDist) {
+          nearestDist = dist;
+          nearest = star.id;
+        }
+      }
+      if (nearest && !used.has(pt.id)) {
+        mapping[pt.id] = nearest;
+        used.add(pt.id);
+      }
+    });
+    backgroundIdToStarIdRef.current = mapping;
+    if (typeof window !== 'undefined') {
+      (window as any).__galaxyHighlightMap = mapping;
+    }
+  }, [constellationStars]);
 
   const handleBgPointsReady = React.useCallback((pts: Array<{x:number;y:number;size:number}>) => {
     domStarPointsRef.current = pts;
   }, []);
+
+  const highlightFallback = React.useMemo(() => litPaletteRef.current?.core ?? '#FFE2B0', [litPaletteRef.current]);
+
+  const mapHighlightsToStars = React.useCallback((points: Array<{id?:string;x:number;y:number;color?:string;litColor?:string}>) => {
+    const matches: Array<{ starId: string; color: string }> = [];
+    const mapping = backgroundIdToStarIdRef.current;
+    const fallbackColor = litPaletteRef.current?.core ?? '#FFE2B0';
+    points.forEach(pt => {
+      if (!pt?.id) return;
+      const starId = mapping[pt.id];
+      if (!starId) return;
+      const highlight = constellationHighlights[starId]?.color;
+      const sourceColor = normalizeHex(highlight ?? fallbackColor) ?? fallbackColor;
+      matches.push({ starId, color: sourceColor });
+    });
+    if (typeof window !== 'undefined') {
+      (window as any).__galaxyMappedHighlights = matches;
+    }
+    return matches;
+  }, [constellationHighlights]);
+  const resolveBandHighlight = React.useCallback((bandId?: string, _source?: { color?: string; litColor?: string }) => {
+    if (bandId) {
+      const starId = backgroundIdToStarIdRef.current[bandId];
+      if (starId) {
+        const highlight = constellationHighlights[starId];
+        if (highlight?.color) {
+          return highlight.color;
+        }
+      }
+    }
+    return litPaletteRef.current?.core ?? '#FFE2B0';
+  }, [constellationHighlights]);
+
+  const colorizeBandPoints = React.useCallback((points: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>) => {
+    return points.map(point => {
+      const resolved = resolveBandHighlight(point.id, point);
+      const normalized = normalizeHex(resolved) ?? (litPaletteRef.current?.core ?? '#FFE2B0');
+      return {
+        ...point,
+        color: normalized,
+        litColor: normalized,
+      };
+    });
+  }, [resolveBandHighlight]);
 
   return (
     <>
@@ -784,12 +873,19 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         scale={params.galaxyScale}
         rotateEnabled={rotateEnabled}
         config={glowCfg}
+        resolveHighlightColor={resolveBandHighlight}
         onPersistHighlights={(points) => {
-          if (!points.length) return
+      if (!points.length) {
+        return;
+      }
+          if (process.env.NODE_ENV !== 'production') {
+            console.debug('[InteractiveGalaxyBackground] persist highlights', points);
+          }
+          const coloredPoints = colorizeBandPoints(points);
           setPersistentHighlights(prev => {
             const map = new Map<string, typeof points[number]>()
-            prev.forEach(item => map.set(item.id, item))
-            points.forEach(item => {
+            colorizeBandPoints(prev).forEach(item => map.set(item.id, item))
+            coloredPoints.forEach(item => {
               if (map.has(item.id)) {
                 map.delete(item.id)
               }
@@ -801,6 +897,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             }
             return merged
           })
+          const mapped = mapHighlightsToStars(coloredPoints);
+          if (mapped.length) {
+            setGalaxyHighlights(mapped);
+          }
         }}
       />
       {/* 调色面板（可开关），用于快速调整与开关结构着色 */}

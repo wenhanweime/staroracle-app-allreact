@@ -11,6 +11,17 @@ import { instantiateTemplate } from '../utils/constellationTemplates';
 import { getRandomInspirationCard, InspirationCard, GalaxyRegion } from '../utils/inspirationCards';
 import { ConstellationTemplate } from '../types';
 
+const normalizeHighlightHex = (color: unknown): string => {
+  if (!color && color !== 0) return '#FFFFFF';
+  let value = typeof color === 'string' ? color.trim() : String(color).trim();
+  if (!value.startsWith('#')) return '#FFFFFF';
+  if (value.length === 4) {
+    value = `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+  }
+  if (value.length !== 7) return '#FFFFFF';
+  return value.toUpperCase();
+};
+
 interface StarPosition {
   x: number;
   y: number;
@@ -20,6 +31,7 @@ interface StarState {
   constellation: Constellation;
   activeStarId: string | null;
   highlightedStarId: string | null;
+  galaxyHighlights: Record<string, { color: string }>;
   isAsking: boolean;
   isLoading: boolean; // New state to track loading during star creation
   pendingStarPosition: StarPosition | null;
@@ -38,6 +50,7 @@ interface StarState {
   applyTemplate: (template: ConstellationTemplate) => void;
   clearConstellation: () => void;
   updateStarTags: (starId: string, newTags: string[]) => void;
+  setGalaxyHighlights: (entries: Array<{ starId: string; color: string }>) => void;
 }
 
 // Generate initial empty constellation
@@ -60,6 +73,7 @@ export const useStarStore = create<StarState>((set, get) => {
     constellation: generateEmptyConstellation(),
     activeStarId: null, // 确保初始状态为null
     highlightedStarId: null,
+    galaxyHighlights: {},
     isAsking: false,
     isLoading: false, // Initialize loading state as false
     pendingStarPosition: null,
@@ -268,6 +282,17 @@ export const useStarStore = create<StarState>((set, get) => {
         pendingStarPosition: position ?? null,
       });
     },
+
+    setGalaxyHighlights: (entries) => {
+      const next: Record<string, { color: string }> = {};
+      entries.forEach(({ starId, color }) => {
+        next[starId] = { color: normalizeHighlightHex(color) };
+      });
+      set({ galaxyHighlights: next });
+      if (typeof window !== 'undefined') {
+        (window as any).__galaxyHighlights = next;
+      }
+    },
     
     regenerateConnections: () => {
       const { constellation } = get();
@@ -322,6 +347,7 @@ export const useStarStore = create<StarState>((set, get) => {
         constellation: generateEmptyConstellation(),
         activeStarId: null,
         highlightedStarId: null,
+        galaxyHighlights: {},
         hasTemplate: false,
         templateInfo: null,
       });

@@ -1,7 +1,29 @@
 import React from 'react';
 import { motion } from 'framer-motion';
+import { useStarStore } from '../store/useStarStore';
+
+const normalizeHex = (hex: unknown) => {
+  if (!hex && hex !== 0) return '#FFFFFF';
+  let value = typeof hex === 'string' ? hex.trim() : String(hex).trim();
+  if (!value.startsWith('#')) return '#FFFFFF';
+  if (value.length === 4) {
+    value = `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+  }
+  if (value.length !== 7) return '#FFFFFF';
+  return value.toUpperCase();
+};
+
+const hexToRgba = (hex: string, alpha: number) => {
+  const normalized = normalizeHex(hex);
+  const r = parseInt(normalized.slice(1, 3), 16);
+  const g = parseInt(normalized.slice(3, 5), 16);
+  const b = parseInt(normalized.slice(5, 7), 16);
+  const clamped = Math.max(0, Math.min(1, alpha));
+  return `rgba(${r}, ${g}, ${b}, ${clamped})`;
+};
 
 interface StarProps {
+  id: string;
   x: number;
   y: number;
   size: number;
@@ -17,6 +39,7 @@ interface StarProps {
 }
 
 const Star: React.FC<StarProps> = ({
+  id,
   x,
   y,
   size,
@@ -30,6 +53,23 @@ const Star: React.FC<StarProps> = ({
   category = 'existential',
   connectionCount = 0,
 }) => {
+  const highlightColor = useStarStore(React.useCallback(state => state.galaxyHighlights[id]?.color ?? null, [id]));
+  const normalizedHighlight = React.useMemo(() => highlightColor ? normalizeHex(highlightColor) : null, [highlightColor]);
+  const highlightGlowPrimary = React.useMemo(() => normalizedHighlight ? hexToRgba(normalizedHighlight, 0.6) : null, [normalizedHighlight]);
+  const highlightGlowSecondary = React.useMemo(() => normalizedHighlight ? hexToRgba(normalizedHighlight, 0.35) : null, [normalizedHighlight]);
+  const isForegroundHighlighted = isActive || isHighlighted || !!normalizedHighlight;
+  const targetOpacity = React.useMemo(() => {
+    if (isGrowing) return 1;
+    if (isForegroundHighlighted) return 1;
+    return brightness;
+  }, [isGrowing, isForegroundHighlighted, brightness]);
+
+  const containerBoxShadow = normalizedHighlight
+    ? `0 0 16px ${highlightGlowPrimary}, 0 0 32px ${highlightGlowSecondary}`
+    : isHighlighted
+      ? '0 0 8px rgba(255, 255, 255, 0.45)'
+      : 'none';
+
   return (
     // 1. 外部定位容器：负责精确定位在坐标系中
     <div
@@ -56,7 +96,7 @@ const Star: React.FC<StarProps> = ({
         className={`star-container ${isActive ? 'pulse' : ''} ${isSpecial ? 'special twinkle' : ''} ${isHighlighted ? 'highlighted' : ''}`}
         initial={{ opacity: 0, scale: 0 }}
         animate={{ 
-          opacity: isGrowing ? 1 : brightness,
+          opacity: targetOpacity,
           scale: isGrowing ? 2 : 1,
         }}
         whileHover={{ scale: isGrowing ? 2 : 1.5, opacity: 1 }}
@@ -67,10 +107,10 @@ const Star: React.FC<StarProps> = ({
           display: 'flex',
           justifyContent: 'center',
           alignItems: 'center',
-          boxShadow: isHighlighted
-            ? '0 0 20px rgba(215, 180, 255, 0.65), 0 0 38px rgba(150, 110, 235, 0.4)'
-            : 'none',
-          transition: 'box-shadow 0.3s ease, transform 0.3s ease, opacity 0.3s ease',
+          background: normalizedHighlight ? hexToRgba(normalizedHighlight, 0.18) : isHighlighted ? 'transparent' : 'inherit',
+          border: normalizedHighlight ? `1px solid ${hexToRgba(normalizedHighlight, 0.6)}` : isHighlighted ? '1px solid rgba(255, 255, 255, 0.35)' : 'none',
+          boxShadow: containerBoxShadow,
+          transition: 'box-shadow 0.25s ease, border 0.25s ease, transform 0.3s ease, opacity 0.3s ease, background 0.25s ease',
         }}
       >
         {/* 3. 星星核心：实际的星星视觉效果 */}
@@ -79,13 +119,17 @@ const Star: React.FC<StarProps> = ({
           style={{
             width: '100%',
             height: '100%',
-            background: 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,236,255,0.9) 50%, rgba(210,210,255,0.3) 100%)',
+            background: normalizedHighlight
+              ? `radial-gradient(circle, ${hexToRgba(normalizedHighlight, 0.95)} 0%, ${hexToRgba(normalizedHighlight, 0.55)} 55%, ${hexToRgba(normalizedHighlight, 0.15)} 100%)`
+              : isHighlighted
+                ? 'transparent'
+                : 'radial-gradient(circle, rgba(255,255,255,1) 0%, rgba(236,236,255,0.9) 50%, rgba(210,210,255,0.3) 100%)',
             borderRadius: '50%',
-            filter: isActive || isHighlighted ? 'blur(0)' : 'blur(1px)',
-            boxShadow: isHighlighted
-              ? '0 0 18px rgba(205, 176, 255, 0.75), 0 0 34px rgba(150, 120, 235, 0.5)'
+            filter: isForegroundHighlighted ? 'blur(0)' : 'blur(1px)',
+            boxShadow: normalizedHighlight
+              ? `0 0 18px ${hexToRgba(normalizedHighlight, 0.7)}, 0 0 32px ${hexToRgba(normalizedHighlight, 0.4)}`
               : '0 0 8px rgba(255, 255, 255, 0.45)',
-            transition: 'box-shadow 0.3s ease, filter 0.3s ease',
+            transition: 'box-shadow 0.25s ease, filter 0.25s ease, background 0.25s ease',
           }}
         />
         

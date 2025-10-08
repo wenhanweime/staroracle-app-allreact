@@ -18,9 +18,10 @@ interface Props {
   config?: GlowConfig
   onLight?: ()=>void
   onPersistHighlights?: (points: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>) => void
+  resolveHighlightColor?: (bandId?: string, source?: { color?: string; litColor?: string }) => string | null
 }
 
-type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string; source?: { type:'band' | 'bg'; data: any } }
+type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string; litColor?: string; source?: { type:'band' | 'bg'; data: any } }
 type Candidate = {
   x:number
   y:number
@@ -39,8 +40,18 @@ const hexToRgb = (hex:string)=>{
 }
 const rgbToHex = (r:number,g:number,b:number)=> '#'+[r,g,b].map(v=>Math.max(0,Math.min(255,v)).toString(16).padStart(2,'0')).join('')
 const lighten = (hex:string, t:number)=>{ const {r,g,b}=hexToRgb(hex); return rgbToHex(r + (255-r)*t, g + (255-g)*t, b + (255-b)*t) }
+const normalizeHex = (hex: unknown): string | null => {
+  if (!hex && hex !== 0) return null
+  let value = typeof hex === 'string' ? hex.trim() : String(hex).trim()
+  if (!value.startsWith('#')) return null
+  if (value.length === 4) {
+    value = `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`
+  }
+  if (value.length !== 7) return null
+  return value.toUpperCase()
+}
 
-const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight, onPersistHighlights }) => {
+const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight, onPersistHighlights, resolveHighlightColor }) => {
   const [pulses, setPulses] = useState<Pulse[]>([])
   const rootRef = useRef<HTMLDivElement|null>(null)
   const highlightTimerRef = useRef<number | null>(null)
@@ -71,6 +82,13 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const bpts = bandPointsRef?.current || []
       const cx = w/2, cy = h/2
       const now = performance.now()
+      const getPulseColor = (candidate: Candidate): string => {
+        const bandId = candidate.__source?.type === 'band' ? candidate.__source.data?.id : undefined
+        const resolved = resolveHighlightColor?.(bandId, candidate.__source?.data ?? candidate)
+        const normalizedHighlight = normalizeHex(resolved)
+        if (normalizedHighlight) return normalizedHighlight
+        return '#FFE2B0'
+      }
       const bgCandidates: Candidate[] = (pts as any[]).map((p:any)=>({
         x: p.x,
         y: p.y,
@@ -120,7 +138,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           const p = arr.shift()!
           const durBase = (config?.durationMs ?? 850)
           const dur = durBase * (0.45 + 0.4*Math.random())
-          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: key, source: p.__source })
+          const pulseColor = getPulseColor(p)
+          chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: pulseColor, litColor: pulseColor, source: p.__source })
         }
       }
       // 将剩余名额优先分配给有色组，再分配给灰色组
@@ -134,8 +153,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             const p = arr.shift()!
             const durBase = (config?.durationMs ?? 850)
             const dur = durBase * (0.45 + 0.4*Math.random())
-            const color = key === greyKey ? '#CCCCCC' : key
-            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color, source: p.__source })
+            const pulseColor = getPulseColor(p)
+            chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: pulseColor, litColor: pulseColor, source: p.__source })
           }
           idx++
           // 防止死循环：如果所有数组都空了就退出
@@ -151,13 +170,32 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           .filter((src): src is { type:'band'; data:any } => !!src && src.type === 'band')
           .map(src => src.data)
           .filter(Boolean)
-        const unique = new Map<string, any>()
+        const uniqueById = new Map<string, any>()
         for (const pt of bandSelected) {
-          if (pt && pt.id && !unique.has(pt.id)) {
-            unique.set(pt.id, pt)
+          if (pt && pt.id && !uniqueById.has(pt.id)) {
+            uniqueById.set(pt.id, pt)
           }
         }
-        const limited = Array.from(unique.values()).slice(0, 12)
+        let limited = Array.from(uniqueById.values()).slice(0, 12)
+        if (!limited.length) {
+          limited = transformed.slice(0, 12).map((p, idx) => {
+            const color = getPulseColor(p)
+            return {
+              id: `fallback-${Date.now()}-${idx}`,
+              band: 0,
+              x: p.x,
+              y: p.y,
+              size: p.size,
+              color,
+              litColor: color,
+            }
+          })
+        } else {
+          limited = limited.map((p:any) => {
+            const color = getPulseColor(p)
+            return { ...p, color, litColor: color }
+          })
+        }
         if (highlightTimerRef.current) {
           clearTimeout(highlightTimerRef.current)
           highlightTimerRef.current = null
@@ -172,6 +210,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             color: p.color,
             litColor: p.litColor
           }))
+          if (typeof window !== 'undefined') {
+            (window as any).__galaxyOverlayPayload = payload;
+          }
           const longestDur = Math.max(...chosen.map(c => c.dur), 0)
           const delay = Math.max(0, longestDur - 80)
           highlightTimerRef.current = window.setTimeout(() => {
@@ -203,7 +244,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           >
             {/* 超亮高亮点：彩色大光晕 + 白色小核心 */}
             {(()=>{
-              const base = ((p as any).litColor || p.color || '#CCCCCC')
+              const base = normalizeHex(p.litColor || p.color) || '#FFE2B0'
               const hi = lighten(base, 0.65) // 显著提亮
               const coreSize = Math.max(2, p.size * 1.4)
               const haloSize = Math.max(coreSize*2.2, p.size * 3.2)

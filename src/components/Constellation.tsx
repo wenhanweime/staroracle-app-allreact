@@ -7,6 +7,8 @@ const prefersReducedMotion = typeof window !== 'undefined' && window.matchMedia 
 import Star from './Star';
 import StarRayIcon from './StarRayIcon';
 
+const DEFAULT_HIGHLIGHT_COLOR = '#FFE2B0';
+
 const Constellation: React.FC = () => {
   const { 
     constellation, 
@@ -17,7 +19,8 @@ const Constellation: React.FC = () => {
     drawInspirationCard,
     pendingStarPosition,
     isLoading,
-    lastCreatedStarId
+    lastCreatedStarId,
+    setGalaxyHighlights
   } = useStarStore();
   
   // 添加聊天状态检查
@@ -29,6 +32,12 @@ const Constellation: React.FC = () => {
   const [sparkles, setSparkles] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const [convergeParticles, setConvergeParticles] = useState<Array<{ id: number; x: number; y: number }>>([]);
   const [lastClickTime, setLastClickTime] = useState(0);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__constellationStars = constellation.stars;
+    }
+  }, [constellation.stars]);
   
   useEffect(() => {
     const updateDimensions = () => {
@@ -51,8 +60,23 @@ const Constellation: React.FC = () => {
   const handleStarClick = (id: string) => {
     playSound('starClick');
     viewStar(id);
+    setGalaxyHighlights([{ starId: id, color: DEFAULT_HIGHLIGHT_COLOR }]);
   };
-  
+
+  useEffect(() => {
+    if (activeStarId) {
+      setGalaxyHighlights([{ starId: activeStarId, color: DEFAULT_HIGHLIGHT_COLOR }]);
+    } else {
+      setGalaxyHighlights([]);
+    }
+  }, [activeStarId, setGalaxyHighlights]);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      (window as any).__constellationStars = constellation.stars;
+    }
+  }, [constellation.stars]);
+
   const createSparkle = (x: number, y: number) => {
     const id = Date.now();
     setSparkles(current => [...current, { id, x, y }]);
@@ -575,6 +599,7 @@ const Constellation: React.FC = () => {
         
         return (
           <Star
+            id={star.id}
             key={star.id}
             x={pixelX}
             y={pixelY}
