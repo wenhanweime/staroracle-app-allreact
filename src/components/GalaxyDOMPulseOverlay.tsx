@@ -167,9 +167,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             uniqueById.set(pt.id, pt)
           }
         }
-        let limited = Array.from(uniqueById.values()).slice(0, 12)
-        if (!limited.length) {
-          limited = transformed.slice(0, 12).map((p, idx) => {
+        let toPersist = Array.from(uniqueById.values())
+        if (!toPersist.length) {
+          toPersist = transformed.slice(0, 12).map((p, idx) => {
             const color = getPulseColor(p)
             return {
               id: `fallback-${Date.now()}-${idx}`,
@@ -182,7 +182,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             }
           })
         } else {
-          limited = limited.map((p:any) => {
+          toPersist = toPersist.map((p:any) => {
             const color = getPulseColor(p)
             return { ...p, color, litColor: color }
           })
@@ -191,8 +191,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           clearTimeout(highlightTimerRef.current)
           highlightTimerRef.current = null
         }
-        if (limited.length) {
-          const payload = limited.map((p:any) => ({
+        if (toPersist.length) {
+          const payload = toPersist.map((p:any) => ({
             id: p.id,
             band: p.band,
             x: p.x,

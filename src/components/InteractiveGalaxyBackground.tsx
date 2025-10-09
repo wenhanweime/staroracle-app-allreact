@@ -321,39 +321,16 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const litPaletteDefault: typeof defaultPalette = {
     core: '#FFE2B0',
     ridge: '#FFFFFF',
-    armBright: '#0056d6',
-    armEdge: '#5A8BFF',
-    dust: '#0042a9',
-    outer: '#9CB1E8',
+    armBright: '#FFFFFF',
+    armEdge: '#FFFFFF',
+    dust: '#FFFFFF',
+    outer: '#FFFFFF',
   }
   const [litPalette, setLitPalette] = useState<typeof defaultPalette>(litPaletteDefault)
   const litPaletteRef = useRef(litPalette)
   useEffect(()=>{ litPaletteRef.current = litPalette }, [litPalette])
   const [persistentHighlights, setPersistentHighlights] = useState<Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>>([])
-  // 载入保存的默认配置（若存在），覆盖初始 palette/litPalette/params/structureColoring
-  useEffect(() => {
-    try {
-      const sp = localStorage.getItem('galaxy.default.palette')
-      const spl = localStorage.getItem('galaxy.default.palette.lit')
-      const sparams = localStorage.getItem('galaxy.default.params')
-      const scolor = localStorage.getItem('galaxy.default.structureColoring')
-      if (sp) {
-        const obj = JSON.parse(sp)
-        setPalette((prev)=> ({ ...prev, ...obj }))
-      }
-      if (spl) {
-        const obj = JSON.parse(spl)
-        setLitPalette((prev)=> ({ ...prev, ...obj }))
-      }
-      if (sparams) {
-        const obj = JSON.parse(sparams)
-        setParams((prev)=> ({ ...prev, ...obj }))
-      }
-      if (scolor) {
-        setStructureColoring(JSON.parse(scolor))
-      }
-    } catch {}
-  }, [])
+  // 不再从 localStorage 读取，保持默认配置
   // 每层透明度（仅显示层）
   const [layerAlpha, setLayerAlpha] = useState<typeof defaultLayerAlpha>(defaultLayerAlpha);
   const layerAlphaRef = useRef(layerAlpha);
@@ -946,13 +923,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onReset={()=> setPalette(defaultPalette)}
         structureColoring={structureColoring}
         onToggleColoring={setStructureColoring}
-        onSaveDefaults={()=>{
-          try {
-            localStorage.setItem('galaxy.default.palette', JSON.stringify(paletteRef.current))
-            localStorage.setItem('galaxy.default.params', JSON.stringify(paramsRef.current))
-            localStorage.setItem('galaxy.default.structureColoring', JSON.stringify(structureColoring))
-          } catch {}
-        }}
+        onSaveDefaults={() => {}}
         buttonLabel="调色"
         title="结构着色与调色（基础）"
         iosButtonBottomRem={9}
@@ -965,9 +936,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         onReset={()=> setLitPalette(litPaletteDefault)}
         structureColoring={structureColoring}
         onToggleColoring={setStructureColoring}
-        onSaveDefaults={()=>{
-          try { localStorage.setItem('galaxy.default.palette.lit', JSON.stringify(litPaletteRef.current)) } catch {}
-        }}
+        onSaveDefaults={() => {}}
         buttonLabel="高亮配色"
         title="高亮配色（点亮区域）"
         iosButtonBottomRem={12}
