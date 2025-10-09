@@ -90,21 +90,6 @@ const normalizeHex = (hex: unknown) => {
   if (value.length !== 7) return '#FFFFFF'
   return value.toUpperCase()
 }
-const hexToRgba = (hex:string, alpha:number)=>{
-  const {r,g,b} = hexToRgb(normalizeHex(hex))
-  const a = Math.max(0, Math.min(1, alpha))
-  return `rgba(${r}, ${g}, ${b}, ${a})`
-}
-const lighten = (hex:string, amount:number)=>{
-  const {r,g,b} = hexToRgb(normalizeHex(hex))
-  const clamp = (v:number)=> Math.max(0, Math.min(255, Math.round(v)))
-  const mix = (channel:number)=> clamp(channel + (255 - channel) * amount)
-  return rgbToHex(mix(r), mix(g), mix(b))
-}
-const lightenToRgba = (hex:string, amount:number, alpha:number)=>{
-  return hexToRgba(lighten(hex, amount), alpha)
-}
-
 const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady, persistentHighlights = [] }) => {
   const rootRef = useRef<HTMLDivElement|null>(null)
   const [dims, setDims] = useState({w:0,h:0})
@@ -254,11 +239,22 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
     return `${fullRotationSeconds()}s`
   }
 
+  const highlightMap = useMemo(() => {
+    const map = new Map<string, string>()
+    persistentHighlights.forEach(h => {
+      const normalized = normalizeHex(h.color || h.litColor || '#FFE2B0')
+      if (h.id) {
+        map.set(h.id, normalized)
+      }
+    })
+    return map
+  }, [persistentHighlights])
+
   return (
     <div ref={rootRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
       {/* 缩放容器：仅缩放银河环，不缩放背景星 */}
       <div
-        style={{ position:'absolute', inset:0, transformOrigin:'50% 50%', transform: `scale(${scale||1})` }}
+        style={{ position:'absolute', inset:0, transformOrigin:'50% 50%', transform: `scale(${scale||1})`, zIndex: 1 }}
       >
       {Array.from({length:ringCount}).map((_,ri)=> (
         <div key={ri}
@@ -268,40 +264,20 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
             animation: `glx-rot ${ringDur(ri)} linear infinite`
           }}
         >
-          {stars.filter(s=>s.ring===ri).map((s)=> (
-            <div key={s.id}
-              style={{
-                position:'absolute', left: s.x, top: s.y, transform:'translate(-50%,-50%)',
-                width: `${s.size}px`, height: `${s.size}px`, borderRadius:'50%',
-                background: s.color,
-                boxShadow: `0 0 6px ${s.color}AA, 0 0 12px ${s.color}66`,
-                opacity: 0.95
-              }}/>
-          ))}
-          {persistentHighlights.filter(h=>h.band===ri).map(h => {
-            const baseColor = normalizeHex(h.color || h.litColor || '#FFE2B0')
-            const coreRgba = hexToRgba(baseColor, 0.96)
-            const haloInner = hexToRgba(baseColor, 0.52)
-            const haloOuter = hexToRgba(baseColor, 0.18)
-            const edgeGlow = hexToRgba(baseColor, 0.36)
+          {stars.filter(s=>s.ring===ri).map((s)=> {
+            const highlightColor = highlightMap.get(s.id)
+            const baseColor = highlightColor || s.color
+            const zIndex = highlightColor ? 3 : 1
             return (
-              <div
-                key={`hl-${h.id}`}
+              <div key={s.id}
                 style={{
-                  position:'absolute',
-                  left: h.x,
-                  top: h.y,
-                  transform:'translate(-50%,-50%)',
-                  width: `${Math.max(h.size, 2.6)}px`,
-                  height: `${Math.max(h.size, 2.6)}px`,
-                  borderRadius:'50%',
-                  background: `radial-gradient(circle, ${coreRgba} 0%, ${haloInner} 62%, ${haloOuter} 100%)`,
-                  boxShadow: `0 0 18px ${edgeGlow}, 0 0 36px ${haloOuter}`,
-                  opacity: 0.98,
-                  pointerEvents: 'none',
-                  transition: 'opacity 0.3s ease'
-                }}
-              />
+                  position:'absolute', left: s.x, top: s.y, transform:'translate(-50%,-50%)',
+                  width: `${s.size}px`, height: `${s.size}px`, borderRadius:'50%',
+                  background: baseColor,
+                  boxShadow: `0 0 6px ${baseColor}AA, 0 0 12px ${baseColor}66`,
+                  opacity: 0.95,
+                  zIndex
+                }}/>
             )
           })}
         </div>
@@ -320,7 +296,8 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
             height:`${b.size}px`,
             borderRadius:'50%',
             background:'#CCCCCC',
-            opacity:0.85
+            opacity:0.85,
+            zIndex: 0
           }}
         />
       ))}
