@@ -313,7 +313,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const rotateRef = useRef(rotateEnabled);
   useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
   // 结构着色开关：按星系结构分类上色（默认关闭，保持白星风格）
-  const [structureColoring, setStructureColoring] = useState(true);
+  const [structureColoring, setStructureColoring] = useState(false);
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);
