@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { generateStarFieldGrid, GalaxyParams, Palette } from '../utils/galaxyModel'
 import { UNIFORM_DEG_PER_MS, fullRotationSeconds } from '../utils/rotationConfig'
+import { useStableViewportSize } from '../hooks/useStableViewportSize'
 
 interface LayerAlpha { core:number; ridge:number; armBright:number; armEdge:number; dust:number; outer:number }
 
@@ -92,14 +93,10 @@ const normalizeHex = (hex: unknown) => {
 }
 const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layerAlpha, structureColoring=true, armCount=5, scale=0.6, onBandPointsReady, onBgPointsReady, persistentHighlights = [] }) => {
   const rootRef = useRef<HTMLDivElement|null>(null)
-  const [dims, setDims] = useState({w:0,h:0})
-  useEffect(()=>{
-    const onResize=()=>{
-      setDims({ w: window.innerWidth, h: window.innerHeight })
-    }
-    onResize(); window.addEventListener('resize', onResize)
-    return ()=> window.removeEventListener('resize', onResize)
-  },[])
+  const { width: viewportWidth, height: viewportHeight } = useStableViewportSize()
+  const dims = { w: viewportWidth, h: viewportHeight }
+  const containerHeight = dims.h || (typeof window !== 'undefined' ? window.innerHeight : 0)
+  const heightStyle = containerHeight ? `${containerHeight}px` : '100vh'
 
   const {stars, ringCount, bgStars} = useMemo(()=>{
     const w = dims.w, h = dims.h; if(!w||!h) return {stars:[], ringCount:0, bgStars:[]}
@@ -250,7 +247,11 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
   }, [persistentHighlights])
 
   return (
-    <div ref={rootRef} className="absolute inset-0 pointer-events-none" style={{ zIndex: 1 }}>
+    <div
+      ref={rootRef}
+      className="pointer-events-none"
+      style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: heightStyle, zIndex: 1 }}
+    >
       {/* 缩放容器：仅缩放银河环，不缩放背景星 */}
       <div
         style={{ position:'absolute', inset:0, transformOrigin:'50% 50%', transform: `scale(${scale||1})`, zIndex: 1 }}
