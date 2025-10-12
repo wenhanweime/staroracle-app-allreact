@@ -109,11 +109,7 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
     if (initialInput && initialInput.trim() && !hasProcessedInitialInput.current) {
       console.log('🔄 ChatOverlay接收到初始输入:', initialInput);
       hasProcessedInitialInput.current = true;
-      
-      // 自动发送初始输入
-      setTimeout(() => {
-        sendMessage(initialInput);
-      }, 300);
+      sendMessage(initialInput);
     }
   }, [initialInput]);
 
@@ -129,12 +125,10 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
   useEffect(() => {
     if (followUpQuestion && followUpQuestion.trim()) {
       console.log('🔄 ChatOverlay接收到后续问题:', followUpQuestion);
-      setTimeout(() => {
-        sendMessage(followUpQuestion);
-        if (onFollowUpProcessed) {
-          onFollowUpProcessed();
-        }
-      }, 200);
+      sendMessage(followUpQuestion);
+      if (onFollowUpProcessed) {
+        onFollowUpProcessed();
+      }
     }
   }, [followUpQuestion, onFollowUpProcessed]);
 
@@ -362,6 +356,12 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
     sendMessage(question);
   };
 
+  const baseTopOffset = 80;
+  const collapsedBottomOffset = Math.max(0, getAttachedBottomPosition());
+  const panelHeight = Math.max(320, viewportHeight - baseTopOffset);
+  const dragOffset = isOpen ? Math.max(0, dragY) : 0;
+  const dragOpacity = Math.max(0.9, 1 - dragOffset / 320);
+
   return (
     <>
       {/* 遮罩层 - 只在完全展开时显示 */}
@@ -373,39 +373,39 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
       />
 
       {/* 浮窗内容 - 关闭时吸附在底部，展开时全屏 */}
-      <motion.div 
-        ref={floatingRef}
-        className={`fixed shadow-2xl z-45 bg-gray-900 ${!isOpen ? 'cursor-pointer' : ''} ${
-          isOpen ? 'rounded-t-2xl' : 'rounded-full'
-        }`}
-        initial={false}
-        animate={{          
-          // 修复动画：使用一致的定位方式
-          top: isOpen ? Math.max(80, 80 + dragY) : window.innerHeight - getAttachedBottomPosition() - 65,
-          left: isOpen ? 0 : '50%',
-          right: isOpen ? 0 : 'auto',
-          // 移除bottom定位，只使用top定位
-          width: isOpen ? '100vw' : 'min(28rem, calc(100vw - 2rem))',
-          // 修复iOS键盘问题：使用实际视口高度
-          height: isOpen ? `${viewportHeight - Math.max(80, 80 + dragY)}px` : 65,
-          x: isOpen ? 0 : '-50%',
-          y: dragY * 0.15,
-          opacity: Math.max(0.9, 1 - dragY / 500)
-        }}
-        transition={{
-          type: 'spring',
-          damping: 25,
-          stiffness: 300,
-          duration: 0.3
-        }}
+      <div
+        className="fixed left-0 right-0 z-45 pointer-events-none"
         style={{
-          pointerEvents: 'auto'
+          top: isOpen ? baseTopOffset : 'auto',
+          bottom: isOpen ? 'auto' : collapsedBottomOffset,
+          height: isOpen ? panelHeight : 65
         }}
-        onTouchStart={isOpen ? handleTouchStart : undefined}
-        onTouchMove={isOpen ? handleTouchMove : undefined}
-        onTouchEnd={isOpen ? handleTouchEnd : undefined}
-        onMouseDown={isOpen ? handleMouseDown : undefined}
       >
+        <motion.div 
+          ref={floatingRef}
+          className={`shadow-2xl bg-gray-900 ${!isOpen ? 'cursor-pointer rounded-full' : 'rounded-t-2xl'}`}
+          style={{
+            width: isOpen ? '100%' : 'min(28rem, calc(100vw - 2rem))',
+            height: '100%',
+            margin: isOpen ? '0' : '0 auto',
+            pointerEvents: 'auto'
+          }}
+          initial={false}
+          animate={{
+            y: dragOffset,
+            opacity: dragOpacity
+          }}
+          transition={{
+            type: 'spring',
+            damping: 26,
+            stiffness: 260,
+            mass: 0.9
+          }}
+          onTouchStart={isOpen ? handleTouchStart : undefined}
+          onTouchMove={isOpen ? handleTouchMove : undefined}
+          onTouchEnd={isOpen ? handleTouchEnd : undefined}
+          onMouseDown={isOpen ? handleMouseDown : undefined}
+        >
         {/* 浮窗内容：关闭时显示简洁的吸附状态，展开时显示完整内容 */}
         {!isOpen && (
           <div 
@@ -510,7 +510,8 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
             </div>
           </>
         )}
-      </motion.div>
+        </motion.div>
+      </div>
     </>
   );
 };

@@ -26,7 +26,6 @@ import { useStarStore } from './store/useStarStore';
 import { useChatStore } from './store/useChatStore';
 import { ConstellationTemplate } from './types';
 import { checkApiConfiguration } from './utils/aiTaggingUtils';
-import { motion, AnimatePresence } from 'framer-motion';
 
 function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
@@ -85,10 +84,10 @@ function App() {
       setIsChatOverlayOpen(true);
     }
     
-    // 立即清空初始输入，确保不重复处理
+    // 在下一帧清空初始输入，确保不重复处理
     setTimeout(() => {
       setInitialChatInput('');
-    }, 500);
+    }, 0);
   };
 
   // ✨ 新增 handleSendMessage 函数
@@ -281,22 +280,13 @@ function App() {
   return (
     <>
       <div 
-        className="min-h-screen cosmic-bg overflow-hidden relative transition-all duration-500 ease-out"
-        style={{
-          transformStyle: 'preserve-3d',
-          perspective: '1000px',
-          transform: isChatOverlayOpen
-            ? 'scale(0.92) translateY(-15px) rotateX(4deg)' 
-            : 'scale(1) translateY(0px) rotateX(0deg)',
-          filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
-        }}
+        className="min-h-screen cosmic-bg overflow-hidden relative"
       >
         {/* Living Galaxy background */}
         {appReady && featureFlags.livingGalaxy && (
           <InteractiveGalaxyBackground
             quality="auto"
             reducedMotion={window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches}
-            debugControls={featureFlags.galaxyDebugControls}
             onCanvasClick={({ x, y, region }) => {
               // 与 Constellation 点击逻辑保持一致
               try {
@@ -314,63 +304,75 @@ function App() {
             }}
           />
         )}
-        
-        {/* Header - 现在包含三个元素在一行 */}
-        <Header 
-          onOpenDrawerMenu={handleOpenDrawerMenu}
-          onLogoClick={handleLogoClick}
+
+        <div
+          className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-300"
+          style={{
+            background: 'rgba(0, 0, 0, 0.35)',
+            opacity: isChatOverlayOpen ? 1 : 0
+          }}
         />
 
-        {/* User's constellation - 延迟渲染 */}
-        {appReady && <Constellation />}
-        
-        {/* Inspiration card */}
-        {currentInspirationCard && (
-          <InspirationCard
-            card={currentInspirationCard}
-            onDismiss={dismissInspirationCard}
-            onDeepDive={(q) => {
-              setDeepDiveQuestion(q);
-              setInitialChatInput(q);
-              setIsChatOverlayOpen(true);
-              // 关闭卡片
-              dismissInspirationCard();
-            }}
+        <div
+          className="relative z-10 transition-all duration-300 ease-out"
+        >
+          {/* Header - 现在包含三个元素在一行 */}
+          <Header 
+            onOpenDrawerMenu={handleOpenDrawerMenu}
+            onLogoClick={handleLogoClick}
           />
-        )}
-        
-        {/* Star detail modal */}
-        {appReady && <StarDetail />}
-        
-        {/* Star collection modal */}
-        <StarCollection 
-          isOpen={isCollectionOpen} 
-          onClose={handleCloseCollection} 
-        />
 
-        {/* Template selector modal */}
-        <ConstellationSelector
-          isOpen={isTemplateSelectorOpen}
-          onClose={handleCloseTemplateSelector}
-          onSelectTemplate={handleSelectTemplate}
-        />
+          {/* User's constellation - 延迟渲染 */}
+          {appReady && <Constellation />}
+          
+          {/* Inspiration card */}
+          {currentInspirationCard && (
+            <InspirationCard
+              card={currentInspirationCard}
+              onDismiss={dismissInspirationCard}
+              onDeepDive={(q) => {
+                setDeepDiveQuestion(q);
+                setInitialChatInput(q);
+                setIsChatOverlayOpen(true);
+                // 关闭卡片
+                dismissInspirationCard();
+              }}
+            />
+          )}
+          
+          {/* Star detail modal */}
+          {appReady && <StarDetail />}
+          
+          {/* Star collection modal */}
+          <StarCollection 
+            isOpen={isCollectionOpen} 
+            onClose={handleCloseCollection} 
+          />
 
-        {/* AI Configuration Panel */}
-        <AIConfigPanel
-          isOpen={isConfigOpen}
-          onClose={handleCloseConfig}
-        />
+          {/* Template selector modal */}
+          <ConstellationSelector
+            isOpen={isTemplateSelectorOpen}
+            onClose={handleCloseTemplateSelector}
+            onSelectTemplate={handleSelectTemplate}
+          />
 
-        {/* Drawer Menu */}
-        <DrawerMenu
-          isOpen={isDrawerMenuOpen}
-          onClose={handleCloseDrawerMenu}
-          onOpenSettings={handleOpenConfig}
-          onOpenTemplateSelector={handleOpenTemplateSelector}
-        />
+          {/* AI Configuration Panel */}
+          <AIConfigPanel
+            isOpen={isConfigOpen}
+            onClose={handleCloseConfig}
+          />
 
-        {/* Oracle Input for star creation */}
-        {featureFlags.oracleInputEnabled && <OracleInput />}
+          {/* Drawer Menu */}
+          <DrawerMenu
+            isOpen={isDrawerMenuOpen}
+            onClose={handleCloseDrawerMenu}
+            onOpenSettings={handleOpenConfig}
+            onOpenTemplateSelector={handleOpenTemplateSelector}
+          />
+
+          {/* Oracle Input for star creation */}
+          {featureFlags.oracleInputEnabled && <OracleInput />}
+        </div>
       </div>
       
       {/* Conversation Drawer - 移到外层，不受3D变换影响 */}

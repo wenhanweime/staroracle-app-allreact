@@ -1,6 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import HotspotOverlay from './HotspotOverlay';
-import VoronoiOverlay from './VoronoiOverlay';
 import GalaxyDOMPulseOverlay from './GalaxyDOMPulseOverlay';
 import GalaxyLightweight from './GalaxyLightweight';
 import { useGalaxyStore } from '../store/useGalaxyStore';
@@ -14,7 +12,6 @@ interface InteractiveGalaxyBackgroundProps {
   reducedMotion?: boolean;
   className?: string;
   onCanvasClick?: (payload: { x: number; y: number; region: 'emotion' | 'relation' | 'growth' }) => void;
-  debugControls?: boolean;
 }
 
 // Lightweight pseudo-noise (deterministic) to avoid extra dependencies
@@ -244,9 +241,12 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   reducedMotion = false,
   className,
   onCanvasClick,
-  debugControls = false,
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const baseViewportHeightRef = useRef<number>(typeof window !== 'undefined' ? window.innerHeight : 0);
+  const baseViewportWidthRef = useRef<number>(typeof window !== 'undefined' ? window.innerWidth : 0);
+  const KEYBOARD_HEIGHT_DROP = 160;
+  const ORIENTATION_WIDTH_DELTA = 120;
   const setGalaxyCanvasSize = useGalaxyStore(s=>s.setCanvasSize)
   const genHotspots = useGalaxyStore(s=>s.generateHotspots)
   const hoverHs = useGalaxyStore(s=>s.hoverAt)
@@ -287,13 +287,13 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     armTransitionSoftness: 7,
     jitterStrength: 25,
   } : defaultParams
-  const [params, setParams] = useState(initialParams);
+  const [params] = useState(initialParams);
   const paramsRef = useRef(params);
   useEffect(() => { paramsRef.current = params; }, [params]);
   // 星点默认使用偏灰白，避免纯白饱和（为交互提亮留余量）
   const starBaseColor = '#CCCCCC';
   // 闪烁动效配置（用于 ClickGlowOverlay）
-  const [glowCfg, setGlowCfg] = useState({
+  const [glowCfg] = useState({
     pickProb: 0.2,
     pulseWidth: 0.25,
     bandFactor: 0.12,
@@ -311,14 +311,12 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
 
   const renderAllRef = useRef<() => void>();
   // Rotation toggle: pause during debug by default
-  const [rotateEnabled, setRotateEnabled] = useState(true);
+  const [rotateEnabled] = useState(true);
   const rotateRef = useRef(rotateEnabled);
   useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
-  // 结构着色开关：按星系结构分类上色（默认开启以展示 default 色板）
-  const [structureColoring, setStructureColoring] = useState(true);
-  const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
-  const paletteRef = useRef(palette);
-  useEffect(() => { paletteRef.current = palette; }, [palette]);
+  // 结构着色常量：默认开启
+  const structureColoring = true;
+  const palette = defaultPalette;
   // Lit palette（点亮时的高亮配色，可独立调节与保存）
   const litPaletteDefault: typeof defaultPalette = {
     core: '#E3B787',     // 暖核：暗色对应的高亮暖金
@@ -329,13 +327,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     dust: '#3F3264',     // 尘埃：压暗后的紫灰
     outer: '#ACB9CF',    // 臂间/外围：淡灰蓝
   }
-  const [litPalette, setLitPalette] = useState<typeof defaultPalette>(litPaletteDefault)
-  const litPaletteRef = useRef(litPalette)
-  useEffect(()=>{ litPaletteRef.current = litPalette }, [litPalette])
+  const litPalette = litPaletteDefault;
   const [persistentHighlights, setPersistentHighlights] = useState<Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>>([])
   // 不再从 localStorage 读取，保持默认配置
   // 每层透明度（仅显示层）
-  const [layerAlpha, setLayerAlpha] = useState<typeof defaultLayerAlpha>(defaultLayerAlpha);
+  const [layerAlpha] = useState<typeof defaultLayerAlpha>(defaultLayerAlpha);
   const layerAlphaRef = useRef(layerAlpha);
   useEffect(() => { layerAlphaRef.current = layerAlpha; }, [layerAlpha]);
 
@@ -354,13 +350,27 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     const DPR = (window.devicePixelRatio || 1);
 
     const resize = () => {
-      const w = window.innerWidth;
-      const h = window.innerHeight;
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const widthDelta = Math.abs(viewportWidth - baseViewportWidthRef.current);
+
+      if (widthDelta > ORIENTATION_WIDTH_DELTA) {
+        baseViewportWidthRef.current = viewportWidth;
+        baseViewportHeightRef.current = viewportHeight;
+      } else if (viewportHeight > baseViewportHeightRef.current) {
+        baseViewportHeightRef.current = viewportHeight;
+      }
+
+      const targetHeightBase = baseViewportHeightRef.current || viewportHeight;
+      const heightDrop = targetHeightBase - viewportHeight;
+      const effectiveHeight = heightDrop > KEYBOARD_HEIGHT_DROP ? targetHeightBase : viewportHeight;
+
+      const w = viewportWidth;
+      const h = effectiveHeight;
       canvas.width = Math.floor(w * DPR);
       canvas.height = Math.floor(h * DPR);
       canvas.style.width = `${w}px`;
       canvas.style.height = `${h}px`;
-      const cw = Math.floor(w * DPR), ch = Math.floor(h * DPR)
       // 交互层与存储统一使用 CSS 像素尺寸，避免与 DPR 不一致
       setGalaxyCanvasSize(w, h)
       setGridSize(w, h)
@@ -521,7 +531,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
               const edgeT = 0.25;   // 臂边
               const dustOffset = 0.35 * aw;
               const dustHalf = 0.10 * aw * 0.5;
-              const pal = paletteRef.current;
+              const pal = palette;
               const al = layerAlphaRef?.current || defaultLayerAlpha;
               let fill = '#FFFFFF';
               let a = 1.0;
@@ -918,246 +928,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           }
         }}
       />
-      {/* 调色面板（可开关），用于快速调整与开关结构着色 */}
-      <PaletteTuner
-        palette={palette}
-        onApply={setPalette}
-        onReset={()=> setPalette(defaultPalette)}
-        structureColoring={structureColoring}
-        onToggleColoring={setStructureColoring}
-        onSaveDefaults={() => {}}
-        buttonLabel="调色"
-        title="结构着色与调色（基础）"
-        iosButtonBottomRem={9}
-        iosPanelBottomRem={12}
-      />
-      {/* 点亮配色面板 */}
-      <PaletteTuner
-        palette={litPalette}
-        onApply={setLitPalette}
-        onReset={()=> setLitPalette(litPaletteDefault)}
-        structureColoring={structureColoring}
-        onToggleColoring={setStructureColoring}
-        onSaveDefaults={() => {}}
-        buttonLabel="高亮配色"
-        title="高亮配色（点亮区域）"
-        iosButtonBottomRem={12}
-        iosPanelBottomRem={15}
-      />
-      {debugControls && (
-        <div className="fixed top-28 right-4 z-40 w-80 max-h-[70vh] overflow-y-auto rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10">
-          <div className="flex items-center justify-between mb-2">
-            <strong className="text-sm">银河参数（临时）</strong>
-            <div className="flex items-center gap-2">
-              <label className="text-xs flex items-center gap-1">
-                <input type="checkbox" checked={rotateEnabled} onChange={(e)=>setRotateEnabled(e.target.checked)} />
-                旋转
-              </label>
-              <label className="text-xs flex items-center gap-1">
-                <input type="checkbox" checked={structureColoring} onChange={(e)=>setStructureColoring(e.target.checked)} />
-                结构着色
-              </label>
-              <button className="text-xs opacity-70 hover:opacity-100" onClick={() => setParams(defaultParams)}>重置</button>
-            </div>
-          </div>
-          {structureColoring && (
-            <div className="mb-3 border-b border-white/10 pb-2">
-              <div className="text-xs opacity-80 mb-2">模块颜色与透明度（不影响参数，仅着色）</div>
-              {([
-                {k:'core', label:'核心'},
-                {k:'ridge', label:'臂脊'},
-                {k:'armBright', label:'臂内'},
-                {k:'armEdge', label:'臂边'},
-                {k:'dust', label:'尘埃'},
-                {k:'outer', label:'外围'},
-              ] as Array<{k:keyof typeof defaultPalette,label:string}>).map(({k,label}) => (
-                <div key={k as string} className="mb-2 flex items-center justify-between gap-2">
-                  <span className="text-xs">{label}</span>
-                  <input type="color" value={(palette as any)[k]}
-                    onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }} />
-                  <input type="text" value={(palette as any)[k]}
-                    onChange={(e)=>{ const v = e.target.value; setPalette(prev => ({...prev, [k]: v})); }}
-                    className="w-24 bg-transparent border border-white/10 rounded px-1 text-xs" />
-                  <div className="flex items-center gap-1">
-                    <span className="text-[10px] opacity-70">α</span>
-                    <input type="range" min={0} max={1} step={0.01}
-                      value={(layerAlpha as any)[k]}
-                      onChange={(e)=>{ const v = Number(e.target.value); setLayerAlpha(prev => ({...prev, [k]: v})); }}
-                      className="w-24" />
-                    <span className="text-[10px] opacity-70 w-8 text-right">{(layerAlpha as any)[k].toFixed(2)}</span>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          {/* 闪烁动效调试 */}
-          <div className="mt-3 border-b border-white/10 pb-2">
-            <div className="text-xs opacity-80 mb-2">闪烁调试（点击星变亮→回灰）</div>
-            {([
-              {k:'pickProb', min:0, max:0.5, step:0.01, label:'选中比例'},
-              {k:'pulseWidth', min:0.1, max:0.5, step:0.01, label:'脉冲宽度'},
-              {k:'bandFactor', min:0.05, max:0.3, step:0.005, label:'扩散软边系数'},
-              {k:'noiseFactor', min:0, max:0.2, step:0.005, label:'径向形变强度'},
-              {k:'edgeAlphaThresh', min:0, max:32, step:1, label:'掩膜边缘阈值'},
-              {k:'edgeExponent', min:1.0, max:2.5, step:0.05, label:'掩膜边缘幂'},
-              {k:'radiusFactor', min:0.01, max:0.12, step:0.001, label:'点击半径系数'},
-              {k:'minRadius', min:5, max:120, step:1, label:'最小点击半径(px)'},
-            ] as Array<{k: keyof typeof glowCfg, min:number, max:number, step:number, label:string}>).map(({k,min,max,step,label}) => (
-              <div key={k as string} className="mb-2">
-                <label className="text-xs flex justify-between">
-                  <span>{label}</span>
-                  <span className="opacity-80">{(glowCfg as any)[k]}</span>
-                </label>
-                <input type="range" min={min} max={max} step={step}
-                  value={(glowCfg as any)[k] as any}
-                  onChange={(e)=>{ const v = Number(e.target.value); setGlowCfg(prev=> ({...prev, [k]: v})); }}
-                  className="w-full" />
-              </div>
-            ))}
-          </div>
-          {(
-            [
-              {k:'coreDensity',min:0,max:1,step:0.01,label:'核心密度'},
-              {k:'coreRadius',min:5,max:100,step:1,label:'核心半径'},
-              {k:'galaxyScale',min:0.3,max:1.2,step:0.01,label:'整体缩放（银河占屏比例）'},
-              {k:'armCount',min:1,max:7,step:1,label:'旋臂数量'},
-              {k:'armDensity',min:0,max:1,step:0.01,label:'旋臂密度'},
-              {k:'spiralB',min:0.1,max:0.5,step:0.01,label:'螺旋紧密度'},
-              {k:'armWidthInner',min:5,max:80,step:1,label:'内侧宽度'},
-              {k:'armWidthOuter',min:20,max:140,step:1,label:'外侧宽度'},
-              {k:'armWidthGrowth',min:1,max:3,step:0.1,label:'宽度增长'},
-              {k:'interArmDensity',min:0,max:0.5,step:0.01,label:'臂间基础密度'},
-              {k:'armTransitionSoftness',min:1,max:100,step:0.5,label:'山坡平缓度'},
-              {k:'fadeStartRadius',min:0.2,max:1,step:0.01,label:'淡化起始'},
-              {k:'fadeEndRadius',min:1,max:1.8,step:0.01,label:'淡化结束'},
-              {k:'backgroundDensity',min:0,max:0.0006,step:0.00001,label:'背景密度'},
-              {k:'jitterStrength',min:0,max:40,step:1,label:'垂直抖动强度'},
-              {k:'jitterChaos',min:0,max:10,step:0.1,label:'抖动不规律度(Chaos)'},
-              {k:'jitterChaosScale',min:0.001,max:2,step:0.001,label:'抖动噪声尺度'},
-              {k:'densityNoiseScale',min:0.005,max:0.2,step:0.001,label:'密度噪声缩放(上限提升)'},
-              {k:'densityNoiseStrength',min:0,max:2,step:0.05,label:'密度噪声强度(上限提升)'},
-              {k:'armStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'旋臂星星大小'},
-              {k:'interArmStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'臂间星星大小'},
-              {k:'backgroundStarSizeMultiplier',min:0.5,max:2,step:0.1,label:'背景星星大小'},
-              {k:'backgroundSizeVariation',min:0.5,max:4,step:0.1,label:'背景星星大小变化'},
-              {k:'spiralA',min:2,max:20,step:1,label:'螺旋基准A'},
-            ] as Array<{k: keyof typeof defaultParams, min:number,max:number,step:number,label:string}>
-          ).map(({k,min,max,step,label}) => (
-            <div key={k as string} className="mb-2">
-              <label className="text-xs flex justify-between">
-                <span>{label}</span>
-                <span className="opacity-80">{(params as any)[k]}</span>
-              </label>
-              <input
-                type="range"
-                min={min}
-                max={max}
-                step={step}
-                value={(params as any)[k] as any}
-                onChange={(e) => {
-                  const v = Number(e.target.value);
-                  setParams(prev => ({ ...prev, [k]: (k==='armCount'||k==='spiralA') ? Math.round(v) : v } as typeof prev));
-                }}
-                className="w-full"
-              />
-            </div>
-          ))}
-          {structureColoring && (
-            <div className="mt-3">
-              <div className="text-xs opacity-80 mb-2">颜色波动（仅显示，不改算法）</div>
-              {([
-                {k:'colorJitterHue', min:0, max:30, step:1, label:'色相抖动(°)'},
-                {k:'colorJitterSat', min:0, max:0.3, step:0.01, label:'饱和度抖动'},
-                {k:'colorJitterLight', min:0, max:0.3, step:0.01, label:'亮度抖动'},
-                {k:'colorNoiseScale', min:0.005, max:0.2, step:0.005, label:'颜色噪声尺度'},
-              ] as Array<{k:keyof typeof defaultParams, min:number,max:number,step:number,label:string}>).map(({k,min,max,step,label}) => (
-                <div key={k as string} className="mb-2">
-                  <label className="text-xs flex justify-between">
-                    <span>{label}</span>
-                    <span className="opacity-80">{(params as any)[k]}</span>
-                  </label>
-                  <input type="range" min={min} max={max} step={step}
-                    value={(params as any)[k] as any}
-                    onChange={(e)=>{ const v=Number(e.target.value); setParams(prev=> ({...prev, [k]: v} as typeof prev)); }}
-                    className="w-full" />
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
     </>
   );
 };
 
 export default InteractiveGalaxyBackground;
-
-// 轻量调色面板（可折叠）
-const PaletteTuner: React.FC<{
-  palette: typeof defaultPalette;
-  onApply: (next: typeof defaultPalette)=>void;
-  onReset?: ()=>void;
-  structureColoring: boolean;
-  onToggleColoring: (v:boolean)=>void;
-  onSaveDefaults: ()=>void;
-  buttonLabel?: string;
-  title?: string;
-  iosButtonBottomRem?: number;
-  iosPanelBottomRem?: number;
-}> = ({ palette, onApply, onReset, structureColoring, onToggleColoring, onSaveDefaults, buttonLabel='调色', title='结构着色与调色', iosButtonBottomRem=9, iosPanelBottomRem=12 }) => {
-  const [open, setOpen] = useState(false)
-  const [draft, setDraft] = useState<typeof defaultPalette>(palette)
-  useEffect(()=>{ if(open) setDraft(palette) }, [open])
-  const isiOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
-  return (
-    <>
-      <button
-        className="fixed bottom-20 right-4 z-40 px-2 py-1 rounded bg-black/60 text-white text-xs border border-white/10 hover:bg-black/70"
-        style={ isiOS ? { bottom: `calc(${iosButtonBottomRem}rem + env(safe-area-inset-bottom, 0px))` } : undefined }
-        onClick={()=> setOpen(v=>!v)}
-      >{open ? `隐藏${buttonLabel}` : buttonLabel}</button>
-      {open && (
-        <div
-          className="fixed bottom-36 right-4 z-40 w-80 rounded-lg bg-black/70 backdrop-blur p-3 text-white border border-white/10 shadow-lg"
-          style={ isiOS ? { bottom: `calc(${iosPanelBottomRem}rem + env(safe-area-inset-bottom, 0px))` } : undefined }
-          onClick={(e)=> e.stopPropagation()}
-          onMouseDown={(e)=> e.stopPropagation()}
-          onPointerDown={(e)=> e.stopPropagation()}
-        >
-          <div className="flex items-center justify-between mb-2">
-            <strong className="text-sm">{title}</strong>
-            <div className="flex items-center gap-2">
-              <label className="text-xs flex items-center gap-1">
-                <input type="checkbox" checked={structureColoring} onChange={e=> onToggleColoring(e.target.checked)} /> 启用
-              </label>
-              <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onSaveDefaults(); }}>设为默认</button>
-              <button className="text-xs px-2 py-0.5 rounded bg-white/10 hover:bg-white/20" onClick={()=>{ onApply(draft); setOpen(false) }}>应用</button>
-              <button className="text-xs px-2 py-0.5 rounded bg-white/5 hover:bg-white/15" onClick={()=> setOpen(false)}>取消</button>
-            </div>
-          </div>
-          {([
-            {k:'core', label:'核心'},
-            {k:'ridge', label:'臂脊'},
-            {k:'armBright', label:'臂内'},
-            {k:'armEdge', label:'臂边'},
-            {k:'hii', label:'HII 区域'},
-            {k:'dust', label:'尘埃'},
-            {k:'outer', label:'臂间/外围'},
-          ] as Array<{k:keyof typeof defaultPalette,label:string}>).map(({k,label}) => (
-            <div key={k as string} className="mb-2 flex items-center justify-between gap-2"> 
-              <span className="text-xs w-16">{label}</span>
-              <input type="color" value={(draft as any)[k]}
-                onChange={(e)=>{ const v = e.target.value; setDraft(prev => ({...prev, [k]: v})); }} />
-              <input type="text" value={(draft as any)[k]}
-                onChange={(e)=>{ const v = e.target.value; setDraft(prev => ({...prev, [k]: v})); }}
-                className="flex-1 bg-transparent border border-white/10 rounded px-1 text-xs" />
-            </div>
-          ))}
-          <div className="mt-2 flex justify-end">
-            <button className="text-xs opacity-80 hover:opacity-100" onClick={()=>{ onReset && onReset() }}>重置默认</button>
-          </div>
-        </div>
-      )}
-    </>
-  )
-}

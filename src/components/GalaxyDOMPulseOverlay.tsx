@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { UNIFORM_DEG_PER_MS } from '../utils/rotationConfig'
+import { useStableViewportSize } from '../hooks/useStableViewportSize'
 
 interface GlowConfig {
   pickProb?: number
@@ -47,6 +48,9 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
   const rootRef = useRef<HTMLDivElement|null>(null)
   const highlightTimerRef = useRef<number | null>(null)
   const rotationStartRef = useRef<number>(typeof performance !== 'undefined' ? performance.now() : Date.now())
+  const { height: viewportHeight } = useStableViewportSize()
+  const containerHeight = viewportHeight || (typeof window !== 'undefined' ? window.innerHeight : 0)
+  const heightStyle = containerHeight ? `${containerHeight}px` : '100vh'
 
   useEffect(() => {
     rotationStartRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
@@ -229,7 +233,11 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
   }, [pointsRef, bandPointsRef, rotateEnabled, scale, config, onPersistHighlights])
 
   return (
-    <div ref={rootRef} className="absolute inset-0 pointer-events-auto z-10">
+    <div
+      ref={rootRef}
+      className="pointer-events-auto"
+      style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: heightStyle, zIndex: 10 }}
+    >
       <AnimatePresence>
         {pulses.map(p => {
           const base = normalizeHex(p.litColor || p.color) || '#FFE2B0'
