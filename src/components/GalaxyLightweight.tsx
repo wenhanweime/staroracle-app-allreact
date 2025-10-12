@@ -172,6 +172,7 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
       ['ridge', (palette as any).ridge],
       ['armBright', (palette as any).armBright],
       ['armEdge', (palette as any).armEdge],
+      ['hii', (palette as any).hii],
       ['dust', (palette as any).dust],
       ['outer', (palette as any).outer],
     ]
@@ -182,13 +183,11 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
       if (base && lit) palMap[base] = lit
     }
     const litCore = normalizeHex((litPalette as any)?.core || palette.core || '#FFE2B0')
-    palMap['#F08CD3'] = litCore
-    palMap['#f08cd3'] = litCore
 
     const stars = colored.map((s:any, idx:number)=>{
       const original = arr[idx] as any
       const baseOriginal = normalizeHex(original?.color || (s as any).color || '')
-      const lit = baseOriginal ? (palMap[baseOriginal] || normalizeHex((litPalette as any)?.core || baseOriginal)) : normalizeHex((litPalette as any)?.core || '#FFE2B0')
+      const lit = baseOriginal ? (palMap[baseOriginal] || litCore) : litCore
       return {
         id: `s-${idx}`,
         x: s.x,

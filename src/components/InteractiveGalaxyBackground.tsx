@@ -134,10 +134,11 @@ const defaultParams = {
 // 模块颜色默认值（结构着色用）
 // 天体物理写实配色（白脊+蓝臂+紫红HII+黑尘+暖核+灰蓝臂间）
 const defaultPalette = {
-  core: '#7A5022',     // 暖核：继续压暗的琥珀金
+  core: '#5A4E41',     // 暖核：偏灰的暖棕
   ridge: '#5B5E66',    // 臂脊：更暗的冷灰脊线
   armBright: '#28457B',// 臂内：再降亮度的蓝调
   armEdge: '#245B88',  // 臂边：更深的青蓝
+  hii: '#3C194E',      // HII：暗紫色发光区
   dust: '#0E0A14',     // 尘埃：近乎黑的紫灰
   outer: '#415069',    // 臂间/外围：暗冷灰蓝
 };
@@ -147,6 +148,7 @@ const defaultLayerAlpha = {
   ridge: 0.98,
   armBright: 0.90,
   armEdge: 0.85,
+  hii: 0.88,
   dust: 0.45,
   outer: 0.78,
 };
@@ -323,6 +325,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     ridge: '#C7C9CE',    // 臂脊：提亮的冷灰
     armBright: '#92ADE0',// 臂内：浅蓝高亮
     armEdge: '#95C2E8',  // 臂边：浅青蓝高亮
+    hii: '#D88AC9',      // HII：高亮紫色
     dust: '#3F3264',     // 尘埃：压暗后的紫灰
     outer: '#ACB9CF',    // 臂间/外围：淡灰蓝
   }
@@ -791,6 +794,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       ['ridge', palette.ridge],
       ['armBright', palette.armBright],
       ['armEdge', palette.armEdge],
+      ['hii', palette.hii],
       ['dust', palette.dust],
       ['outer', palette.outer],
     ];
@@ -801,8 +805,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         map.set(normalizedBase, litValue);
       }
     });
-    map.set('#F08CD3', highlightFallback);
-    map.set('#F08CD3'.toLowerCase(), highlightFallback);
     return map;
   }, [palette, litPalette, highlightFallback]);
 
@@ -824,7 +826,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       (window as any).__galaxyMappedHighlights = matches;
     }
     return matches;
-  }, [constellationHighlights, highlightFallback]);
+  }, [constellationHighlights, highlightFallback, paletteLitMap]);
   const resolveBandHighlight = React.useCallback((bandId?: string, source?: { color?: string; litColor?: string }) => {
     if (bandId) {
       const starId = backgroundIdToStarIdRef.current[bandId];
@@ -1138,6 +1140,7 @@ const PaletteTuner: React.FC<{
             {k:'ridge', label:'臂脊'},
             {k:'armBright', label:'臂内'},
             {k:'armEdge', label:'臂边'},
+            {k:'hii', label:'HII 区域'},
             {k:'dust', label:'尘埃'},
             {k:'outer', label:'臂间/外围'},
           ] as Array<{k:keyof typeof defaultPalette,label:string}>).map(({k,label}) => (

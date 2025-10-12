@@ -42,6 +42,7 @@ export interface Palette {
   ridge: string
   armBright: string
   armEdge: string
+  hii: string
   dust: string
   outer: string
 }
@@ -411,7 +412,7 @@ export function generateStarFieldGrid(opts:{
               const knot2 = noise2D(x * 0.09 - 3.1, y * 0.09 + 5.3)
               const isHII = (r01 < baseShare) || (knot1 > 0.65 && knot2 > 0.30)
               if (isHII) {
-                color = '#BE3FA6' // 品红/紫红 HII（暗一些）
+                color = pal.hii // HII：由调色板控制
                 size = size * 1.35  // HII 减小高亮体积
               } else {
                 color = pal.armBright // 臂内蓝
