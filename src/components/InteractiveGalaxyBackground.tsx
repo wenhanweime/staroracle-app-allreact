@@ -124,22 +124,22 @@ const defaultParams = {
    interArmStarSizeMultiplier: 1.0, // 旋臂间区域星星大小倍数
    backgroundStarSizeMultiplier: 1.0,
    galaxyScale: 0.88, // 整体缩放（银河占屏比例）
-  // 颜色波动（写实：轻微即可）
-  colorJitterHue: 5,
-  colorJitterSat: 0.035,
-  colorJitterLight: 0.05,
-  colorNoiseScale: 0.05,
+  // 颜色波动（为保持结构颜色一致，默认关闭）
+  colorJitterHue: 0,
+  colorJitterSat: 0,
+  colorJitterLight: 0,
+  colorNoiseScale: 0,
 };
 
 // 模块颜色默认值（结构着色用）
 // 天体物理写实配色（白脊+蓝臂+紫红HII+黑尘+暖核+灰蓝臂间）
 const defaultPalette = {
-  core: '#FFD39B',     // 暖核：金象牙（老年群）
-  ridge: '#F7FAFF',    // 臂脊：冷白近白（年轻骨架）
-  armBright: '#A7C7FF',// 臂内：淡蓝（OB/年轻星群）
-  armEdge: '#9BD4FF',  // 臂边：青蓝
-  dust: '#1A1426',     // 尘埃：接近黑的深靛/棕黑
-  outer: '#B0C4DE',    // 臂间/外围：冷灰蓝
+  core: '#7A5022',     // 暖核：继续压暗的琥珀金
+  ridge: '#5B5E66',    // 臂脊：更暗的冷灰脊线
+  armBright: '#28457B',// 臂内：再降亮度的蓝调
+  armEdge: '#245B88',  // 臂边：更深的青蓝
+  dust: '#0E0A14',     // 尘埃：近乎黑的紫灰
+  outer: '#415069',    // 臂间/外围：暗冷灰蓝
 };
 // 分层透明度（仅用于显示着色，不影响算法/密度）
 const defaultLayerAlpha = {
@@ -312,19 +312,19 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const [rotateEnabled, setRotateEnabled] = useState(true);
   const rotateRef = useRef(rotateEnabled);
   useEffect(() => { rotateRef.current = rotateEnabled; }, [rotateEnabled]);
-  // 结构着色开关：按星系结构分类上色（默认关闭，保持白星风格）
-  const [structureColoring, setStructureColoring] = useState(false);
+  // 结构着色开关：按星系结构分类上色（默认开启以展示 default 色板）
+  const [structureColoring, setStructureColoring] = useState(true);
   const [palette, setPalette] = useState<typeof defaultPalette>(defaultPalette);
   const paletteRef = useRef(palette);
   useEffect(() => { paletteRef.current = palette; }, [palette]);
   // Lit palette（点亮时的高亮配色，可独立调节与保存）
   const litPaletteDefault: typeof defaultPalette = {
-    core: '#FFE2B0',
-    ridge: '#FFFFFF',
-    armBright: '#FFFFFF',
-    armEdge: '#FFFFFF',
-    dust: '#FFFFFF',
-    outer: '#FFFFFF',
+    core: '#E3B787',     // 暖核：暗色对应的高亮暖金
+    ridge: '#C7C9CE',    // 臂脊：提亮的冷灰
+    armBright: '#92ADE0',// 臂内：浅蓝高亮
+    armEdge: '#95C2E8',  // 臂边：浅青蓝高亮
+    dust: '#3F3264',     // 尘埃：压暗后的紫灰
+    outer: '#ACB9CF',    // 臂间/外围：淡灰蓝
   }
   const [litPalette, setLitPalette] = useState<typeof defaultPalette>(litPaletteDefault)
   const litPaletteRef = useRef(litPalette)

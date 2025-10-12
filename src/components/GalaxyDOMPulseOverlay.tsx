@@ -46,6 +46,11 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
   const [pulses, setPulses] = useState<Pulse[]>([])
   const rootRef = useRef<HTMLDivElement|null>(null)
   const highlightTimerRef = useRef<number | null>(null)
+  const rotationStartRef = useRef<number>(typeof performance !== 'undefined' ? performance.now() : Date.now())
+
+  useEffect(() => {
+    rotationStartRef.current = typeof performance !== 'undefined' ? performance.now() : Date.now()
+  }, [])
 
   useEffect(() => {
     return () => {
@@ -72,7 +77,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const pts = pointsRef.current || []
       const bpts = bandPointsRef?.current || []
       const cx = w/2, cy = h/2
-      const now = performance.now()
+      const now = typeof performance !== 'undefined' ? performance.now() : Date.now()
+      const rotationElapsed = Math.max(0, now - rotationStartRef.current)
       const getPulseColor = (candidate: Candidate): string => {
         const bandId = candidate.__source?.type === 'band' ? candidate.__source.data?.id : undefined
         const resolved = resolveHighlightColor?.(bandId, candidate.__source?.data ?? candidate)
@@ -91,7 +97,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const transformed: Candidate[] = bpts.map(p=>{
         // 统一旋转速度：所有环使用相同角速度，与 CSS 动画保持一致
         const omegaDegPerMs = rotateEnabled ? UNIFORM_DEG_PER_MS : 0
-        const angle = omegaDegPerMs * now * (Math.PI/180)
+        const angle = omegaDegPerMs * rotationElapsed * (Math.PI/180)
         const bcx = p.bw/2, bcy = p.bh/2
         const rx = p.x - bcx
         const ry = p.y - bcy
