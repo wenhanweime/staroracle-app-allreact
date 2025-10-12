@@ -280,6 +280,29 @@ function App() {
   
   return (
     <>
+      {appReady && featureFlags.livingGalaxy && (
+        <InteractiveGalaxyBackground
+          quality="auto"
+          reducedMotion={window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches}
+          debugControls={featureFlags.galaxyDebugControls}
+          onCanvasClick={({ x, y, region }) => {
+            // 与 Constellation 点击逻辑保持一致
+            try {
+              setIsAsking(false, { x, y });
+              recordEvent('galaxy_click', { x, y, region });
+              playSound('starReveal');
+              if (Capacitor.isNativePlatform()) {
+                triggerHapticFeedback('light');
+              }
+              const card = drawInspirationCard(region as any);
+              console.log('🃏 卡片（来自背景点击）:', card.question);
+            } catch (e) {
+              console.warn('背景点击处理异常:', e);
+            }
+          }}
+        />
+      )}
+
       <div 
         className="min-h-screen cosmic-bg overflow-hidden relative transition-all duration-500 ease-out"
         style={{
@@ -291,86 +314,74 @@ function App() {
           filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
         }}
       >
-        {/* Living Galaxy background */}
-        {appReady && featureFlags.livingGalaxy && (
-          <InteractiveGalaxyBackground
-            quality="auto"
-            reducedMotion={window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches}
-            debugControls={featureFlags.galaxyDebugControls}
-            onCanvasClick={({ x, y, region }) => {
-              // 与 Constellation 点击逻辑保持一致
-              try {
-                setIsAsking(false, { x, y });
-                recordEvent('galaxy_click', { x, y, region });
-                playSound('starReveal');
-                if (Capacitor.isNativePlatform()) {
-                  triggerHapticFeedback('light');
-                }
-                const card = drawInspirationCard(region as any);
-                console.log('🃏 卡片（来自背景点击）:', card.question);
-              } catch (e) {
-                console.warn('背景点击处理异常:', e);
-              }
-            }}
+        <div
+          className="absolute inset-0 z-0 pointer-events-none transition-opacity duration-300"
+          style={{
+            background: 'rgba(0, 0, 0, 0.35)',
+            opacity: isChatOverlayOpen ? 1 : 0
+          }}
+        />
+
+        <div
+          className="relative z-10 transition-all duration-300 ease-out"
+        >
+          {/* Header - 现在包含三个元素在一行 */}
+          <Header 
+            onOpenDrawerMenu={handleOpenDrawerMenu}
+            onLogoClick={handleLogoClick}
           />
-        )}
-        
-        {/* Header - 现在包含三个元素在一行 */}
-        <Header 
-          onOpenDrawerMenu={handleOpenDrawerMenu}
-          onLogoClick={handleLogoClick}
-        />
 
-        {/* User's constellation - 延迟渲染 */}
-        {appReady && <Constellation />}
-        
-        {/* Inspiration card */}
-        {currentInspirationCard && (
-          <InspirationCard
-            card={currentInspirationCard}
-            onDismiss={dismissInspirationCard}
-            onDeepDive={(q) => {
-              setDeepDiveQuestion(q);
-              setInitialChatInput(q);
-              setIsChatOverlayOpen(true);
-              // 关闭卡片
-              dismissInspirationCard();
-            }}
+          {/* User's constellation - 延迟渲染 */}
+          {appReady && <Constellation />}
+          
+          {/* Inspiration card */}
+          {currentInspirationCard && (
+            <InspirationCard
+              card={currentInspirationCard}
+              onDismiss={dismissInspirationCard}
+              onDeepDive={(q) => {
+                setDeepDiveQuestion(q);
+                setInitialChatInput(q);
+                setIsChatOverlayOpen(true);
+                // 关闭卡片
+                dismissInspirationCard();
+              }}
+            />
+          )}
+          
+          {/* Star detail modal */}
+          {appReady && <StarDetail />}
+          
+          {/* Star collection modal */}
+          <StarCollection 
+            isOpen={isCollectionOpen} 
+            onClose={handleCloseCollection} 
           />
-        )}
-        
-        {/* Star detail modal */}
-        {appReady && <StarDetail />}
-        
-        {/* Star collection modal */}
-        <StarCollection 
-          isOpen={isCollectionOpen} 
-          onClose={handleCloseCollection} 
-        />
 
-        {/* Template selector modal */}
-        <ConstellationSelector
-          isOpen={isTemplateSelectorOpen}
-          onClose={handleCloseTemplateSelector}
-          onSelectTemplate={handleSelectTemplate}
-        />
+          {/* Template selector modal */}
+          <ConstellationSelector
+            isOpen={isTemplateSelectorOpen}
+            onClose={handleCloseTemplateSelector}
+            onSelectTemplate={handleSelectTemplate}
+          />
 
-        {/* AI Configuration Panel */}
-        <AIConfigPanel
-          isOpen={isConfigOpen}
-          onClose={handleCloseConfig}
-        />
+          {/* AI Configuration Panel */}
+          <AIConfigPanel
+            isOpen={isConfigOpen}
+            onClose={handleCloseConfig}
+          />
 
-        {/* Drawer Menu */}
-        <DrawerMenu
-          isOpen={isDrawerMenuOpen}
-          onClose={handleCloseDrawerMenu}
-          onOpenSettings={handleOpenConfig}
-          onOpenTemplateSelector={handleOpenTemplateSelector}
-        />
+          {/* Drawer Menu */}
+          <DrawerMenu
+            isOpen={isDrawerMenuOpen}
+            onClose={handleCloseDrawerMenu}
+            onOpenSettings={handleOpenConfig}
+            onOpenTemplateSelector={handleOpenTemplateSelector}
+          />
 
-        {/* Oracle Input for star creation */}
-        {featureFlags.oracleInputEnabled && <OracleInput />}
+          {/* Oracle Input for star creation */}
+          {featureFlags.oracleInputEnabled && <OracleInput />}
+        </div>
       </div>
       
       {/* Conversation Drawer - 移到外层，不受3D变换影响 */}
