@@ -16,6 +16,7 @@ public class InputDrawerPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "blur", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setBottomSpace", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setPlaceholder", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setHorizontalOffset", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isVisible", returnType: CAPPluginReturnPromise)
     ]
     
@@ -118,6 +119,17 @@ public class InputDrawerPlugin: CAPPlugin, CAPBridgedPlugin {
         
         DispatchQueue.main.async {
             self.drawerManager.setPlaceholder(placeholder)
+            call.resolve(["success": true])
+        }
+    }
+
+    @objc func setHorizontalOffset(_ call: CAPPluginCall) {
+        NSLog("🎯 InputDrawer setHorizontalOffset方法被调用!")
+        let offset = CGFloat(call.getDouble("offset") ?? 0)
+        let animated = call.getBool("animated") ?? true
+        
+        DispatchQueue.main.async {
+            self.drawerManager.setHorizontalOffset(max(0, offset), animated: animated)
             call.resolve(["success": true])
         }
     }

@@ -5,8 +5,6 @@ import {
   ChevronRight 
 } from 'lucide-react';
 import { listSessions as listNativeSessions, switchSession as switchNativeSession, newSession as newNativeSession, renameSession as renameNativeSession, onSessionsChanged, getSessionSummaryContext } from '@/utils/conversationBridge';
-import { ChatOverlay } from '@/plugins/ChatOverlay';
-import { InputDrawer } from '@/plugins/InputDrawer';
 
 interface DrawerMenuProps {
   isOpen: boolean;
@@ -21,58 +19,10 @@ const DrawerMenu: React.FC<DrawerMenuProps> = ({ isOpen, onClose, onOpenSettings
   const [summarizing, setSummarizing] = useState<Record<string, boolean>>({});
   const [query, setQuery] = useState('');
   const [backdropReady, setBackdropReady] = useState(false); // 菜单展开动画完成后再显示背景模糊
-  const [prevInputVisible, setPrevInputVisible] = useState<boolean | null>(null);
-  const [prevOverlayVisible, setPrevOverlayVisible] = useState<boolean | null>(null);
 
   // 打开时先隐藏背景模糊，待抽屉动画完成再显示
   useEffect(() => {
     if (isOpen) setBackdropReady(false);
-  }, [isOpen]);
-
-  // 当菜单打开时，隐藏原生输入与聊天浮层；关闭时按需恢复
-  useEffect(() => {
-    const syncNativeLayers = async () => {
-      try {
-        if (isOpen) {
-          // 记录当前可见性
-          try {
-            const vis = await InputDrawer.isVisible();
-            setPrevInputVisible(!!vis?.visible);
-          } catch {}
-          try {
-            const v2 = await ChatOverlay.isVisible();
-            setPrevOverlayVisible(!!v2?.visible);
-          } catch {}
-          // 隐藏两者（尽量用动画）
-          try { await InputDrawer.hide({ animated: true }); } catch {}
-          try { await (ChatOverlay as any).hide({ animated: true }); } catch {}
-        } else {
-          // 关闭菜单后恢复：根据之前的状态恢复输入框
-          setTimeout(async () => {
-            try { 
-              // 确保 ChatOverlay 隐藏
-              await (ChatOverlay as any).hide({ animated: true }); 
-            } catch {}
-            
-            // 核心修复：如果之前聊天浮窗不是打开状态，就恢复输入框
-            if (!prevOverlayVisible) {
-              try {
-                await InputDrawer.show({ animated: true });
-                console.log('✅ 菜单关闭后恢复输入框显示 (因为聊天浮窗未打开)');
-              } catch (e) {
-                console.error('❌ 恢复输入框失败:', e);
-              }
-            } else {
-              console.log('ℹ️ 之前聊天浮窗是打开的，不恢复输入框，由浮窗管理');
-            }
-            
-            setPrevInputVisible(null);
-            setPrevOverlayVisible(null);
-          }, 100); // 减少延迟，让恢复更快
-        }
-      } catch {}
-    };
-    syncNativeLayers();
   }, [isOpen]);
 
   // 订阅原生侧会话变化

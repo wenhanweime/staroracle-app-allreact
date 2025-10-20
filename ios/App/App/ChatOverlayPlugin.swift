@@ -17,6 +17,7 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setViewportHeight", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setInitialInput", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setFollowUpQuestion", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setHorizontalOffset", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setInputBottomSpace", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setupBackgroundTransform", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "isVisible", returnType: CAPPluginReturnPromise),
@@ -254,6 +255,15 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         NSLog("🎯 ChatOverlay setFollowUpQuestion: \(question)")
         
         overlayManager.setFollowUpQuestion(question)
+        call.resolve(["success": true])
+    }
+
+    @objc func setHorizontalOffset(_ call: CAPPluginCall) {
+        let offset = CGFloat(call.getDouble("offset") ?? 0)
+        let animated = call.getBool("animated") ?? true
+        NSLog("🎯 ChatOverlay setHorizontalOffset: \(offset), animated: \(animated)")
+        
+        overlayManager.setHorizontalOffset(max(0, offset), animated: animated)
         call.resolve(["success": true])
     }
     

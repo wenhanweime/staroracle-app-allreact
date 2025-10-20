@@ -372,6 +372,25 @@ function App() {
     }
   }, [isNative, isDrawerMenuOpen]);
 
+  useEffect(() => {
+    if (!isNative) return;
+    const drawerWidth = 320;
+    const offset = isDrawerMenuOpen ? drawerWidth : 0;
+    const applyOffset = async () => {
+      try {
+        await InputDrawer.setHorizontalOffset({ offset, animated: true });
+      } catch (e) {
+        console.warn('InputDrawer.setHorizontalOffset 调用失败:', e);
+      }
+      try {
+        await ChatOverlay.setHorizontalOffset({ offset, animated: true });
+      } catch (e) {
+        console.warn('ChatOverlay.setHorizontalOffset 调用失败:', e);
+      }
+    };
+    applyOffset();
+  }, [isNative, isDrawerMenuOpen]);
+
   // 检查API配置（静默模式 - 只在控制台提示）
   useEffect(() => {
     // 延迟检查，确保应用已完全加载

@@ -61,6 +61,7 @@ public class InputDrawerManager {
     private var currentText = ""
     internal var placeholder = "输入文字..." // 改为internal让InputViewController访问
     internal var bottomSpace: CGFloat = 20 // 默认20px，匹配React版本
+    internal var horizontalOffset: CGFloat = 0
     private var inputViewController: InputViewController?
     
     // 事件代理
@@ -154,6 +155,16 @@ public class InputDrawerManager {
         self.placeholder = placeholder
         inputViewController?.updatePlaceholder(placeholder)
     }
+
+    func setHorizontalOffset(_ offset: CGFloat, animated: Bool = true) {
+        let normalized = max(0, offset)
+        NSLog("🎯 InputDrawer: 更新水平偏移 -> \(normalized) (animated: \(animated))")
+        NSLog("🎯 InputDrawerManager: 设置水平偏移: \(normalized)")
+        horizontalOffset = normalized
+        DispatchQueue.main.async { [weak self] in
+            self?.inputViewController?.updateHorizontalOffset(normalized, animated: animated)
+        }
+    }
     
     func getVisibility() -> Bool {
         return isVisible
@@ -175,6 +186,11 @@ public class InputDrawerManager {
         // 创建输入框视图控制器
         inputViewController = InputViewController(manager: self)
         window.rootViewController = inputViewController
+        inputViewController?.loadViewIfNeeded()
+        inputViewController?.updateText(currentText)
+        inputViewController?.updatePlaceholder(placeholder)
+        inputViewController?.updateBottomSpace(bottomSpace)
+        inputViewController?.updateHorizontalOffset(horizontalOffset, animated: false)
         
         // 设置窗口对视图控制器的引用，用于收起键盘
         window.inputDrawerViewController = inputViewController  // 使用新的属性名
@@ -226,7 +242,10 @@ class InputViewController: UIViewController {
     private var awarenessView: FloatingAwarenessPlanetView!
     
     // 约束
+    private var containerLeadingConstraint: NSLayoutConstraint!
+    private var containerTrailingConstraint: NSLayoutConstraint!
     private var containerBottomConstraint: NSLayoutConstraint!
+    private var horizontalOffset: CGFloat = 0
     
     // 添加属性来保存键盘出现前的位置
     private var bottomSpaceBeforeKeyboard: CGFloat = 20
@@ -358,11 +377,14 @@ class InputViewController: UIViewController {
         
         // 设置约束 - 完全匹配原版：左侧觉察动画 + 输入框 + 右侧按钮组
         containerBottomConstraint = containerView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -(manager?.bottomSpace ?? 20))
+        horizontalOffset = manager?.horizontalOffset ?? 0
+        containerLeadingConstraint = containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16 + horizontalOffset)
+        containerTrailingConstraint = containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
         
         NSLayoutConstraint.activate([
             // 容器约束 - 匹配原版h-12 = 48px高度
-            containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16),
-            containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16),
+            containerLeadingConstraint,
+            containerTrailingConstraint,
             containerView.heightAnchor.constraint(equalToConstant: 48), // h-12
             containerBottomConstraint,
             
@@ -531,6 +553,36 @@ class InputViewController: UIViewController {
             NSLog("🎯 InputDrawer: 位置更新完成（动画），bottomSpace: \(space)")
             // 通知ChatOverlay输入框的新位置
             self.notifyInputDrawerActualPosition()
+        }
+    }
+
+    func updateHorizontalOffset(_ offset: CGFloat, animated: Bool) {
+        let normalized = max(0, offset)
+        if abs(horizontalOffset - normalized) < 0.5 {
+            horizontalOffset = normalized
+            return
+        }
+        horizontalOffset = normalized
+        containerLeadingConstraint.constant = 16 + normalized
+        containerTrailingConstraint.constant = -16
+
+        let updates = {
+            self.view.layoutIfNeeded()
+            self.notifyInputDrawerActualPosition()
+        }
+
+        if animated {
+            UIView.animate(
+                withDuration: 0.25,
+                delay: 0,
+                usingSpringWithDamping: 0.85,
+                initialSpringVelocity: 0.3,
+                options: [.allowUserInteraction, .beginFromCurrentState]
+            ) {
+                updates()
+            }
+        } else {
+            updates()
         }
     }
     

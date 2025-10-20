@@ -51,6 +51,9 @@ async sendMessage(options: { message: string }): Promise<void> {
   async setFollowUpQuestion(options: { question: string }): Promise<void> {
     console.log('🌐 ChatOverlay setFollowUpQuestion called:', options.question);
   }
+  async setHorizontalOffset(options: { offset: number; animated?: boolean }): Promise<void> {
+    console.log('🌐 ChatOverlay setHorizontalOffset called:', options.offset, options.animated);
+  }
 
   async appendAIChunk(options: { id?: string; delta: string }): Promise<void> {
     console.log('🌐 ChatOverlay appendAIChunk called:', options.id, options.delta?.length);

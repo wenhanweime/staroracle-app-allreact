@@ -79,6 +79,7 @@ public class ChatOverlayManager {
     // NOTE: Removed stray non-code line accidentally inserted during docs; no functional change.
     // 关闭后下次输入强制新会话
     private var startNewOnNextInput: Bool = false
+    fileprivate var horizontalOffset: CGFloat = 0
     
     // 原生流式客户端（可选使用）
     private let streamingClient = StreamingClient()
@@ -487,6 +488,15 @@ public class ChatOverlayManager {
         self.followUpQuestion = question
         // 这里可以更新UI，暂时先简化
     }
+
+    func setHorizontalOffset(_ offset: CGFloat, animated: Bool = true) {
+        let normalized = max(0, offset)
+        NSLog("🎯 ChatOverlayManager: 设置水平偏移: \(normalized) (animated: \(animated))")
+        horizontalOffset = normalized
+        DispatchQueue.main.async { [weak self] in
+            self?.overlayViewController?.setHorizontalOffset(normalized, animated: animated)
+        }
+    }
     
     func setInputBottomSpace(_ space: CGFloat) {
         NSLog("🎯 ChatOverlayManager: InputDrawer位置设置为: \(space)px")
@@ -706,7 +716,9 @@ public class ChatOverlayManager {
         // 创建自定义视图控制器
         overlayViewController = OverlayViewController(manager: self)
         window.rootViewController = overlayViewController
-        
+        overlayViewController?.loadViewIfNeeded()
+        overlayViewController?.setHorizontalOffset(horizontalOffset, animated: false)
+
         // 设置窗口对视图控制器的引用
         window.overlayViewController = overlayViewController
         
@@ -880,6 +892,7 @@ class OverlayViewController: UIViewController {
     private var containerHeightConstraint: NSLayoutConstraint!
     private var containerLeadingConstraint: NSLayoutConstraint!
     private var containerTrailingConstraint: NSLayoutConstraint!
+    private var horizontalOffset: CGFloat = 0
     
     init(manager: ChatOverlayManager) {
         self.manager = manager
@@ -1007,7 +1020,8 @@ class OverlayViewController: UIViewController {
         // 创建可变约束 - 包括宽度约束
         containerTopConstraint = containerView.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 80)
         containerHeightConstraint = containerView.heightAnchor.constraint(equalToConstant: 65)
-        containerLeadingConstraint = containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16)
+        horizontalOffset = manager?.horizontalOffset ?? 0
+        containerLeadingConstraint = containerView.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 16 + horizontalOffset)
         containerTrailingConstraint = containerView.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -16)
         
         containerTopConstraint.isActive = true
@@ -1221,7 +1235,7 @@ class OverlayViewController: UIViewController {
             containerHeightConstraint.constant = floatingHeight
             
             // 收起状态：与输入框一样宽度（屏幕宽度减去左右各16px边距）
-            containerLeadingConstraint.constant = 16
+            containerLeadingConstraint.constant = 16 + horizontalOffset
             containerTrailingConstraint.constant = -16
             
             collapsedView.alpha = 1
@@ -1246,7 +1260,7 @@ class OverlayViewController: UIViewController {
             containerHeightConstraint.constant = screenHeight - expandedTopMargin + expandedBottomExtension
             
             // 展开状态：覆盖整个屏幕宽度（无边距）
-            containerLeadingConstraint.constant = 0
+            containerLeadingConstraint.constant = horizontalOffset
             containerTrailingConstraint.constant = 0
             
             NSLog("🔥 [残影修复] 设置UI元素可见性 - containerView: 显示, collapsedView: 隐藏, expandedView: 显示")
@@ -1271,6 +1285,34 @@ class OverlayViewController: UIViewController {
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
+    }
+
+    func setHorizontalOffset(_ offset: CGFloat, animated: Bool) {
+        let normalized = max(0, offset)
+        NSLog("🎯 ChatOverlay VC: 更新水平偏移 -> \(normalized) (animated: \(animated))")
+        if abs(horizontalOffset - normalized) < 0.5 {
+            horizontalOffset = normalized
+            return
+        }
+        horizontalOffset = normalized
+        let state = manager?.currentState ?? .collapsed
+        let updates = {
+            self.updateForState(state)
+            self.view.layoutIfNeeded()
+        }
+        if animated {
+            UIView.animate(
+                withDuration: 0.25,
+                delay: 0,
+                usingSpringWithDamping: 0.85,
+                initialSpringVelocity: 0.3,
+                options: [.allowUserInteraction, .beginFromCurrentState]
+            ) {
+                updates()
+            }
+        } else {
+            updates()
+        }
     }
     
     @objc private func handleHeaderTap() {

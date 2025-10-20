@@ -10,6 +10,7 @@ export interface InputDrawerPlugin {
   setBottomSpace(options: { space: number }): Promise<{ success: boolean }>;
   setPlaceholder(options: { placeholder: string }): Promise<{ success: boolean }>;
   isVisible(): Promise<{ visible: boolean }>;
+  setHorizontalOffset(options: { offset: number; animated?: boolean }): Promise<{ success: boolean }>;
 }
 
 export const InputDrawer = registerPlugin<InputDrawerPlugin>('InputDrawer', {
@@ -49,6 +50,10 @@ export const InputDrawer = registerPlugin<InputDrawerPlugin>('InputDrawer', {
     isVisible: async () => {
       console.log('🌐 Web InputDrawer: isVisible');
       return { visible: true };
+    },
+    setHorizontalOffset: async (options) => {
+      console.log('🌐 Web InputDrawer: setHorizontalOffset', options);
+      return { success: true };
     }
   })
 });
