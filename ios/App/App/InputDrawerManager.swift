@@ -564,7 +564,7 @@ class InputViewController: UIViewController {
         }
         horizontalOffset = normalized
         containerLeadingConstraint.constant = 16 + normalized
-        containerTrailingConstraint.constant = -16
+        containerTrailingConstraint.constant = -16 + normalized
 
         let updates = {
             self.view.layoutIfNeeded()

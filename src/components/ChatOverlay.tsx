@@ -24,6 +24,7 @@ interface ChatOverlayProps {
   onFollowUpProcessed?: () => void;
   initialInput?: string;
   inputBottomSpace?: number; // 新增：输入框底部空间，用于计算吸附位置
+  drawerOffset?: number; // 左侧抽屉占用的宽度，用于水平偏移
 }
 
 const ChatOverlay: React.FC<ChatOverlayProps> = ({
@@ -33,7 +34,8 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
   followUpQuestion,
   onFollowUpProcessed,
   initialInput,
-  inputBottomSpace = 70 // 默认70px
+  inputBottomSpace = 70, // 默认70px
+  drawerOffset = 0
 }) => {
   const [isDragging, setIsDragging] = useState(false);
   const [dragY, setDragY] = useState(0);
@@ -44,6 +46,11 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
   
   const floatingRef = useRef<HTMLDivElement>(null);
   const hasProcessedInitialInput = useRef(false);
+  const effectiveDrawerOffset = Math.max(0, drawerOffset);
+  const collapsedLeft = effectiveDrawerOffset > 0 ? `${effectiveDrawerOffset + 16}px` : '50%';
+  const collapsedX = effectiveDrawerOffset > 0 ? 0 : '-50%';
+  const expandedLeft = effectiveDrawerOffset;
+  const collapsedWidth = 'min(28rem, calc(100vw - 2rem))';
   
   const { 
     addUserMessage, 
@@ -367,6 +374,7 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
         className={`fixed inset-0 bg-black transition-opacity duration-300 ${
           isOpen ? 'bg-opacity-40 pointer-events-auto z-45' : 'bg-opacity-0 pointer-events-none z-10'
         }`}
+        style={{ left: effectiveDrawerOffset }}
         onClick={isOpen ? onClose : undefined}
       />
 
@@ -380,13 +388,12 @@ const ChatOverlay: React.FC<ChatOverlayProps> = ({
         animate={{          
           // 修复动画：使用一致的定位方式
           top: isOpen ? Math.max(80, 80 + dragY) : window.innerHeight - getAttachedBottomPosition() - 65,
-          left: isOpen ? 0 : '50%',
-          right: isOpen ? 0 : 'auto',
+          left: isOpen ? expandedLeft : collapsedLeft,
           // 移除bottom定位，只使用top定位
-          width: isOpen ? '100vw' : 'min(28rem, calc(100vw - 2rem))',
+          width: isOpen ? '100vw' : collapsedWidth,
           // 修复iOS键盘问题：使用实际视口高度
           height: isOpen ? `${viewportHeight - Math.max(80, 80 + dragY)}px` : 65,
-          x: isOpen ? 0 : '-50%',
+          x: isOpen ? 0 : collapsedX,
           y: dragY * 0.15,
           opacity: Math.max(0.9, 1 - dragY / 500)
         }}

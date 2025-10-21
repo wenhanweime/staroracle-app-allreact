@@ -31,6 +31,8 @@ import { useNativeInputDrawer } from './hooks/useNativeInputDrawer';
 import { InputDrawer } from './plugins/InputDrawer';
 import { ChatOverlay } from './plugins/ChatOverlay';
 
+const DRAWER_WIDTH = 320;
+
 function App() {
   const [isCollectionOpen, setIsCollectionOpen] = useState(false);
   const [isConfigOpen, setIsConfigOpen] = useState(false);
@@ -342,8 +344,6 @@ function App() {
           console.warn('🔁 ChatOverlay状态变化后，InputDrawer 不可见，尝试强制显示');
           await InputDrawer.show({ animated: false });
         }
-        // 位置兜底：复位 bottomSpace，避免停留在负空间或错误预留
-        try { await InputDrawer.setBottomSpace({ space: 0 }); } catch {}
       } catch (e) {
         console.warn('ensureVisible 检查失败:', e);
       }
@@ -361,7 +361,6 @@ function App() {
       const ensureVisible = async () => {
         try {
           await InputDrawer.show({ animated: true });
-          try { await InputDrawer.setBottomSpace({ space: 0 }); } catch {}
         } catch (e) {
           console.warn('ensureVisible(menu-close) 显示失败:', e);
         }
@@ -374,8 +373,7 @@ function App() {
 
   useEffect(() => {
     if (!isNative) return;
-    const drawerWidth = 320;
-    const offset = isDrawerMenuOpen ? drawerWidth : 0;
+    const offset = isDrawerMenuOpen ? DRAWER_WIDTH : 0;
     const applyOffset = async () => {
       try {
         await InputDrawer.setHorizontalOffset({ offset, animated: true });
@@ -656,6 +654,7 @@ function App() {
               onFollowUpProcessed={handleFollowUpProcessed}
               initialInput={initialChatInput}
               inputBottomSpace={webChatOverlayOpen ? 34 : 70}
+              drawerOffset={isDrawerMenuOpen ? DRAWER_WIDTH : 0}
             />
           )}
         </>,

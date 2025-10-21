@@ -1236,7 +1236,7 @@ class OverlayViewController: UIViewController {
             
             // 收起状态：与输入框一样宽度（屏幕宽度减去左右各16px边距）
             containerLeadingConstraint.constant = 16 + horizontalOffset
-            containerTrailingConstraint.constant = -16
+            containerTrailingConstraint.constant = -16 + horizontalOffset
             
             collapsedView.alpha = 1
             expandedView.alpha = 0
@@ -1261,7 +1261,7 @@ class OverlayViewController: UIViewController {
             
             // 展开状态：覆盖整个屏幕宽度（无边距）
             containerLeadingConstraint.constant = horizontalOffset
-            containerTrailingConstraint.constant = 0
+            containerTrailingConstraint.constant = horizontalOffset
             
             NSLog("🔥 [残影修复] 设置UI元素可见性 - containerView: 显示, collapsedView: 隐藏, expandedView: 显示")
             containerView.alpha = 1  // 🚨 【残影修复】展开状态时显示容器
