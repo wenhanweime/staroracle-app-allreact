@@ -22,6 +22,8 @@
 		82980D202E67274A008B5529 /* StreamingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82980D1F2E67274A008B5529 /* StreamingClient.swift */; };
 		82980D222E6895A8008B5529 /* ConversationStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82980D212E6895A8008B5529 /* ConversationStore.swift */; };
 		82980D242E689C7F008B5529 /* File.txt in Resources */ = {isa = PBXBuildFile; fileRef = 82980D232E689C76008B5529 /* File.txt */; };
+		82980D252E7A0001008B5529 /* GalaxyBackgroundManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82980D252E7A0000008B5529 /* GalaxyBackgroundManager.swift */; };
+		82980D262E7A0003008B5529 /* GalaxyBackgroundPlugin.swift in Sources */ = {isa = PBXBuildFile; fileRef = 82980D262E7A0002008B5529 /* GalaxyBackgroundPlugin.swift */; };
 		A084ECDBA7D38E1E42DFC39D /* Pods_App.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */; };
 /* End PBXBuildFile section */
 
@@ -43,6 +45,8 @@
 		82980D1F2E67274A008B5529 /* StreamingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StreamingClient.swift; sourceTree = "<group>"; };
 		82980D212E6895A8008B5529 /* ConversationStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConversationStore.swift; sourceTree = "<group>"; };
 		82980D232E689C76008B5529 /* File.txt */ = {isa = PBXFileReference; lastKnownFileType = text; path = File.txt; sourceTree = "<group>"; };
+		82980D252E7A0000008B5529 /* GalaxyBackgroundManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalaxyBackgroundManager.swift; sourceTree = "<group>"; };
+		82980D262E7A0002008B5529 /* GalaxyBackgroundPlugin.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GalaxyBackgroundPlugin.swift; sourceTree = "<group>"; };
 		AF277DCFFFF123FFC6DF26C7 /* Pods_App.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_App.framework; sourceTree = BUILT_PRODUCTS_DIR; };
 		AF51FD2D460BCFE21FA515B2 /* Pods-App.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.release.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.release.xcconfig"; sourceTree = "<group>"; };
 		FC68EB0AF532CFC21C3344DD /* Pods-App.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-App.debug.xcconfig"; path = "Pods/Target Support Files/Pods-App/Pods-App.debug.xcconfig"; sourceTree = "<group>"; };
@@ -94,7 +98,9 @@
 				82980D192E5F74B9008B5529 /* InputDrawerManager.swift */,
 				82980D1A2E5F74B9008B5529 /* InputDrawerPlugin.swift */,
 				82980D132E5E23B8008B5529 /* ChatOverlayPlugin.swift */,
+				82980D262E7A0002008B5529 /* GalaxyBackgroundPlugin.swift */,
 				82980D1A2E5F23B8008B5529 /* ChatOverlayManager.swift */,
+				82980D252E7A0000008B5529 /* GalaxyBackgroundManager.swift */,
 				82980D232E689C76008B5529 /* File.txt */,
 				82980D152E5E23B8008B5529 /* MainViewController.swift */,
 				50379B222058CBB4000EE86E /* capacitor.config.json */,
@@ -246,10 +252,12 @@
 				82980D182E5E23B8008B5529 /* MainViewController.swift in Sources */,
 				82980D222E6895A8008B5529 /* ConversationStore.swift in Sources */,
 				82980D172E5E23B8008B5529 /* ChatOverlayPlugin.swift in Sources */,
+				82980D262E7A0003008B5529 /* GalaxyBackgroundPlugin.swift in Sources */,
 				82980D202E67274A008B5529 /* StreamingClient.swift in Sources */,
 				82980D1B2E5F74BA008B5529 /* InputDrawerManager.swift in Sources */,
 				82980D1C2E5F74BA008B5529 /* InputDrawerPlugin.swift in Sources */,
 				82980D192E5F23B8008B5529 /* ChatOverlayManager.swift in Sources */,
+				82980D252E7A0001008B5529 /* GalaxyBackgroundManager.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

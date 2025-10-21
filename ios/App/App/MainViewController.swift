@@ -23,8 +23,12 @@ class MainViewController: CAPBridgeViewController {
         
         // 注册InputDrawer插件
         bridge?.registerPluginInstance(InputDrawerPlugin())
+
+        // 注册GalaxyBackground插件
+        bridge?.registerPluginInstance(GalaxyBackgroundPlugin())
         
         NSLog("🎯 ChatOverlayPlugin (CAPBridgedPlugin) 注册完成")
         NSLog("🎯 InputDrawerPlugin (CAPBridgedPlugin) 注册完成")
+        NSLog("🎯 GalaxyBackgroundPlugin (CAPBridgedPlugin) 注册完成")
     }
 }

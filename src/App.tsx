@@ -17,6 +17,7 @@ import Header from './components/Header';
 // import ConversationDrawer from './components/ConversationDrawer'; // 🚫 临时屏蔽 - 专注调试原生InputDrawer
 import ChatOverlay from './components/ChatOverlay'; // React版本（Web端回退）
 import OracleInput from './components/OracleInput';
+import InteractiveGalaxyBackground from './components/InteractiveGalaxyBackground';
 import { startAmbientSound, stopAmbientSound, playSound } from './utils/soundUtils';
 import { triggerHapticFeedback } from './utils/hapticUtils';
 import { Menu } from 'lucide-react';
@@ -57,13 +58,17 @@ function App() {
   const forceWebMode = false; // 设为false开启原生模式
   const isNative = forceWebMode ? false : Capacitor.isNativePlatform();
   const isChatOverlayOpen = isNative ? nativeChatOverlay.isOpen : webChatOverlayOpen;
+  const prefersReducedMotion = typeof window !== 'undefined'
+    ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
+    : false;
   
   const { 
     applyTemplate, 
     currentInspirationCard, 
-    dismissInspirationCard 
+    dismissInspirationCard,
+    setIsAsking
   } = useStarStore();
-  
+
   const { messages, addUserMessage, addStreamingAIMessage, updateStreamingMessage, finalizeStreamingMessage, setLoading, generateConversationTitle } = useChatStore(); // 获取聊天消息以判断是否有对话历史
   // 处理后续提问的回调
   const handleFollowUpQuestion = (question: string) => {
@@ -569,8 +574,23 @@ function App() {
           // filter: isChatOverlayOpen ? 'brightness(0.6)' : 'brightness(1)'
         }}
       >
-        {/* Background with stars - 已屏蔽 */}
-        {/* {appReady && <StarryBackground starCount={75} />} */}
+        {appReady && (
+          <InteractiveGalaxyBackground
+            quality={isNative ? 'mid' : 'auto'}
+            reducedMotion={prefersReducedMotion}
+            onCanvasClick={({ x, y }) => {
+              try {
+                setIsAsking(false, { x, y });
+                playSound('starReveal');
+                if (isNative) {
+                  triggerHapticFeedback('light');
+                }
+              } catch (error) {
+                console.warn('处理银河点击事件失败:', error);
+              }
+            }}
+          />
+        )}
         
         {/* Header - 现在包含三个元素在一行 */}
         <Header 

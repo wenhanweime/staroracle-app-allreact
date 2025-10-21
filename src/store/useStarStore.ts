@@ -8,8 +8,19 @@ import {
   getAIConfig as getAIConfigFromUtils
 } from '../utils/aiTaggingUtils';
 import { instantiateTemplate } from '../utils/constellationTemplates';
-import { getRandomInspirationCard, InspirationCard } from '../utils/inspirationCards';
+import { getRandomInspirationCard, InspirationCard, GalaxyRegion } from '../utils/inspirationCards';
 import { ConstellationTemplate } from '../types';
+
+const normalizeHighlightHex = (color: unknown): string => {
+  if (!color && color !== 0) return '#FFFFFF';
+  let value = typeof color === 'string' ? color.trim() : String(color).trim();
+  if (!value.startsWith('#')) return '#FFFFFF';
+  if (value.length === 4) {
+    value = `#${value[1]}${value[1]}${value[2]}${value[2]}${value[3]}${value[3]}`;
+  }
+  if (value.length !== 7) return '#FFFFFF';
+  return value.toUpperCase();
+};
 
 interface StarPosition {
   x: number;
@@ -19,14 +30,18 @@ interface StarPosition {
 interface StarState {
   constellation: Constellation;
   activeStarId: string | null;
+  highlightedStarId: string | null;
+  galaxyHighlights: Record<string, { color: string }>;
+  galaxyHighlightColor: string;
   isAsking: boolean;
   isLoading: boolean; // New state to track loading during star creation
   pendingStarPosition: StarPosition | null;
   currentInspirationCard: InspirationCard | null;
   hasTemplate: boolean;
   templateInfo: { name: string; element: string } | null;
+  lastCreatedStarId: string | null;
   addStar: (question: string) => Promise<Star>;
-  drawInspirationCard: () => InspirationCard;
+  drawInspirationCard: (region?: GalaxyRegion) => InspirationCard;
   useInspirationCard: () => void;
   dismissInspirationCard: () => void;
   viewStar: (id: string | null) => void;
@@ -36,6 +51,8 @@ interface StarState {
   applyTemplate: (template: ConstellationTemplate) => void;
   clearConstellation: () => void;
   updateStarTags: (starId: string, newTags: string[]) => void;
+  setGalaxyHighlights: (entries: Array<{ starId: string; color?: string }>) => void;
+  setGalaxyHighlightColor: (color: string) => void;
 }
 
 // Generate initial empty constellation
@@ -57,12 +74,16 @@ export const useStarStore = create<StarState>((set, get) => {
   return {
     constellation: generateEmptyConstellation(),
     activeStarId: null, // 确保初始状态为null
+    highlightedStarId: null,
+    galaxyHighlights: {},
+    galaxyHighlightColor: '#FFE2B0',
     isAsking: false,
     isLoading: false, // Initialize loading state as false
     pendingStarPosition: null,
     currentInspirationCard: null,
     hasTemplate: false,
     templateInfo: null,
+    lastCreatedStarId: null,
     
     addStar: async (question: string) => {
       const { constellation, pendingStarPosition } = get();
@@ -120,8 +141,10 @@ export const useStarStore = create<StarState>((set, get) => {
           connections: constellation.connections, // Keep existing connections for now
         },
         activeStarId: newStar.id, // Show the star being created
+        highlightedStarId: newStar.id,
         isAsking: false,
         pendingStarPosition: null,
+        lastCreatedStarId: newStar.id,
       });
       
       // Generate AI response with streaming
@@ -216,8 +239,8 @@ export const useStarStore = create<StarState>((set, get) => {
       return finalStar;
     },
 
-    drawInspirationCard: () => {
-      const card = getRandomInspirationCard();
+    drawInspirationCard: (region?: GalaxyRegion) => {
+      const card = getRandomInspirationCard(region);
       console.log('🌟 Drawing inspiration card:', card.question);
       set({ currentInspirationCard: card });
       return card;
@@ -244,7 +267,10 @@ export const useStarStore = create<StarState>((set, get) => {
     },
     
     viewStar: (id: string | null) => {
-      set({ activeStarId: id });
+      set(state => ({
+        activeStarId: id,
+        highlightedStarId: id ?? state.highlightedStarId,
+      }));
       console.log(`👁️ Viewing star: ${id}`);
     },
     
@@ -258,6 +284,23 @@ export const useStarStore = create<StarState>((set, get) => {
         isAsking,
         pendingStarPosition: position ?? null,
       });
+    },
+
+    setGalaxyHighlights: (entries) => {
+      const fallback = get().galaxyHighlightColor;
+      const next: Record<string, { color: string }> = {};
+      entries.forEach(({ starId, color }) => {
+        const resolved = color ?? fallback;
+        next[starId] = { color: normalizeHighlightHex(resolved) };
+      });
+      set({ galaxyHighlights: next });
+      if (typeof window !== 'undefined') {
+        (window as any).__galaxyHighlights = next;
+      }
+    },
+
+    setGalaxyHighlightColor: (color) => {
+      set({ galaxyHighlightColor: normalizeHighlightHex(color) });
     },
     
     regenerateConnections: () => {
@@ -297,6 +340,7 @@ export const useStarStore = create<StarState>((set, get) => {
           connections: allConnections,
         },
         activeStarId: null, // 清除活动星星ID，避免阻止按钮点击
+        highlightedStarId: null,
         hasTemplate: true,
         templateInfo: {
           name: template.chineseName,
@@ -311,6 +355,8 @@ export const useStarStore = create<StarState>((set, get) => {
       set({
         constellation: generateEmptyConstellation(),
         activeStarId: null,
+        highlightedStarId: null,
+        galaxyHighlights: {},
         hasTemplate: false,
         templateInfo: null,
       });
