@@ -723,25 +723,41 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   }, [palette, layerAlpha, structureColoring]);
 
   // Angle→区域映射：将360°切为三等份
-  const angleToRegion = (angleRad: number): 'emotion' | 'relation' | 'growth' => {
+  const angleToRegion = React.useCallback((angleRad: number): 'emotion' | 'relation' | 'growth' => {
     const deg = ((angleRad * 180) / Math.PI + 360) % 360;
     if (deg < 120) return 'emotion';
     if (deg < 240) return 'relation';
     return 'growth';
-  };
+  }, []);
 
-  const handleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
-    const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * 100;
-    const y = ((e.clientY - rect.top) / rect.height) * 100;
+  const pendingCardRegionRef = React.useRef<'emotion' | 'relation' | 'growth' | null>(null);
+
+  const computeClickMeta = React.useCallback(({ clientX, clientY }: { clientX: number; clientY: number }) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const xPx = clientX - rect.left;
+    const yPx = clientY - rect.top;
+    const xPct = (xPx / rect.width) * 100;
+    const yPct = (yPx / rect.height) * 100;
     const cx = rect.left + rect.width / 2;
     const cy = rect.top + rect.height / 2;
-    const angle = Math.atan2(e.clientY - cy, e.clientX - cx);
+    const angle = Math.atan2(clientY - cy, clientX - cx);
     const region = angleToRegion(angle);
-    if (onCanvasClick) onCanvasClick({ x, y, region });
-    // 触发热点交互与内容分发（不改主体渲染）
-    clickHs(e.clientX, e.clientY)
-    drawInspirationCard(region as any)
+    return { xPct, yPct, xPx, yPx, region };
+  }, [angleToRegion]);
+
+  const handleBackgroundMeta = React.useCallback((meta: { xPct: number; yPct: number; xPx: number; yPx: number; region: 'emotion' | 'relation' | 'growth' }) => {
+    pendingCardRegionRef.current = meta.region;
+    if (onCanvasClick) onCanvasClick({ x: meta.xPct, y: meta.yPct, region: meta.region });
+    clickHs(meta.xPx, meta.yPx);
+  }, [clickHs, onCanvasClick]);
+
+  const handleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
+    const meta = computeClickMeta({ clientX: e.clientX, clientY: e.clientY });
+    if (!meta) return;
+    handleBackgroundMeta(meta);
   };
 
   const handleMouseMove: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
@@ -899,6 +915,8 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         rotateEnabled={rotateEnabled}
         config={glowCfg}
         resolveHighlightColor={resolveBandHighlight}
+        resolveClickMeta={computeClickMeta}
+        onBackgroundClick={handleBackgroundMeta}
         onPersistHighlights={(points) => {
       if (!points.length) {
         return;
@@ -925,6 +943,18 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           const mapped = mapHighlightsToStars(coloredPoints);
           if (mapped.length) {
             setGalaxyHighlights(mapped);
+          }
+          if (pendingCardRegionRef.current) {
+            const region = pendingCardRegionRef.current;
+            pendingCardRegionRef.current = null;
+            // 延迟与脉冲动画对齐，让卡片在星星闪烁完成后出现
+            window.setTimeout(() => {
+              try {
+                drawInspirationCard(region as any);
+              } catch (error) {
+                console.warn('drawInspirationCard 调用失败:', error);
+              }
+            }, 120);
           }
         }}
       />

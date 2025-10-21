@@ -20,6 +20,8 @@ interface Props {
   onLight?: ()=>void
   onPersistHighlights?: (points: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>) => void
   resolveHighlightColor?: (bandId?: string, source?: { color?: string; litColor?: string }) => string | null
+  resolveClickMeta?: (coords: { clientX: number; clientY: number }) => { xPct: number; yPct: number; xPx: number; yPx: number; region: 'emotion' | 'relation' | 'growth' } | null
+  onBackgroundClick?: (meta: { xPct: number; yPct: number; xPx: number; yPx: number; region: 'emotion' | 'relation' | 'growth' }) => void
 }
 
 type Pulse = { id:number; x:number; y:number; size:number; dur:number; delay:number; color?: string; litColor?: string; source?: { type:'band' | 'bg'; data: any } }
@@ -43,7 +45,7 @@ const normalizeHex = (hex: unknown): string | null => {
   return value.toUpperCase()
 }
 
-const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight, onPersistHighlights, resolveHighlightColor }) => {
+const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scale=1, rotateEnabled=true, config, onLight, onPersistHighlights, resolveHighlightColor, resolveClickMeta, onBackgroundClick }) => {
   const [pulses, setPulses] = useState<Pulse[]>([])
   const rootRef = useRef<HTMLDivElement|null>(null)
   const highlightTimerRef = useRef<number | null>(null)
@@ -75,6 +77,12 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
       const x = e.clientX - rect.left
       const y = e.clientY - rect.top
       const w = rect.width, h = rect.height
+      const clickMeta = resolveClickMeta?.({ clientX: e.clientX, clientY: e.clientY })
+      if (clickMeta) {
+        try { onBackgroundClick && onBackgroundClick(clickMeta) } catch (err) {
+          console.warn('[GalaxyDOMPulseOverlay] onBackgroundClick failed:', err)
+        }
+      }
       const factor = config?.radiusFactor ?? 0.0175
       const minR = config?.minRadius ?? 30
       const R = Math.max(minR, Math.min(w,h) * factor)
