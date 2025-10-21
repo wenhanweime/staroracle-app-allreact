@@ -389,12 +389,15 @@ h1, h2, h3, h4, h5, h6 {
 }
 
 .star-card-front {
-  border: 1px solid rgba(138, 95, 189, 0.3);
+  background: linear-gradient(145deg, #4a1c6a 0%, #2a0f46 100%) !important;
+  background-color: #4a1c6a !important;
+  border: 1px solid rgba(138, 95, 189, 0.35);
 }
 
-.star-card-back {
-  background: linear-gradient(135deg, rgba(27, 39, 53, 0.95) 0%, rgba(13, 18, 30, 0.95) 100%);
-  border: 1px solid rgba(255, 255, 255, 0.2);
+.star-card-face.star-card-back {
+  background: linear-gradient(145deg, #3c1d6d 0%, #241142 100%) !important;
+  background-color: #3c1d6d !important; /* 兜底防止透明 */
+  border: 1px solid rgba(255, 255, 255, 0.25);
   transform: rotateY(180deg);
 }
 
