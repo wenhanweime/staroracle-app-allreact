@@ -5,17 +5,28 @@ import { useChatStore } from '../store/useChatStore'; // 添加聊天状态导�
 import { playSound } from '../utils/soundUtils';
 import Star from './Star';
 import StarRayIcon from './StarRayIcon';
+import { useShallow } from 'zustand/react/shallow';
 
 const Constellation: React.FC = () => {
-  const { 
-    constellation, 
-    activeStarId, 
-    viewStar, 
+  const {
+    constellation,
+    activeStarId,
+    viewStar,
     setIsAsking,
     drawInspirationCard,
     pendingStarPosition,
-    isLoading
-  } = useStarStore();
+    isLoading,
+  } = useStarStore(
+    useShallow((state) => ({
+      constellation: state.constellation,
+      activeStarId: state.activeStarId,
+      viewStar: state.viewStar,
+      setIsAsking: state.setIsAsking,
+      drawInspirationCard: state.drawInspirationCard,
+      pendingStarPosition: state.pendingStarPosition,
+      isLoading: state.isLoading,
+    }))
+  );
   
   // 添加聊天状态检查
   const { messages, isLoading: chatIsLoading } = useChatStore();
@@ -529,4 +540,4 @@ const Constellation: React.FC = () => {
   );
 };
 
-export default Constellation;
+export default React.memo(Constellation);

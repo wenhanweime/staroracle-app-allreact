@@ -504,22 +504,15 @@ const StarCard: React.FC<StarCardProps> = ({
       onHoverEnd={() => setIsHovered(false)}
       onContextMenu={handleContextMenu}
     >
-      <div
-        className="star-card-wrapper"
-        onPointerDown={(e) => {
-          console.log('[StarCard] pointerDown', star.id);
-          e.stopPropagation();
-        }}
-        onClick={(e) => {
-          e.stopPropagation();
-          console.log('[StarCard] wrapper onClick', star.id, 'isFlipped ->', !isFlipped);
-          onFlip?.();
-        }}
-      >
+      <div className="star-card-wrapper" onPointerDown={(e) => e.stopPropagation()}>
         <motion.div
           className={`star-card ${isFlipped ? 'is-flipped' : ''}`}
           animate={{ rotateY: isFlipped ? 180 : 0 }}
           transition={{ duration: 0.6, type: "spring" }}
+          onClick={(e) => {
+            e.stopPropagation();
+            onFlip?.();
+          }}
         >
           {/* Front Side - Star Design */}
           <div className="star-card-face star-card-front">

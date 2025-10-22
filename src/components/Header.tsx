@@ -44,6 +44,7 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
           className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
           onClick={onLogoClick}
           title="集星"
+          data-star-collection-trigger
         >
           <StarRayIcon 
             size={18} 

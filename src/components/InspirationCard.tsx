@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Sparkles, MessageCircle } from 'lucide-react';
 import { InspirationCard as IInspirationCard } from '../utils/inspirationCards';
@@ -21,7 +21,11 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   const [answerReflection, setAnswerReflection] = useState('');
   const [inputValue, setInputValue] = useState('');
   const [isCardReady, setIsCardReady] = useState(false); // 控制内部动画何时开始
+  const [isClosing, setIsClosing] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const cardContainerRef = useRef<HTMLDivElement | null>(null);
+  const cardControls = useAnimationControls();
+  const overlayControls = useAnimationControls();
   
   // 预生成固定的星星位置，避免重新渲染时跳变
   const [starPositions] = useState(() => 
@@ -60,6 +64,26 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
 
     return () => clearTimeout(timer);
   }, []);
+
+  useEffect(() => {
+    overlayControls.start({
+      opacity: 0.6,
+      transition: { duration: 0.18, ease: 'easeOut' },
+    });
+    cardControls.start({
+      opacity: 1,
+      scale: 1,
+      x: 0,
+      y: 0,
+      rotate: 0,
+      transition: {
+        type: 'spring',
+        stiffness: 220,
+        damping: 20,
+        mass: 0.6,
+      },
+    });
+  }, [cardControls, overlayControls]);
     
   // 移除自动聚焦功能 - 只有用户手动点击输入框时才触发键盘
   // useEffect(() => {
@@ -70,9 +94,54 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   //   }
   // }, [isFlipped]);
 
-  const handleDismiss = () => {
+  const computeDismissTarget = () => {
+    const cardEl = cardContainerRef.current;
+    const targetEl = typeof document !== 'undefined'
+      ? (document.querySelector('[data-star-collection-trigger]') as HTMLElement | null)
+      : null;
+
+    if (cardEl && targetEl) {
+      const cardRect = cardEl.getBoundingClientRect();
+      const triggerRect = targetEl.getBoundingClientRect();
+      const deltaX =
+        triggerRect.left + triggerRect.width / 2 - (cardRect.left + cardRect.width / 2);
+      const deltaY =
+        triggerRect.top + triggerRect.height / 2 - (cardRect.top + cardRect.height / 2);
+      return { x: deltaX, y: deltaY };
+    }
+
+    const fallbackWidth = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const fallbackHeight = typeof window !== 'undefined' ? window.innerHeight : 0;
+    return {
+      x: fallbackWidth * 0.35,
+      y: -fallbackHeight * 0.3,
+    };
+  };
+
+  const handleDismiss = async () => {
+    if (isClosing) return;
+    setIsClosing(true);
     playSound('starClick');
-    onDismiss();
+    overlayControls.start({ opacity: 0, transition: { duration: 0.24, ease: 'easeIn' } }).catch(() => {});
+    const target = computeDismissTarget();
+    try {
+      await cardControls.start({
+        x: target.x,
+        y: target.y,
+        scale: 0.35,
+        rotate: -12,
+        opacity: 0,
+        transition: {
+          type: 'spring',
+          stiffness: 260,
+          damping: 26,
+          restDelta: 0.5,
+          restSpeed: 0.5,
+        },
+      });
+    } finally {
+      onDismiss();
+    }
   };
 
   const toggleCardFlip = (target?: boolean) => {
@@ -130,20 +199,18 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     >
       <motion.div
         className="absolute inset-0 bg-black"
-        style={{ opacity: 0.6 }}
         initial={{ opacity: 0 }}
-        animate={{ opacity: 0.6 }}
+        animate={overlayControls}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.18 }}
         onClick={handleDismiss}
       />
 
       <motion.div
+        ref={cardContainerRef}
         className="star-card-container"
-        initial={{ opacity: 0, scale: 0.9 }}
-        animate={{ opacity: 1, scale: 1 }}
-        exit={{ opacity: 0, scale: 0.92 }}
-        transition={{ type: "spring", stiffness: 220, damping: 20, duration: 0.18 }}
+        initial={{ opacity: 0, scale: 0.9, y: 16 }}
+        animate={cardControls}
+        exit={{ opacity: 0, scale: 0.9 }}
       >
         <div
           className="star-card-wrapper"

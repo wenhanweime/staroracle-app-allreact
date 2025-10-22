@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import ReactDOM from 'react-dom'; // ✨ 1. 导入 ReactDOM 用于 Portal
 import { Capacitor } from '@capacitor/core';
 import { StatusBar, Style } from '@capacitor/status-bar';
@@ -560,6 +560,21 @@ function App() {
     applyTemplate(template);
     playSound('starReveal');
   };
+
+  const handleGalaxyCanvasClick = useCallback(
+    ({ x, y }: { x: number; y: number; region: 'emotion' | 'relation' | 'growth' }) => {
+      try {
+        setIsAsking(false, { x, y });
+        playSound('starReveal');
+        if (isNative) {
+          triggerHapticFeedback('light');
+        }
+      } catch (error) {
+        console.warn('处理银河点击事件失败:', error);
+      }
+    },
+    [setIsAsking, isNative]
+  );
   
   return (
     // ✨ 2. 添加根容器 div，创建稳定的布局基础
@@ -578,17 +593,7 @@ function App() {
           <InteractiveGalaxyBackground
             quality={isNative ? 'mid' : 'auto'}
             reducedMotion={prefersReducedMotion}
-            onCanvasClick={({ x, y }) => {
-              try {
-                setIsAsking(false, { x, y });
-                playSound('starReveal');
-                if (isNative) {
-                  triggerHapticFeedback('light');
-                }
-              } catch (error) {
-                console.warn('处理银河点击事件失败:', error);
-              }
-            }}
+            onCanvasClick={handleGalaxyCanvasClick}
           />
         )}
         

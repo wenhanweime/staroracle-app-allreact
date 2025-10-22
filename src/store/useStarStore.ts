@@ -47,7 +47,6 @@ interface StarState {
   viewStar: (id: string | null) => void;
   hideStarDetail: () => void;
   setIsAsking: (isAsking: boolean, position?: StarPosition) => void;
-  addGalaxyHighlightStar: (payload: { xPct: number; yPct: number; region: GalaxyRegion; question?: string; answer?: string }) => void;
   regenerateConnections: () => void;
   applyTemplate: (template: ConstellationTemplate) => void;
   clearConstellation: () => void;
@@ -285,43 +284,6 @@ export const useStarStore = create<StarState>((set, get) => {
         isAsking,
         pendingStarPosition: position ?? null,
       });
-    },
-
-    addGalaxyHighlightStar: ({ xPct, yPct, region, question, answer }) => {
-      const regionLabel =
-        region === 'emotion' ? '情绪之光' : region === 'relation' ? '关系之光' : '成长之光';
-      const now = Date.now();
-      const newStar: Star = {
-        id: `galaxy-${now}`,
-        x: Math.min(100, Math.max(0, xPct)),
-        y: Math.min(100, Math.max(0, yPct)),
-        size: 2.5,
-        brightness: 0.6,
-        question: question ?? `你捕捉到的${regionLabel}提问`,
-        answer: answer ?? '',
-        imageUrl: generateRandomStarImage(),
-        createdAt: new Date(),
-        isSpecial: false,
-        tags: [],
-        primary_category: 'inspiration',
-        emotional_tone: [regionLabel],
-        question_type: '探索型',
-        insight_level: { value: 1, description: '星尘' },
-        initial_luminosity: 60,
-        connection_potential: 2,
-        suggested_follow_up: '',
-        card_summary: question ?? `在${regionLabel}下的灵感`,
-        isTemplate: false,
-        isStreaming: false,
-      };
-
-      set(state => ({
-        constellation: {
-          ...state.constellation,
-          stars: [...state.constellation.stars, newStar],
-        },
-        lastCreatedStarId: newStar.id,
-      }));
     },
 
     setGalaxyHighlights: (entries) => {

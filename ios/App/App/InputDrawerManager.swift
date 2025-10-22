@@ -7,41 +7,26 @@ class InputPassthroughWindow: UIWindow {
     weak var inputDrawerViewController: InputViewController?  // 改名避免与系统属性冲突
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
-        // 先让窗口正常处理触摸测试
         guard let hitView = super.hitTest(point, with: event) else {
-            NSLog("🎯 InputPassthroughWindow: 没有找到hitView，透传事件")
             return nil
         }
-        
-        // 如果点击的是窗口的根视图控制器的根视图（背景视图）
+
         if hitView == self.rootViewController?.view {
-            NSLog("🎯 InputPassthroughWindow: 点击在背景视图上，收起键盘并透传事件")
-            // 收起键盘
             inputDrawerViewController?.textField.resignFirstResponder()
-            return nil // 透传事件
+            return nil
         }
-        
-        // 如果点击的是PassthroughView类型的视图
+
         if let passthroughView = hitView as? PassthroughView {
-            NSLog("🎯 InputPassthroughWindow: 点击在PassthroughView上")
-            
-            // 检查是否点击在容器外
             if let containerView = passthroughView.containerView {
                 let convertedPoint = passthroughView.convert(point, to: containerView)
                 if !containerView.bounds.contains(convertedPoint) {
-                    NSLog("🎯 点击在输入框容器外，收起键盘")
-                    // 点击在容器外，收起键盘
                     inputDrawerViewController?.textField.resignFirstResponder()
-                    return nil // 透传事件
+                    return nil
                 }
             }
-            
-            // 点击在容器内，正常处理
             return hitView
         }
-        
-        // 其他情况，正常返回hitView（比如点击在实际的UI控件上）
-        NSLog("🎯 InputPassthroughWindow: 点击在UI控件上，正常处理")
+
         return hitView
     }
 }
