@@ -379,14 +379,6 @@ h1, h2, h3, h4, h5, h6 {
   box-sizing: border-box;
 }
 
-.star-card.is-flipped .star-card-front {
-  pointer-events: none;
-}
-
-.star-card:not(.is-flipped) .star-card-back {
-  pointer-events: none;
-}
-
 .star-card-face {
   position: absolute;
   width: 100%;

@@ -87,12 +87,14 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   };
 
   const handleCardClick = () => {
+    if (isClosing) return;
     console.log('[InspirationCard] card wrapper clicked');
     toggleCardFlip();
   };
 
   const handleFlipBack = (e: React.MouseEvent) => {
     e.stopPropagation();
+    if (isClosing) return;
     console.log('[InspirationCard] flip back button clicked');
     toggleCardFlip(false);
   };
@@ -128,18 +130,20 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     >
       <motion.div
         className="absolute inset-0 bg-black"
-        style={{ opacity: 0.7 }}
+        style={{ opacity: 0.6 }}
         initial={{ opacity: 0 }}
-        animate={{ opacity: 0.7 }}
+        animate={{ opacity: 0.6 }}
         exit={{ opacity: 0 }}
+        transition={{ duration: 0.18 }}
         onClick={handleDismiss}
       />
-      
+
       <motion.div
         className="star-card-container"
         initial={{ opacity: 0, scale: 0.9 }}
         animate={{ opacity: 1, scale: 1 }}
-        transition={{ type: "spring", damping: 20 }}
+        exit={{ opacity: 0, scale: 0.92 }}
+        transition={{ type: "spring", stiffness: 220, damping: 20, duration: 0.18 }}
       >
         <div
           className="star-card-wrapper"
@@ -197,9 +201,9 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                     opacity: 0
                   }}
                   transition={{
-                    duration: star.duration,
+                    duration: Math.max(1.2, star.duration * 0.75),
                     repeat: isCardReady ? Infinity : 0,
-                    delay: isCardReady ? 2.0 + star.delay : 0
+                    delay: isCardReady ? 1.4 + star.delay * 0.6 : 0
                   }}
                 />
               ))}
@@ -234,10 +238,10 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                           opacity: 0
                         }}
                         transition={{
-                          duration: 1.5,
-                          delay: isCardReady ? i * 0.1 : 0,
+                          duration: 1.1,
+                          delay: isCardReady ? i * 0.08 : 0,
                           repeat: isCardReady ? Infinity : 0,
-                          repeatDelay: isCardReady ? 1 : 0
+                          repeatDelay: isCardReady ? 0.8 : 0
                         }}
               />
                     ))}
@@ -255,8 +259,8 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                     y: 20
                   }}
                   transition={{ 
-                    delay: isCardReady ? 0.5 : 0,
-                    duration: 0.3
+                    delay: isCardReady ? 0.35 : 0,
+                    duration: 0.25
                   }}
                 >
                   <p className="text-center text-base text-neutral-300 font-normal">

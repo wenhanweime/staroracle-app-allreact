@@ -256,6 +256,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const constellationHighlights = useStarStore(state => state.galaxyHighlights);
   const setGalaxyHighlights = useStarStore(state => state.setGalaxyHighlights);
   const setGalaxyHighlightColor = useStarStore(state => state.setGalaxyHighlightColor);
+  const addGalaxyHighlightStar = useStarStore(state => state.addGalaxyHighlightStar);
   const setGridSize = useGalaxyGridStore(s=>s.setCanvasSize)
   const genSites = useGalaxyGridStore(s=>s.generateSites)
   const currentQualityRef = useRef<Exclude<Quality, 'auto'>>('mid');
@@ -751,8 +752,9 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const handleBackgroundMeta = React.useCallback((meta: { xPct: number; yPct: number; xPx: number; yPx: number; region: 'emotion' | 'relation' | 'growth' }) => {
     pendingCardRegionRef.current = meta.region;
     if (onCanvasClick) onCanvasClick({ x: meta.xPct, y: meta.yPct, region: meta.region });
+    addGalaxyHighlightStar({ xPct: meta.xPct, yPct: meta.yPct, region: meta.region });
     clickHs(meta.xPx, meta.yPx);
-  }, [clickHs, onCanvasClick]);
+  }, [addGalaxyHighlightStar, clickHs, onCanvasClick]);
 
   const handleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
     const meta = computeClickMeta({ clientX: e.clientX, clientY: e.clientY });

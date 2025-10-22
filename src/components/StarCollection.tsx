@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { X, Search, Filter, Star as StarIcon } from 'lucide-react';
 import { useStarStore } from '../store/useStarStore';
+import { Capacitor } from '@capacitor/core';
+import { InputDrawer } from '@/plugins/InputDrawer';
 import { playSound } from '../utils/soundUtils';
 import { getMobileModalStyles, getMobileModalClasses, fixIOSZIndex, createTopLevelContainer, hideOtherElements } from '../utils/mobileUtils';
 import StarCard from './StarCard';
@@ -38,6 +40,22 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
   useEffect(() => {
     fixIOSZIndex();
   }, []);
+
+  useEffect(() => {
+    if (!Capacitor.isNativePlatform()) return;
+    const toggle = async () => {
+      try {
+        if (isOpen) {
+          await InputDrawer.hide({ animated: false });
+        } else {
+          await InputDrawer.show({ animated: true });
+        }
+      } catch (error) {
+        console.warn('[StarCollection] 切换 InputDrawer 失败:', error);
+      }
+    };
+    toggle();
+  }, [isOpen]);
 
   // 当模态框打开时隐藏其他元素
   useEffect(() => {
@@ -93,15 +111,16 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
   };
 
   const handleCardFlip = (starId: string) => {
+    console.log('[StarCollection] handleCardFlip', starId, 'currently flipped:', flippedCards.has(starId));
     playSound('starClick');
     setFlippedCards(prev => {
-      const newSet = new Set(prev);
-      if (newSet.has(starId)) {
-        newSet.delete(starId);
+      const next = new Set(prev);
+      if (next.has(starId)) {
+        next.delete(starId);
       } else {
-        newSet.add(starId);
+        next.add(starId);
       }
-      return newSet;
+      return next;
     });
   };
 

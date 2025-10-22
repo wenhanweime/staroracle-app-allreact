@@ -4,18 +4,6 @@ import Capacitor
 
 // MARK: - InputPassthroughWindow - 自定义窗口类，支持触摸事件穿透
 class InputPassthroughWindow: UIWindow {
-    override init(frame: CGRect) {
-        super.init(frame: frame)
-        self.isUserInteractionEnabled = false
-        self.backgroundColor = .clear
-    }
-
-    required init?(coder: NSCoder) {
-        super.init(coder: coder)
-        self.isUserInteractionEnabled = false
-        self.backgroundColor = .clear
-    }
-
     weak var inputDrawerViewController: InputViewController?  // 改名避免与系统属性冲突
     
     override func hitTest(_ point: CGPoint, with event: UIEvent?) -> UIView? {
@@ -88,7 +76,7 @@ public class InputDrawerManager {
             if self.inputWindow != nil {
                 NSLog("🎯 输入框已存在，直接显示")
                 self.inputWindow?.isHidden = false
-                self.inputWindow?.isUserInteractionEnabled = false
+                self.inputWindow?.isUserInteractionEnabled = true
                 self.isVisible = true
                 completion(true)
                 return
