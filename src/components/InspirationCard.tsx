@@ -75,9 +75,26 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     onDismiss();
   };
 
+  const toggleCardFlip = (target?: boolean) => {
+    setIsFlipped(prev => {
+      const next = typeof target === 'boolean' ? target : !prev;
+      console.log('[InspirationCard] toggleCardFlip', { prev, next, target });
+      if (prev !== next) {
+        playSound('starClick');
+      }
+      return next;
+    });
+  };
+
   const handleCardClick = () => {
-    setIsFlipped(!isFlipped);
-    playSound('starClick');
+    console.log('[InspirationCard] card wrapper clicked');
+    toggleCardFlip();
+  };
+
+  const handleFlipBack = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    console.log('[InspirationCard] flip back button clicked');
+    toggleCardFlip(false);
   };
   
   const handleSendMessage = () => {
@@ -124,15 +141,36 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
         animate={{ opacity: 1, scale: 1 }}
         transition={{ type: "spring", damping: 20 }}
       >
-        <div className="star-card-wrapper">
+        <div
+          className="star-card-wrapper"
+          onClick={(e) => {
+            e.stopPropagation();
+            console.log('[InspirationCard] wrapper clicked');
+            toggleCardFlip();
+          }}
+          onPointerDown={(e) => {
+            console.log('[InspirationCard] wrapper pointer down');
+            e.stopPropagation();
+          }}
+        >
           <motion.div
-            className="star-card"
+            className={`star-card ${isFlipped ? 'is-flipped' : ''}`}
             animate={{ rotateY: isFlipped ? 180 : 0 }}
             transition={{ duration: 0.6, type: "spring" }}
-            onClick={handleCardClick}
           >
             {/* Front Side - Card Design */}
-            <div className="star-card-face star-card-front">
+            <div
+              className="star-card-face star-card-front"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('[InspirationCard] front face clicked');
+                toggleCardFlip(true);
+              }}
+              onPointerDown={(e) => {
+                console.log('[InspirationCard] front face pointer down');
+                e.stopPropagation();
+              }}
+            >
               <div className="star-card-bg">
                 <div className="star-card-constellation">
                   {/* Star pattern */}
@@ -256,17 +294,40 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
             </div>
 
             {/* Back Side - Book of Answers */}
-            <div className="star-card-face star-card-back">
+            <div
+              className="star-card-face star-card-back"
+              onClick={(e) => {
+                e.stopPropagation();
+                console.log('[InspirationCard] back face clicked');
+                toggleCardFlip(false);
+              }}
+              onPointerDown={(e) => {
+                console.log('[InspirationCard] back face pointer down');
+                e.stopPropagation();
+              }}
+            >
               <div className="star-card-content flex flex-col h-full">
-                {/* 标题 */}
-                <motion.div
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2 }}
-                >
-                  <h3 className="answer-label text-xl font-semibold text-cosmic-accent text-center mb-6">来自宇宙的答案</h3>
-                </motion.div>
-                
+                {/* 标题与返回按钮 */}
+                <div className="flex items-center justify-between mb-6 px-1">
+                  <motion.div
+                    className="flex-1"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.2 }}
+                  >
+                    <h3 className="answer-label text-xl font-semibold text-cosmic-accent text-center">来自宇宙的答案</h3>
+                  </motion.div>
+                  <motion.button
+                    className="text-xs px-3 py-1 rounded-full border border-white/20 text-white/80 hover:text-white hover:border-white/40 transition-colors ml-3"
+                    initial={{ opacity: 0, y: -10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.35 }}
+                    onClick={handleFlipBack}
+                  >
+                    返回正面
+                  </motion.button>
+                </div>
+
                 {/* 答案部分 - 居中显示 */}
                 <div className="answer-section flex-grow flex items-center justify-center px-6">
                   <motion.div

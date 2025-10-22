@@ -62,9 +62,9 @@ function App() {
     ? window.matchMedia('(prefers-reduced-motion: reduce)').matches
     : false;
   
-  const { 
-    applyTemplate, 
-    currentInspirationCard, 
+  const {
+    applyTemplate,
+    currentInspirationCard,
     dismissInspirationCard,
     setIsAsking
   } = useStarStore();
@@ -426,6 +426,37 @@ function App() {
     };
     boot();
   }, [isNative]);
+
+  useEffect(() => {
+    if (!isNative) return;
+    let cancelled = false;
+    const syncDrawerVisibility = async () => {
+      try {
+        if (currentInspirationCard) {
+          try {
+            await InputDrawer.hide({ animated: true });
+          } catch (error) {
+            console.warn('隐藏 InputDrawer 失败:', error);
+          }
+        } else {
+          // 小延迟，避免与卡片关闭动画冲突
+          await new Promise(resolve => setTimeout(resolve, 180));
+          if (cancelled) return;
+          try {
+            await InputDrawer.show({ animated: true });
+          } catch (error) {
+            console.warn('显示 InputDrawer 失败:', error);
+          }
+        }
+      } catch (error) {
+        console.warn('syncDrawerVisibility 调用异常:', error);
+      }
+    };
+    syncDrawerVisibility();
+    return () => {
+      cancelled = true;
+    };
+  }, [isNative, currentInspirationCard]);
 
   // 🔧 移除重复的消息同步 - 已在useNativeChatOverlay.ts中处理
   // useEffect(() => {
