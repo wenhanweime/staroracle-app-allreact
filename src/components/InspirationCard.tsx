@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useAnimationControls } from 'framer-motion';
+import { motion, AnimatePresence, useAnimationControls, useMotionValue, PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
 import { Sparkles, MessageCircle } from 'lucide-react';
 import { InspirationCard as IInspirationCard } from '../utils/inspirationCards';
@@ -26,6 +26,8 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   const cardContainerRef = useRef<HTMLDivElement | null>(null);
   const cardControls = useAnimationControls();
   const overlayControls = useAnimationControls();
+  const rotate = useMotionValue(0);
+  const hasDraggedRef = useRef(false);
   
   // 预生成固定的星星位置，避免重新渲染时跳变
   const [starPositions] = useState(() => 
@@ -83,6 +85,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
         mass: 0.6,
       },
     });
+    rotate.set(0);
   }, [cardControls, overlayControls]);
     
   // 移除自动聚焦功能 - 只有用户手动点击输入框时才触发键盘
@@ -144,6 +147,75 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     }
   };
 
+  const computeLeftDismissTarget = () => {
+    const cardRect = cardContainerRef.current?.getBoundingClientRect();
+    const width = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const offscreenX = -((width || 0) + (cardRect?.width ?? 320) * 1.1);
+    const lift = cardRect ? -Math.min(cardRect.height * 0.18, 120) : -90;
+    return { x: offscreenX, y: lift };
+  };
+
+  const computeRightDismissTarget = () => {
+    const cardRect = cardContainerRef.current?.getBoundingClientRect();
+    const width = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const offscreenX = (width || 0) + (cardRect?.width ?? 320) * 1.1;
+    const lift = cardRect ? -Math.min(cardRect.height * 0.16, 110) : -80;
+    return { x: offscreenX, y: lift };
+  };
+
+  const handleLinearSwipeDismiss = async (direction: 'left' | 'right', velocityX: number) => {
+    if (isClosing) return;
+    setIsClosing(true);
+    playSound('starClick');
+    const target =
+      direction === 'left' ? computeLeftDismissTarget() : computeRightDismissTarget();
+    overlayControls.start({ opacity: 0, transition: { duration: 0.24, ease: 'easeIn' } }).catch(() => {});
+    rotate.set(direction === 'left' ? -14 : 14);
+    try {
+      await cardControls.start({
+        x: target.x,
+        y: target.y,
+        rotate: direction === 'left' ? -18 : 18,
+        transition: direction === 'left'
+          ? {
+              type: 'spring',
+              stiffness: 150,
+              damping: 18,
+              velocity: Math.max(velocityX / 75, -10),
+            }
+          : {
+              type: 'spring',
+              stiffness: 160,
+              damping: 18,
+              velocity: Math.min(Math.max(velocityX / 70, -10), 12),
+            },
+      });
+      if (direction === 'left') {
+        rotate.set(-20);
+        await cardControls.start({
+          x: target.x - 160,
+          transition: {
+            type: 'tween',
+            duration: 0.18,
+            ease: [0.05, 0.8, 0.2, 1],
+          },
+        });
+      } else {
+        rotate.set(22);
+        await cardControls.start({
+          x: target.x + 160,
+          transition: {
+            type: 'tween',
+            duration: 0.18,
+            ease: [0.05, 0.8, 0.2, 1],
+          },
+        });
+      }
+    } finally {
+      onDismiss();
+    }
+  };
+
   const toggleCardFlip = (target?: boolean) => {
     setIsFlipped(prev => {
       const next = typeof target === 'boolean' ? target : !prev;
@@ -156,14 +228,20 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
   };
 
   const handleCardClick = () => {
-    if (isClosing) return;
+    if (isClosing || hasDraggedRef.current) {
+      hasDraggedRef.current = false;
+      return;
+    }
     console.log('[InspirationCard] card wrapper clicked');
     toggleCardFlip();
   };
 
   const handleFlipBack = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (isClosing) return;
+    if (isClosing || hasDraggedRef.current) {
+      hasDraggedRef.current = false;
+      return;
+    }
     console.log('[InspirationCard] flip back button clicked');
     toggleCardFlip(false);
   };
@@ -211,6 +289,46 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
         initial={{ opacity: 0, scale: 0.9, y: 16 }}
         animate={cardControls}
         exit={{ opacity: 0, scale: 0.9 }}
+        style={{ rotate }}
+        drag={isClosing ? false : 'x'}
+        dragConstraints={{ left: 0, right: 0 }}
+        dragElastic={0.28}
+        onDragStart={() => {
+          if (isClosing) return;
+          hasDraggedRef.current = false;
+          cardControls.stop();
+          rotate.set(0);
+        }}
+        onDrag={(event, info) => {
+          if (isClosing) return;
+          if (Math.abs(info.offset.x) > 4) {
+            hasDraggedRef.current = true;
+          }
+          const limited = Math.max(Math.min(info.offset.x / 10, 18), -18);
+          rotate.set(limited);
+        }}
+        onDragEnd={(event, info: PanInfo) => {
+          if (isClosing) return;
+          const { offset, velocity } = info;
+          rotate.set(0);
+          const shouldDismiss =
+            offset.x < -140 || velocity.x < -900 || offset.x > 140 || velocity.x > 900;
+          if (shouldDismiss) {
+            handleLinearSwipeDismiss(offset.x > 0 || velocity.x > 0 ? 'right' : 'left', velocity.x);
+            return;
+          }
+          hasDraggedRef.current = false;
+          cardControls.start({
+            x: 0,
+            y: 0,
+            rotate: 0,
+            transition: {
+              type: 'spring',
+              stiffness: 320,
+              damping: 28,
+            },
+          });
+        }}
       >
         <div
           className="star-card-wrapper"
