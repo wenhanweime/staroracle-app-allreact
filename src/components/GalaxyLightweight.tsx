@@ -246,61 +246,136 @@ const GalaxyLightweight: React.FC<Props> = ({ params, palette, litPalette, layer
     return map
   }, [persistentHighlights])
 
+  type GalaxyDomStar = (typeof stars)[number]
+  const ringGroups = useMemo(() => {
+    const groups: Record<number, GalaxyDomStar[]> = {}
+    for (let i = 0; i < ringCount; i++) {
+      groups[i] = []
+    }
+    stars.forEach(star => {
+      if (!groups[star.ring]) {
+        groups[star.ring] = []
+      }
+      groups[star.ring].push(star)
+    })
+    return groups
+  }, [stars, ringCount])
+
   return (
     <div
       ref={rootRef}
-      className="pointer-events-none"
+      className="pointer-events-auto"
       style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: heightStyle, zIndex: 1 }}
     >
       {/* 缩放容器：仅缩放银河环，不缩放背景星 */}
       <div
         style={{ position:'absolute', inset:0, transformOrigin:'50% 50%', transform: `scale(${scale||1})`, zIndex: 1 }}
       >
-      {Array.from({length:ringCount}).map((_,ri)=> (
+      {Array.from({length:ringCount}).map((_,ri)=> {
+        const ringStars = ringGroups[ri] || []
+        const neighborSpan = Math.max(1, Math.min(3, Math.floor(ringStars.length / 8) || 1))
+        return (
         <div key={ri}
           style={{
             position:'absolute', inset:0,
             transformOrigin:'50% 50%',
-            animation: `glx-rot ${ringDur(ri)} linear infinite`
+            animation: `glx-rot ${ringDur(ri)} linear infinite`,
+            pointerEvents: 'none'
           }}
         >
-          {stars.filter(s=>s.ring===ri).map((s)=> {
+          {ringStars.map((s, idx, arr)=> {
             const highlightColor = highlightMap.get(s.id)
             const baseColor = highlightColor || s.color
             const zIndex = highlightColor ? 3 : 1
+            const bandPoint = {
+              id: s.id,
+              band: s.ring,
+              x: s.x,
+              y: s.y,
+              size: s.size,
+              bw: dims.w,
+              bh: dims.h,
+              color: s.color,
+              litColor: s.litColor
+            }
+            let neighborIds: string[] = []
+            if (arr.length > 1) {
+              const maxNeighbors = Math.min(arr.length - 1, neighborSpan * 2)
+              for (let offset = 1; offset <= neighborSpan; offset++) {
+                const forward = arr[(idx + offset) % arr.length]
+                if (forward && neighborIds.length < maxNeighbors) {
+                  neighborIds.push(forward.id)
+                }
+                const backward = arr[(idx - offset + arr.length) % arr.length]
+                if (backward && neighborIds.length < maxNeighbors) {
+                  neighborIds.push(backward.id)
+                }
+              }
+            }
+            const starInfo = {
+              id: s.id,
+              x: s.x,
+              y: s.y,
+              size: s.size,
+              color: baseColor,
+              litColor: s.litColor,
+              source: { type: 'band', data: bandPoint }
+            }
+            const neighborAttr = neighborIds.length ? JSON.stringify(neighborIds) : undefined
             return (
-              <div key={s.id}
+              <div
+                key={s.id}
+                className="galaxy-star-node"
+                data-star-id={s.id}
+                data-star-info={JSON.stringify(starInfo)}
+                data-star-neighbors={neighborAttr}
                 style={{
                   position:'absolute', left: s.x, top: s.y, transform:'translate(-50%,-50%)',
                   width: `${s.size}px`, height: `${s.size}px`, borderRadius:'50%',
                   background: baseColor,
                   boxShadow: `0 0 6px ${baseColor}AA, 0 0 12px ${baseColor}66`,
                   opacity: 0.95,
-                  zIndex
+                  zIndex,
+                  pointerEvents: 'auto'
                 }}/>
             )
           })}
         </div>
-      ))}
+      )})}
       </div>
       {/* 背景小星（不旋转） */}
-      {bgStars && bgStars.map((b, i)=> (
-        <div
-          key={'bg-'+i}
-          style={{
-            position:'absolute',
-            left: b.x,
-            top: b.y,
-            transform:'translate(-50%,-50%)',
-            width:`${b.size}px`,
-            height:`${b.size}px`,
-            borderRadius:'50%',
-            background:'#CCCCCC',
-            opacity:0.85,
-            zIndex: 0
-          }}
-        />
-      ))}
+      {bgStars && bgStars.map((b, i)=> {
+        const bgId = `bg-${i}`
+        const starInfo = {
+          id: bgId,
+          x: b.x,
+          y: b.y,
+          size: b.size,
+          color: '#CCCCCC',
+          source: { type: 'bg', data: { id: bgId, x: b.x, y: b.y, size: b.size } }
+        }
+        return (
+          <div
+            key={bgId}
+            className="galaxy-star-node"
+            data-star-id={bgId}
+            data-star-info={JSON.stringify(starInfo)}
+            style={{
+              position:'absolute',
+              left: b.x,
+              top: b.y,
+              transform:'translate(-50%,-50%)',
+              width:`${b.size}px`,
+              height:`${b.size}px`,
+              borderRadius:'50%',
+              background:'#CCCCCC',
+              opacity:0.85,
+              zIndex: 0,
+              pointerEvents: 'auto'
+            }}
+          />
+        )
+      })}
       <style>{`
         @keyframes glx-rot { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
       `}</style>

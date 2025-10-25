@@ -1,5 +1,5 @@
-import React, { useEffect, useRef, useState } from 'react';
-import GalaxyDOMPulseOverlay from './GalaxyDOMPulseOverlay';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { AnimatePresence, motion } from 'framer-motion';
 import GalaxyLightweight from './GalaxyLightweight';
 import { useGalaxyStore } from '../store/useGalaxyStore';
 import { useGalaxyGridStore } from '../store/useGalaxyGridStore';
@@ -13,6 +13,88 @@ interface InteractiveGalaxyBackgroundProps {
   className?: string;
   onCanvasClick?: (payload: { x: number; y: number; region: 'emotion' | 'relation' | 'growth' }) => void;
 }
+
+const PulseOverlay: React.FC<{
+  pulses: Array<{ id: number; x: number; y: number; size: number; dur: number; color: string }>;
+}> = ({ pulses }) => (
+  <div
+    className="pointer-events-none"
+    style={{ position: 'absolute', inset: 0, zIndex: 10 }}
+  >
+    <AnimatePresence>
+      {pulses.map((pulse) => (
+        <motion.div
+          key={pulse.id}
+          initial={{ opacity: 1, scale: 0 }}
+          animate={{ opacity: 0, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: pulse.dur / 1000, ease: 'easeOut' }}
+          style={{
+            position: 'absolute',
+            left: pulse.x,
+            top: pulse.y,
+            width: pulse.size,
+            height: pulse.size,
+            borderRadius: '50%',
+            backgroundColor: pulse.color,
+            transform: 'translate(-50%, -50%)',
+            boxShadow: `0 0 12px ${pulse.color}`,
+          }}
+        />
+      ))}
+    </AnimatePresence>
+  </div>
+);
+
+type GalaxyStarNodeInfo = {
+  id?: string;
+  x?: number;
+  y?: number;
+  size?: number;
+  color?: string;
+  litColor?: string;
+  source?: {
+    type: 'band' | 'bg';
+    data?: {
+      id?: string;
+      band?: number;
+      x?: number;
+      y?: number;
+      size?: number;
+      bw?: number;
+      bh?: number;
+      color?: string;
+      litColor?: string;
+    };
+  };
+};
+
+type BandPoint = {
+  id?: string;
+  x: number;
+  y: number;
+  size: number;
+  band: number;
+  bw: number;
+  bh: number;
+  color?: string;
+  litColor?: string;
+};
+
+const parseNeighborIds = (raw?: string): string[] => {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (Array.isArray(parsed)) {
+      return parsed
+        .filter((id): id is string => typeof id === 'string')
+        .slice(0, 8);
+    }
+  } catch (error) {
+    console.warn('[InteractiveGalaxyBackground] 无法解析 star neighbors:', error);
+  }
+  return [];
+};
 
 // Lightweight pseudo-noise (deterministic) to avoid extra dependencies
 const fract = (n: number) => n - Math.floor(n);
@@ -268,15 +350,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const nearLayerRef = useRef<HTMLCanvasElement | null>(null); // legacy
   const farLayerRef = useRef<HTMLCanvasElement | null>(null);  // legacy
   const bandLayersRef = useRef<HTMLCanvasElement[] | null>(null); // 差速旋转分层
-  // DOM 脉冲用：记录可见星点（CSS像素坐标，仅BG层，免读像素）
-  const domStarPointsRef = useRef<Array<{x:number;y:number;size:number}>>([]);
-  // 记录分层（旋转臂）星点：band 层坐标及其画布尺寸，用于点击时做矩阵变换
-  const bandStarPointsRef = useRef<Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}>>([]);
   // 星点掩膜层：与图层对应的掩膜和每帧合成后的掩膜
   const bgMaskRef = useRef<HTMLCanvasElement | null>(null);
   const bandMaskLayersRef = useRef<HTMLCanvasElement[] | null>(null);
   const starMaskCompositeRef = useRef<HTMLCanvasElement | null>(null);
-  const domBandPointsRef = useRef<Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>>([]);
   const isIOS = typeof navigator !== 'undefined' && /iP(ad|hone|od)/.test(navigator.userAgent)
   const initialParams = isIOS ? {
     ...defaultParams,
@@ -329,11 +406,26 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   }
   const litPalette = litPaletteDefault;
   const [persistentHighlights, setPersistentHighlights] = useState<Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>>([])
+  const [pulses, setPulses] = useState<Array<{ id: number; x: number; y: number; size: number; dur: number; color: string }>>([]);
+  const pulseTimersRef = useRef<number[]>([]);
+  const highlightTimerRef = useRef<number | null>(null);
+  const bandPointLookupRef = useRef<Record<string, BandPoint>>({});
   // 不再从 localStorage 读取，保持默认配置
   // 每层透明度（仅显示层）
   const [layerAlpha] = useState<typeof defaultLayerAlpha>(defaultLayerAlpha);
   const layerAlphaRef = useRef(layerAlpha);
   useEffect(() => { layerAlphaRef.current = layerAlpha; }, [layerAlpha]);
+
+  useEffect(() => {
+    return () => {
+      pulseTimersRef.current.forEach(id => window.clearTimeout(id));
+      pulseTimersRef.current = [];
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     // Coarse pointer (mobile): skip heavy Canvas pipeline, DOM mode will render below
@@ -433,8 +525,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       });
       const bandCtx = bands.map(c => c.getContext('2d')!);
       bandCtx.forEach(ctx => { ctx.save(); ctx.scale(DPR, DPR); });
-      // 收集 band 星点（不含旋转，仅记录生成时 band 层坐标）
-      const bandPts: Array<Array<{x:number;y:number;size:number}>> = Array.from({length:BAND_COUNT},()=>[]);
       const bandMasks: HTMLCanvasElement[] = Array.from({ length: BAND_COUNT }, () => {
         const c = document.createElement('canvas');
         c.width = owidth; c.height = oheight;
@@ -447,7 +537,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       const step = getStep();
 
       // Background small stars -> bg layer (full-screen, no rotation/scale)
-      const domPoints: Array<{x:number;y:number;size:number}> = [];
       const bgCount = Math.floor((width / DPR) * (height / DPR) * p.backgroundDensity * (reducedMotion ? 0.6 : 1) * qualityScale);
       bctx.save(); bctx.scale(DPR, DPR); bctx.globalAlpha = 1; bctx.fillStyle = starBaseColor;
       bmctx.save(); bmctx.scale(DPR, DPR); bmctx.fillStyle = '#FFFFFF';
@@ -460,7 +549,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
         size *= p.backgroundStarSizeMultiplier;
         bctx.beginPath(); bctx.arc(x, y, size, 0, Math.PI * 2); bctx.fill();
         bmctx.beginPath(); bmctx.arc(x, y, size, 0, Math.PI * 2); bmctx.fill();
-        domPoints.push({ x, y, size });
       }
       bctx.restore(); bmctx.restore();
 
@@ -578,8 +666,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
             targetMask.fillStyle = '#FFFFFF';
             targetMask.arc(ox + jx, oy + jy, size, 0, Math.PI * 2);
             targetMask.fill();
-            // 记录 band 星点（生成时坐标）
-            bandPts[bandIndex].push({ x: ox + jx, y: oy + jy, size });
             if (structureColoring) { target.globalAlpha = 1; }
           }
         }
@@ -595,14 +681,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       bandMaskLayersRef.current = bandMasks;
       nearLayerRef.current = null;
       farLayerRef.current = null;
-      domStarPointsRef.current = domPoints;
-      // 展平 band 点并附上 band 画布尺寸
-      const flattened: Array<{x:number;y:number;size:number;band:number;bw:number;bh:number}> = [];
-      for(let i=0;i<BAND_COUNT;i++){
-        const bw = bands[i].width; const bh = bands[i].height;
-        for(const p of bandPts[i]) flattened.push({ x:p.x, y:p.y, size:p.size, band:i, bw, bh });
-      }
-      bandStarPointsRef.current = flattened;
     };
 
     const drawFrame = (time: number) => {
@@ -754,12 +832,6 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     clickHs(meta.xPx, meta.yPx);
   }, [clickHs, onCanvasClick]);
 
-  const handleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
-    const meta = computeClickMeta({ clientX: e.clientX, clientY: e.clientY });
-    if (!meta) return;
-    handleBackgroundMeta(meta);
-  };
-
   const handleMouseMove: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
     const rect = (e.target as HTMLCanvasElement).getBoundingClientRect();
     const cx = rect.left + rect.width / 2;
@@ -772,14 +844,17 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const backgroundIdToStarIdRef = React.useRef<Record<string, string>>({});
 
   const handleBandPointsReady = React.useCallback((pts: Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>) => {
-    domBandPointsRef.current = pts;
     if (typeof window === 'undefined') return;
     if (!constellationStars.length) return;
     const width = window.innerWidth || 1;
     const height = window.innerHeight || 1;
     const mapping: Record<string, string> = {};
     const used = new Set<string>();
+    const lookup: Record<string, BandPoint> = {};
     pts.forEach(pt => {
+      if (pt?.id) {
+        lookup[pt.id] = pt;
+      }
       let nearest: string | null = null;
       let nearestDist = Infinity;
       for (const star of constellationStars) {
@@ -799,14 +874,11 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
       }
     });
     backgroundIdToStarIdRef.current = mapping;
+    bandPointLookupRef.current = lookup;
     if (typeof window !== 'undefined') {
       (window as any).__galaxyHighlightMap = mapping;
     }
   }, [constellationStars]);
-
-  const handleBgPointsReady = React.useCallback((pts: Array<{x:number;y:number;size:number}>) => {
-    domStarPointsRef.current = pts;
-  }, []);
 
   const highlightFallback = React.useMemo(() => normalizeHex(litPalette.core ?? '#FFE2B0') ?? '#FFE2B0', [litPalette.core]);
   useEffect(() => {
@@ -886,79 +958,170 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     });
   }, [resolveBandHighlight, highlightFallback]);
 
+  const persistHighlights = React.useCallback((
+    points: Array<{id:string;band:number;x:number;y:number;size:number;color?:string;litColor?:string}>,
+    regionOverride?: 'emotion' | 'relation' | 'growth'
+  ) => {
+    if (!points.length) return;
+    const coloredPoints = colorizeBandPoints(points);
+    setPersistentHighlights(prev => {
+      const map = new Map<string, typeof coloredPoints[number]>();
+      colorizeBandPoints(prev).forEach(item => map.set(item.id, item));
+      coloredPoints.forEach(item => {
+        if (item.id && map.has(item.id)) {
+          map.delete(item.id);
+        }
+        map.set(item.id, item);
+      });
+      const merged = Array.from(map.values());
+      if (areHighlightListsEqual(prev, merged)) {
+        return prev;
+      }
+      return merged;
+    });
+    const mapped = mapHighlightsToStars(coloredPoints);
+    if (mapped.length) {
+      setGalaxyHighlights(mapped);
+    }
+    const region = regionOverride ?? pendingCardRegionRef.current;
+    if (region) {
+      pendingCardRegionRef.current = null;
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current);
+        pulseTimersRef.current = pulseTimersRef.current.filter(id => id !== highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+      const timer = window.setTimeout(() => {
+        try {
+          drawInspirationCard(region);
+        } catch (error) {
+          console.warn('drawInspirationCard 调用失败:', error);
+        } finally {
+          pulseTimersRef.current = pulseTimersRef.current.filter(id => id !== timer);
+          if (highlightTimerRef.current === timer) {
+            highlightTimerRef.current = null;
+          }
+        }
+      }, 120);
+      highlightTimerRef.current = timer;
+      pulseTimersRef.current.push(timer);
+    }
+  }, [colorizeBandPoints, mapHighlightsToStars, setGalaxyHighlights, drawInspirationCard]);
+
+  const handleGalaxyClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement | null;
+    if (target && target.classList.contains('galaxy-star-node')) {
+      e.stopPropagation();
+      const raw = target.dataset.starInfo;
+      if (!raw) return;
+      let info: GalaxyStarNodeInfo | null = null;
+      try {
+        info = JSON.parse(raw);
+      } catch (err) {
+        console.warn('[InteractiveGalaxyBackground] 无法解析 starInfo:', err);
+        info = null;
+      }
+      if (!info) return;
+      const rect = target.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      const pulseColor = normalizeHex(info.litColor || info.color || highlightFallback) ?? highlightFallback;
+      const pulseSize = Math.max(24, (info.size || 1) * 20);
+      const pulseDuration = glowCfg.durationMs;
+      const pulseId = Date.now();
+      setPulses(prev => [...prev, { id: pulseId, x: centerX, y: centerY, size: pulseSize, dur: pulseDuration, color: pulseColor }]);
+      const removalTimer = window.setTimeout(() => {
+        setPulses(prev => prev.filter(p => p.id !== pulseId));
+        pulseTimersRef.current = pulseTimersRef.current.filter(id => id !== removalTimer);
+      }, pulseDuration);
+      pulseTimersRef.current.push(removalTimer);
+      if (highlightTimerRef.current) {
+        window.clearTimeout(highlightTimerRef.current);
+        pulseTimersRef.current = pulseTimersRef.current.filter(id => id !== highlightTimerRef.current);
+        highlightTimerRef.current = null;
+      }
+      const meta = computeClickMeta({ clientX: centerX, clientY: centerY });
+      const region = meta?.region ?? angleToRegion(Math.atan2(centerY - window.innerHeight / 2, centerX - window.innerWidth / 2));
+      const neighborIds = parseNeighborIds(target.dataset.starNeighbors);
+      const highlightPoints: BandPoint[] = [];
+      const sourceData = info.source?.type === 'band' ? (info.source.data as BandPoint) : undefined;
+      if (sourceData?.id) {
+        highlightPoints.push(sourceData);
+      } else if (info.id) {
+        const fallbackPoint = bandPointLookupRef.current[info.id];
+        if (fallbackPoint) {
+          highlightPoints.push(fallbackPoint);
+        }
+      }
+      if (neighborIds.length) {
+        neighborIds.forEach(id => {
+          const neighbor = bandPointLookupRef.current[id];
+          if (neighbor) {
+            highlightPoints.push(neighbor);
+          }
+        });
+      }
+      if (highlightPoints.length) {
+        persistHighlights(highlightPoints, region);
+      } else {
+        const timer = window.setTimeout(() => {
+          try {
+            drawInspirationCard(region);
+          } catch (error) {
+            console.warn('drawInspirationCard 调用失败:', error);
+          } finally {
+            pulseTimersRef.current = pulseTimersRef.current.filter(id => id !== timer);
+            if (highlightTimerRef.current === timer) {
+              highlightTimerRef.current = null;
+            }
+          }
+        }, 120);
+        highlightTimerRef.current = timer;
+        pulseTimersRef.current.push(timer);
+      }
+      return;
+    }
+    const meta = computeClickMeta({ clientX: e.clientX, clientY: e.clientY });
+    if (meta) {
+      handleBackgroundMeta(meta);
+      return;
+    }
+    if (onCanvasClick) {
+      const currentRect = e.currentTarget.getBoundingClientRect();
+      if (currentRect.width && currentRect.height) {
+        const xPct = ((e.clientX - currentRect.left) / currentRect.width) * 100;
+        const yPct = ((e.clientY - currentRect.top) / currentRect.height) * 100;
+        const region = angleToRegion(Math.atan2(
+          e.clientY - (currentRect.top + currentRect.height / 2),
+          e.clientX - (currentRect.left + currentRect.width / 2)
+        ));
+        onCanvasClick({ x: xPct, y: yPct, region });
+      }
+    }
+  }, [angleToRegion, computeClickMeta, drawInspirationCard, glowCfg.durationMs, handleBackgroundMeta, highlightFallback, onCanvasClick, persistHighlights]);
+
+  const containerClassName = 'fixed top-0 left-0 w-full h-full';
+  const canvasClassName = className || 'absolute inset-0 w-full h-full -z-10';
+
   return (
-    <>
+    <div className={containerClassName} onClick={handleGalaxyClick}>
       <canvas
         ref={canvasRef}
-        className={
-          className || 'fixed top-0 left-0 w-full h-full -z-10'
-        }
-        onClick={handleClick}
+        className={canvasClassName}
         onMouseMove={handleMouseMove}
       />
       <GalaxyLightweight
-          params={params}
-          palette={palette}
-          litPalette={litPalette}
-          structureColoring={structureColoring}
-          armCount={defaultParams.armCount}
-          scale={params.galaxyScale}
-          onBandPointsReady={handleBandPointsReady}
-          onBgPointsReady={handleBgPointsReady}
-          persistentHighlights={persistentHighlights}
-        />
-      {/* DOM/SVG 脉冲（无需像素读回）：只使用BG层星点位置 */}
-      <GalaxyDOMPulseOverlay
-        pointsRef={domStarPointsRef}
-        bandPointsRef={domBandPointsRef}
+        params={params}
+        palette={palette}
+        litPalette={litPalette}
+        structureColoring={structureColoring}
+        armCount={defaultParams.armCount}
         scale={params.galaxyScale}
-        rotateEnabled={rotateEnabled}
-        config={glowCfg}
-        resolveHighlightColor={resolveBandHighlight}
-        resolveClickMeta={computeClickMeta}
-        onBackgroundClick={handleBackgroundMeta}
-        onPersistHighlights={(points) => {
-      if (!points.length) {
-        return;
-      }
-          if (process.env.NODE_ENV !== 'production') {
-            console.debug('[InteractiveGalaxyBackground] persist highlights', points);
-          }
-          const coloredPoints = colorizeBandPoints(points);
-          setPersistentHighlights(prev => {
-            const map = new Map<string, typeof points[number]>()
-            colorizeBandPoints(prev).forEach(item => map.set(item.id, item))
-            coloredPoints.forEach(item => {
-              if (map.has(item.id)) {
-                map.delete(item.id)
-              }
-              map.set(item.id, item)
-            })
-            const merged = Array.from(map.values())
-            if (areHighlightListsEqual(prev, merged)) {
-              return prev
-            }
-            return merged
-          })
-          const mapped = mapHighlightsToStars(coloredPoints);
-          if (mapped.length) {
-            setGalaxyHighlights(mapped);
-          }
-          if (pendingCardRegionRef.current) {
-            const region = pendingCardRegionRef.current;
-            pendingCardRegionRef.current = null;
-            // 延迟与脉冲动画对齐，让卡片在星星闪烁完成后出现
-            window.setTimeout(() => {
-              try {
-                drawInspirationCard(region as any);
-              } catch (error) {
-                console.warn('drawInspirationCard 调用失败:', error);
-              }
-            }, 120);
-          }
-        }}
+        onBandPointsReady={handleBandPointsReady}
+        persistentHighlights={persistentHighlights}
       />
-    </>
+      <PulseOverlay pulses={pulses} />
+    </div>
   );
 };
 

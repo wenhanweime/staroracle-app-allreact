@@ -387,7 +387,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                   }}
                   transition={{
                     duration: Math.max(1.2, star.duration * 0.75),
-                    repeat: isCardReady ? Infinity : 0,
+                    repeat: isCardReady && !isClosing ? Infinity : 0,
                     delay: isCardReady ? 1.4 + star.delay * 0.6 : 0
                   }}
                 />
@@ -425,7 +425,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
                         transition={{
                           duration: 1.1,
                           delay: isCardReady ? i * 0.08 : 0,
-                          repeat: isCardReady ? Infinity : 0,
+                          repeat: isCardReady && !isClosing ? Infinity : 0,
                           repeatDelay: isCardReady ? 0.8 : 0
                         }}
               />
@@ -473,7 +473,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
               }}
               transition={{
                 duration: particle.duration,
-                repeat: isCardReady ? Infinity : 0,
+                repeat: isCardReady && !isClosing ? Infinity : 0,
                 delay: isCardReady ? 2.0 + particle.delay : 0
               }}
             />
