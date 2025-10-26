@@ -20,7 +20,8 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
           paddingBottom: '0.5rem', // 8px底部间距
           // 添加背景，让其延伸到屏幕最顶端实现沉浸效果
           background: 'rgba(0, 0, 0, 0.1)',
-          backdropFilter: 'blur(10px)'
+          backdropFilter: 'blur(10px)',
+          zIndex: 2147483646 // 确保始终位于原生浮层之上，方便点击
         }}
       >
         <div className="flex justify-between items-center h-full">
@@ -41,9 +42,10 @@ const Header: React.FC<HeaderProps> = ({ onOpenDrawerMenu, onLogoClick }) => {
 
         {/* 右侧logo按钮 */}
         <button
-          className="p-2 rounded-full dialog-transparent-button transition-colors duration-200"
+          className="dialog-transparent-button stellar-hit-target transition-colors duration-200"
           onClick={onLogoClick}
           title="集星"
+          aria-label="打开星星收藏册"
           data-star-collection-trigger
         >
           <StarRayIcon 

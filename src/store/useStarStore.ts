@@ -47,6 +47,7 @@ const CARD_TONE_TO_EMOTION: Record<InspirationCard['emotionalTone'], string> = {
 
 interface StarState {
   constellation: Constellation;
+  inspirationStars: Star[];
   activeStarId: string | null;
   highlightedStarId: string | null;
   galaxyHighlights: Record<string, { color: string }>;
@@ -91,6 +92,7 @@ export const useStarStore = create<StarState>((set, get) => {
 
   return {
     constellation: generateEmptyConstellation(),
+    inspirationStars: [],
     activeStarId: null, // 确保初始状态为null
     highlightedStarId: null,
     galaxyHighlights: {},
@@ -296,19 +298,12 @@ export const useStarStore = create<StarState>((set, get) => {
         isTransient: true
       };
 
-      const updatedStars = [...constellation.stars, inspirationStar];
-      const connectionCandidates = updatedStars.filter(star => !star.isTransient);
-      const smartConnections = generateSmartConnections(connectionCandidates);
-
       console.log('🌟 Drawing inspiration card:', card.question, `#${card.spawnedAt}`);
-      set({
-        constellation: {
-          stars: updatedStars,
-          connections: smartConnections,
-        },
+      set(state => ({
+        inspirationStars: [...state.inspirationStars, inspirationStar].slice(-60),
         currentInspirationCard: card,
         lastCreatedStarId: inspirationStar.id,
-      });
+      }));
 
       return card;
     },
@@ -431,6 +426,7 @@ export const useStarStore = create<StarState>((set, get) => {
     clearConstellation: () => {
       set({
         constellation: generateEmptyConstellation(),
+        inspirationStars: [],
         activeStarId: null,
         highlightedStarId: null,
         galaxyHighlights: {},

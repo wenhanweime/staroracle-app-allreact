@@ -61,6 +61,7 @@ interface StarCardProps {
   starStyle?: string; // 可选的星星样式
   colorTheme?: number; // 可选的颜色主题索引
   onContextMenu?: (e: React.MouseEvent) => void; // 右键菜单回调
+  isLoading?: boolean;
 }
 
 const StarCard: React.FC<StarCardProps> = ({ 
@@ -70,7 +71,8 @@ const StarCard: React.FC<StarCardProps> = ({
   showActions = true,
   starStyle,
   colorTheme,
-  onContextMenu
+  onContextMenu,
+  isLoading = false
 }) => {
   const [isHovered, setIsHovered] = useState(false);
   const planetCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -89,6 +91,15 @@ const StarCard: React.FC<StarCardProps> = ({
   };
 
   const { style, theme, hasRing, dustCount } = useMemo(() => {
+    if (isLoading) {
+      return {
+        style: starStyle || STAR_STYLES.STANDARD,
+        theme: colorTheme ?? 0,
+        hasRing: false,
+        dustCount: 0
+      };
+    }
+
     const seed = resolveSeed();
     const seedRandom = (min: number, max: number) => {
       const x = Math.sin(seed) * 10000;
@@ -109,16 +120,21 @@ const StarCard: React.FC<StarCardProps> = ({
       hasRing: randomHasRing,
       dustCount: randomDustCount
     };
-  }, [star.id, star.isSpecial, starStyle, colorTheme]);
+  }, [star.id, star.isSpecial, starStyle, colorTheme, isLoading]);
   
   // 获取当前颜色主题
   const currentTheme = COSMIC_PALETTES[theme];
   
   // 星星基本颜色（特殊星星使用主题色，普通星星使用白色）
   const starColor = star.isSpecial ? currentTheme.accent : currentTheme.star;
+  const placeholderQuestion = star.question?.slice(0, 24) ?? '记忆中的提问';
+  const placeholderDate = star.createdAt instanceof Date
+    ? star.createdAt.toLocaleDateString()
+    : new Date(star.createdAt).toLocaleDateString();
   
   // 随机生成尘埃粒子
   const dustParticles = useMemo(() => {
+    if (isLoading || dustCount === 0) return [];
     return Array.from({ length: dustCount }).map((_, i) => {
       const angle = Math.random() * Math.PI * 2;
       const distance = 30 + Math.random() * 40;
@@ -131,11 +147,11 @@ const StarCard: React.FC<StarCardProps> = ({
         animationDuration: 2 + Math.random() * 3
       };
     });
-  }, [dustCount]);
+  }, [dustCount, isLoading]);
   
   // 生成星环配置（如果有）
   const ringConfig = useMemo(() => {
-    if (!hasRing) return null;
+    if (!hasRing || isLoading) return null;
     
     const ringTilt = (Math.random() - 0.5) * 0.8;
     return {
@@ -145,11 +161,12 @@ const StarCard: React.FC<StarCardProps> = ({
       color: starColor,
       lineWidth: 1.5
     };
-  }, [hasRing, starColor]);
+  }, [hasRing, starColor, isLoading]);
 
   // 处理右键点击，显示灵感卡片
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
+    if (isLoading) return;
     if (onContextMenu) {
       onContextMenu(e);
     }
@@ -157,6 +174,7 @@ const StarCard: React.FC<StarCardProps> = ({
 
   // 行星绘制函数 - 从star-plantegenerate.html移植
   useEffect(() => {
+    if (isLoading) return;
     // 只有当样式是行星类型且canvas存在时绘制行星
     if (!style.startsWith('planet_') || !planetCanvasRef.current) return;
     
@@ -503,7 +521,14 @@ const StarCard: React.FC<StarCardProps> = ({
     
     drawPlanet();
     
-  }, [style, star.id, currentTheme, starColor]);
+  }, [style, star.id, currentTheme, starColor, isLoading]);
+
+  const canFlip = !isLoading;
+  const cardClassName = [
+    'star-card',
+    canFlip && isFlipped ? 'is-flipped' : '',
+    isLoading ? 'is-loading' : '',
+  ].filter(Boolean).join(' ');
 
   return (
     <motion.div
@@ -517,11 +542,12 @@ const StarCard: React.FC<StarCardProps> = ({
     >
       <div className="star-card-wrapper" onPointerDown={(e) => e.stopPropagation()}>
         <motion.div
-          className={`star-card ${isFlipped ? 'is-flipped' : ''}`}
-          animate={{ rotateY: isFlipped ? 180 : 0 }}
+          className={cardClassName}
+          animate={{ rotateY: canFlip && isFlipped ? 180 : 0 }}
           transition={{ duration: 0.6, type: "spring" }}
           onClick={(e) => {
             e.stopPropagation();
+            if (!canFlip) return;
             onFlip?.();
           }}
         >
@@ -535,7 +561,7 @@ const StarCard: React.FC<StarCardProps> = ({
             >
               <div className="star-card-constellation">
                 {/* 渲染行星类型星星 */}
-                {style.startsWith('planet_') && (
+                {!isLoading && style.startsWith('planet_') && (
                   <canvas 
                     ref={planetCanvasRef} 
                     width="200" 
@@ -549,7 +575,7 @@ const StarCard: React.FC<StarCardProps> = ({
                 )}
                 
                 {/* 星星模式 - 仅在非行星样式时显示 */}
-                {!style.startsWith('planet_') && (
+                {!isLoading && !style.startsWith('planet_') && (
                   <svg className="constellation-svg" viewBox="0 0 200 200">
                     <defs>
                       <radialGradient id={`starGlow-${star.id}`} cx="50%" cy="50%" r="50%">
