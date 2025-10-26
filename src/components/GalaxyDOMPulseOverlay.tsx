@@ -223,7 +223,8 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
             (window as any).__galaxyOverlayPayload = payload;
           }
           const longestDur = Math.max(...chosen.map(c => c.dur), 0)
-          const delay = Math.max(0, longestDur - 80)
+          // 缩短高亮提交延迟，使点击反馈更及时
+          const delay = Math.min(240, Math.max(120, longestDur * 0.35 || 0))
           highlightTimerRef.current = window.setTimeout(() => {
             onPersistHighlights(payload)
             highlightTimerRef.current = null

@@ -303,7 +303,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     // 点击高亮范围缩小一半（半径减半）
     radiusFactor: 0.00875,
     minRadius: 15,
-    durationMs: 850,
+    durationMs: 600,
     ease: 'sine' as 'sine' | 'cubic',
   });
   // 闪烁调试参数（用于 ClickGlowOverlay）
@@ -947,14 +947,14 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
           if (pendingCardRegionRef.current) {
             const region = pendingCardRegionRef.current;
             pendingCardRegionRef.current = null;
-            // 延迟与脉冲动画对齐，让卡片在星星闪烁完成后出现
-            window.setTimeout(() => {
+            // 通过 requestAnimationFrame 保持动画连贯，但不再强制额外等待
+            window.requestAnimationFrame(() => {
               try {
                 drawInspirationCard(region as any);
               } catch (error) {
                 console.warn('drawInspirationCard 调用失败:', error);
               }
-            }, 120);
+            });
           }
         }}
       />

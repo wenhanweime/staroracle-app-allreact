@@ -1,7 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { motion, AnimatePresence, useAnimationControls, useMotionValue, PanInfo } from 'framer-motion';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { motion, useAnimationControls, useMotionValue, PanInfo } from 'framer-motion';
 import { createPortal } from 'react-dom';
-import { Sparkles, MessageCircle } from 'lucide-react';
 import { InspirationCard as IInspirationCard } from '../utils/inspirationCards';
 import { useStarStore } from '../store/useStarStore';
 import { playSound } from '../utils/soundUtils';
@@ -11,7 +10,7 @@ import StarRayIcon from './StarRayIcon';
 
 interface InspirationCardProps {
   card: IInspirationCard;
-  onDismiss: () => void;
+  onDismiss: (id: string) => void;
 }
 
 const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) => {
@@ -50,28 +49,39 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     }))
   );
   
-  // 在组件挂载时生成答案，确保答案在整个卡片生命周期内保持不变
+  const spawnMarker = useMemo(() => card.spawnedAt ?? Date.now(), [card.spawnedAt, card.id]);
+
   useEffect(() => {
     const answer = getBookAnswer();
     const reflection = getAnswerReflection(answer);
     setBookAnswer(answer);
     setAnswerReflection(reflection);
-  }, []);
-
-  // 延迟启动内部动画，等待卡片容器动画完成
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setIsCardReady(true);
-    }, 0); // 减少延迟时间，加快主星星出现
-
-    return () => clearTimeout(timer);
-  }, []);
+    setInputValue('');
+    setIsFlipped(false);
+  }, [spawnMarker]);
 
   useEffect(() => {
+    let readyTimer: ReturnType<typeof setTimeout> | null = null;
+    setIsClosing(false);
+    setIsFlipped(false);
+    setIsCardReady(false);
+    hasDraggedRef.current = false;
+
+    cardControls.stop();
+    overlayControls.stop();
+    overlayControls.set({ opacity: 0 });
+    cardControls.set({
+      opacity: 0,
+      scale: 0.9,
+      x: 0,
+      y: 16,
+    });
+    rotate.set(0);
+
     overlayControls.start({
       opacity: 0.6,
       transition: { duration: 0.18, ease: 'easeOut' },
-    });
+    }).catch(() => {});
     cardControls.start({
       opacity: 1,
       scale: 1,
@@ -84,9 +94,18 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
         damping: 20,
         mass: 0.6,
       },
-    });
-    rotate.set(0);
-  }, [cardControls, overlayControls]);
+    }).catch(() => {});
+
+    readyTimer = setTimeout(() => {
+      setIsCardReady(true);
+    }, 0);
+
+    return () => {
+      if (readyTimer) {
+        clearTimeout(readyTimer);
+      }
+    };
+  }, [spawnMarker, cardControls, overlayControls, rotate]);
     
   // 移除自动聚焦功能 - 只有用户手动点击输入框时才触发键盘
   // useEffect(() => {
@@ -143,7 +162,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
         },
       });
     } finally {
-      onDismiss();
+      onDismiss(card.id);
     }
   };
 
@@ -212,7 +231,7 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
         });
       }
     } finally {
-      onDismiss();
+      onDismiss(card.id);
     }
   };
 
@@ -264,13 +283,13 @@ const InspirationCard: React.FC<InspirationCardProps> = ({ card, onDismiss }) =>
     }
   };
 
-  // 为卡片生成唯一ID，用于渐变效果
-  const cardId = `insp-${Date.now()}`;
+  // 为卡片生成稳定的唯一ID，用于渐变效果
+  const cardId = useMemo(() => `insp-${spawnMarker}`, [spawnMarker]);
 
   return createPortal(
     <motion.div
       className="fixed inset-0 flex items-center justify-center"
-      style={{ zIndex: 999999 }}
+      style={{ zIndex: 999999, pointerEvents: isClosing ? 'none' : 'auto' }}
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}

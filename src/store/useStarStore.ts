@@ -20,12 +20,14 @@ const normalizeHighlightHex = (color: unknown): string => {
   }
   if (value.length !== 7) return '#FFFFFF';
   return value.toUpperCase();
-};
+	};
 
 interface StarPosition {
   x: number;
   y: number;
 }
+
+let inspirationSequence = 0;
 
 interface StarState {
   constellation: Constellation;
@@ -43,7 +45,7 @@ interface StarState {
   addStar: (question: string) => Promise<Star>;
   drawInspirationCard: (region?: GalaxyRegion) => InspirationCard;
   useInspirationCard: () => void;
-  dismissInspirationCard: () => void;
+  dismissInspirationCard: (id?: string) => void;
   viewStar: (id: string | null) => void;
   hideStarDetail: () => void;
   setIsAsking: (isAsking: boolean, position?: StarPosition) => void;
@@ -240,8 +242,13 @@ export const useStarStore = create<StarState>((set, get) => {
     },
 
     drawInspirationCard: (region?: GalaxyRegion) => {
-      const card = getRandomInspirationCard(region);
-      console.log('🌟 Drawing inspiration card:', card.question);
+      const rawCard = getRandomInspirationCard(region);
+      const sequence = ++inspirationSequence;
+      const card = {
+        ...rawCard,
+        spawnedAt: sequence,
+      };
+      console.log('🌟 Drawing inspiration card:', card.question, `#${card.spawnedAt}`);
       set({ currentInspirationCard: card });
       return card;
     },
@@ -261,9 +268,19 @@ export const useStarStore = create<StarState>((set, get) => {
       }
     },
 
-    dismissInspirationCard: () => {
-      console.log('👋 Dismissing inspiration card');
-      set({ currentInspirationCard: null });
+    dismissInspirationCard: (id?: string) => {
+      set(state => {
+        const active = state.currentInspirationCard;
+        if (id && active && active.id !== id) {
+          console.log('🚫 跳过关闭灵感卡片，当前卡片已切换', {
+            requestedId: id,
+            activeId: active.id,
+          });
+          return {};
+        }
+        console.log('👋 Dismissing inspiration card', id ? `#${id}` : '');
+        return { currentInspirationCard: null };
+      });
     },
     
     viewStar: (id: string | null) => {

@@ -26,7 +26,7 @@ import { useChatStore } from './store/useChatStore';
 import { ConstellationTemplate } from './types';
 import { checkApiConfiguration, generateAIResponse } from './utils/aiTaggingUtils';
 import { defaultSystemPrompt } from '@/utils/systemPrompt';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
 import { useNativeChatOverlay } from './hooks/useNativeChatOverlay';
 import { useNativeInputDrawer } from './hooks/useNativeInputDrawer';
 import { InputDrawer } from './plugins/InputDrawer';
@@ -607,12 +607,15 @@ function App() {
         {appReady && <Constellation />}
         
         {/* Inspiration card */}
-        {currentInspirationCard && (
-          <InspirationCard
-            card={currentInspirationCard}
-            onDismiss={dismissInspirationCard}
-          />
-        )}
+        <AnimatePresence initial={false} mode="sync">
+          {currentInspirationCard && (
+            <InspirationCard
+              key={currentInspirationCard.spawnedAt ?? currentInspirationCard.id}
+              card={currentInspirationCard}
+              onDismiss={(id) => dismissInspirationCard(id)}
+            />
+          )}
+        </AnimatePresence>
         
         {/* Star detail modal */}
         {appReady && <StarDetail />}

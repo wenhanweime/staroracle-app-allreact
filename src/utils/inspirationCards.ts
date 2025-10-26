@@ -6,6 +6,7 @@ export interface InspirationCard {
   tags: string[];
   category: string;
   emotionalTone: 'positive' | 'neutral' | 'contemplative' | 'seeking';
+  spawnedAt?: number;
 }
 
 // 灵感卡片数据库
