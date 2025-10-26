@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { Star, Connection, Constellation } from '../types';
+import { Star, Connection, Constellation, PlanetRecord, PlanetVariant } from '../types';
 import { generateRandomStarImage } from '../utils/imageUtils';
 import { 
   analyzeStarContent, 
@@ -40,6 +40,7 @@ interface StarState {
   hasTemplate: boolean;
   templateInfo: { name: string; element: string } | null;
   lastCreatedStarId: string | null;
+  planetCards: PlanetRecord[];
   addStar: (question: string) => Promise<Star>;
   drawInspirationCard: (region?: GalaxyRegion) => InspirationCard;
   useInspirationCard: () => void;
@@ -53,6 +54,7 @@ interface StarState {
   updateStarTags: (starId: string, newTags: string[]) => void;
   setGalaxyHighlights: (entries: Array<{ starId: string; color?: string }>) => void;
   setGalaxyHighlightColor: (color: string) => void;
+  addPlanetCard: (params?: { region?: GalaxyRegion }) => PlanetRecord;
 }
 
 // Generate initial empty constellation
@@ -71,6 +73,20 @@ export const useStarStore = create<StarState>((set, get) => {
     return getAIConfigFromUtils();
   };
 
+  const regionVariantMap: Record<GalaxyRegion, PlanetVariant> = {
+    emotion: 'ocean',
+    relation: 'gas',
+    growth: 'desert'
+  };
+
+  const pickVariant = (region?: GalaxyRegion): PlanetVariant => {
+    if (region && regionVariantMap[region]) {
+      return regionVariantMap[region];
+    }
+    const variants: PlanetVariant[] = ['gas', 'ocean', 'lava', 'ice', 'desert'];
+    return variants[Math.floor(Math.random() * variants.length)];
+  };
+
   return {
     constellation: generateEmptyConstellation(),
     activeStarId: null, // 确保初始状态为null
@@ -84,6 +100,7 @@ export const useStarStore = create<StarState>((set, get) => {
     hasTemplate: false,
     templateInfo: null,
     lastCreatedStarId: null,
+    planetCards: [],
     
     addStar: async (question: string) => {
       const { constellation, pendingStarPosition } = get();
@@ -301,6 +318,24 @@ export const useStarStore = create<StarState>((set, get) => {
 
     setGalaxyHighlightColor: (color) => {
       set({ galaxyHighlightColor: normalizeHighlightHex(color) });
+    },
+
+    addPlanetCard: (params) => {
+      const region = params?.region;
+      const newPlanet: PlanetRecord = {
+        id: `planet-${Date.now()}-${Math.floor(Math.random() * 9999)}`,
+        seed: Math.floor(Math.random() * 10_000_000),
+        variant: pickVariant(region),
+        region,
+        createdAt: Date.now()
+      };
+
+      set(state => {
+        const next = [...state.planetCards, newPlanet];
+        return { planetCards: next.slice(-32) };
+      });
+
+      return newPlanet;
     },
     
     regenerateConnections: () => {

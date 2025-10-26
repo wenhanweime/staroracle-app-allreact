@@ -103,3 +103,14 @@ export interface TemplateConnectionData {
   strength: number;
   sharedTags: string[];
 }
+
+export type PlanetVariant = 'gas' | 'ocean' | 'lava' | 'ice' | 'desert';
+export type PlanetRegion = 'emotion' | 'relation' | 'growth';
+
+export interface PlanetRecord {
+  id: string;
+  seed: number;
+  variant: PlanetVariant;
+  region?: PlanetRegion;
+  createdAt: number;
+}

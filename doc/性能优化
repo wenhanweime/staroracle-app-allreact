@@ -1,0 +1,365 @@
+好的，我们来制定一个详细的、分步骤的“作战计划”，来彻底解决你应用的性能问题。
+
+这个计划将从效果最显著、最关键的优化开始，每一步都有明确的目标、详细的执行方案和用于验证效果的**检查点**。请严格按照顺序执行。
+
+### **星 Oracle App 性能优化作战计划**
+
+#### **指导原则**
+
+我们的核心策略是“按需渲染，按需计算”，避免浏览器在同一时间处理过多任务。
+
+1.  **动画生命周期管理**：只在组件可见时播放动画，在组件即将销毁时立即停止动画。
+2.  **事件处理效率**：将高成本的计算（如遍历所有星星）替换为高效的事件委托。
+3.  **列表虚拟化**：只渲染屏幕上可见的列表项，而不是一次性渲染成百上千个。
+4.  **组件记忆化**：防止不必要的组件重渲染。
+
+---
+
+### **第一步：解决 `InspirationCard` 消失时的严重卡顿问题**
+
+这是你提到的最紧急的问题，我们将首先解决它。
+
+*   **目标**：让灵感卡片（`InspirationCard`）在滑动或点击背景消失时，动画如丝般顺滑。
+*   **核心原理**：在卡片开始播放“退出动画”之前，立即“冻结”其内部所有正在无限循环的、消耗性能的微动画（如背景星星闪烁、光芒）。
+
+#### **执行方案**
+
+1.  **打开文件**：`src/components/InspirationCard.tsx`。
+2.  **定位内部动画**：找到所有使用了 `transition` prop 并且设置了 `repeat: Infinity` 的 `motion` 组件。这包括背景星星 (`motion.circle`)、主星光芒 (`motion.line`) 和装饰粒子 (`motion.div`)。
+3.  **添加条件判断**：我们将利用你已有的 `isClosing` 状态作为开关。将所有 `repeat: Infinity` 的设置修改为 `repeat: isCardReady && !isClosing ? Infinity : 0`。
+
+**代码修改 (`src/components/InspirationCard.tsx`)**：
+
+```tsx
+// ... (imports and other code)
+
+// 推荐：将组件用 React.memo 包裹，这在后续步骤中很重要
+const InspirationCard: React.FC<InspirationCardProps> = React.memo(({ card, onDismiss }) => {
+  // ...
+  const [isClosing, setIsClosing] = useState(false);
+
+  const dismissWithSlide = async (direction: 'left' | 'right', velocityX = 0) => {
+    if (isClosing) return;
+    setIsClosing(true); // 👈 这个状态是我们的关键！
+    playSound('starClick');
+    onDismiss();
+    // ... (rest of the function)
+  };
+  
+  // ...
+
+  return createPortal(
+    // ...
+          <motion.div
+            className={`star-card ${isFlipped ? 'is-flipped' : ''}`}
+            // ...
+          >
+            {/* Front Side */}
+            <div className="star-card-face star-card-front" /* ... */ >
+              <div className="star-card-bg">
+                <div className="star-card-constellation">
+                  <svg className="constellation-svg" viewBox="0 0 200 200">
+                    {/* ...defs... */}
+              
+                    {/* 背景星星 */}
+                    {starPositions.map((star, i) => (
+                      <motion.circle
+                        key={i}
+                        // ... (other props)
+                        animate={isCardReady ? { opacity: [0.3, 0.8, 0.3] } : { opacity: 0 }}
+                        transition={{
+                          duration: star.duration,
+                          // 👇 核心修改 1
+                          repeat: isCardReady && !isClosing ? Infinity : 0,
+                          delay: isCardReady ? 2.0 + star.delay : 0
+                        }}
+                      />
+                    ))}
+              
+                    {/* 主星光芒 */}
+                    {[0, 1, 2, 3, 4, 5, 6, 7].map((i) => (
+                      <motion.line
+                        key={i}
+                        // ... (other props)
+                        animate={isCardReady ? { pathLength: 1, opacity: [0, 0.8, 0] } : { pathLength: 0, opacity: 0 }}
+                        transition={{
+                          duration: 1.5,
+                          delay: isCardReady ? i * 0.1 : 0,
+                          // 👇 核心修改 2
+                          repeat: isCardReady && !isClosing ? Infinity : 0,
+                          repeatDelay: isCardReady ? 1 : 0
+                        }}
+                      />
+                    ))}
+                  </svg>
+                </div>
+
+                {/* 装饰粒子 */}
+                <div className="star-card-decorations">
+                  {particlePositions.map((particle, i) => (
+                    <motion.div
+                      key={i}
+                      // ... (other props)
+                      animate={isCardReady ? { y: [-5, 5, -5], opacity: [0.3, 0.7, 0.3] } : { y: 0, opacity: 0 }}
+                      transition={{
+                        duration: particle.duration,
+                        // 👇 核心修改 3
+                        repeat: isCardReady && !isClosing ? Infinity : 0,
+                        delay: isCardReady ? 2.0 + particle.delay : 0
+                      }}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Back Side */}
+            {/* ... */}
+          </motion.div>
+    // ...
+  );
+});
+
+export default InspirationCard;
+```
+
+#### **检查点 1**
+
+1.  运行你的应用。
+2.  点击主页银河，弹出 `InspirationCard`。
+3.  **滑动或点击背景来关闭卡片。**
+4.  **预期结果**：卡片消失的动画现在应该如丝般顺滑，没有任何卡顿或掉帧。
+
+---
+
+### **第二步：重构银河点击交互，解决连续点击卡顿问题**
+
+这是另一个核心交互问题，我们将用最高效的方式重写它。
+
+*   **目标**：无论点击多快，银河的点击响应都应该即时且流畅。
+*   **核心原理**：用高效的 DOM 事件委托取代“每次点击都遍历所有星星”的低效 JavaScript 计算。
+
+#### **执行方案**
+
+1.  **修改 `GalaxyLightweight.tsx`，让星星可以被直接点击。**
+    *   **打开文件**: `src/components/GalaxyLightweight.tsx`。
+    *   **修改代码**:
+        *   让根 `div` 和每个星星 `div` 都能响应 `pointer-events`。
+        *   给每个星星 `div` 添加 `data-*` 属性来存储其信息（ID, 坐标, 颜色等）。
+        *   添加一个统一的 `className` (例如 `galaxy-star-node`) 以便事件委托。
+
+2.  **修改 `InteractiveGalaxyBackground.tsx`，实现事件委托。**
+    *   **打开文件**: `src/components/InteractiveGalaxyBackground.tsx`。
+    *   **删除** `GalaxyDOMPulseOverlay` 组件的导入和使用。
+    *   **添加** 一个新的、轻量的 `PulseOverlay` 组件，只负责渲染脉冲动画。
+    *   **创建** 一个新的 `handleGalaxyClick` 事件处理器，并将其绑定到最外层的容器上。这个处理器会检查 `event.target` 是否是我们的星星节点。
+
+3.  **删除 `GalaxyDOMPulseOverlay.tsx` 文件。**
+
+**代码修改 (`src/components/GalaxyLightweight.tsx`)**:
+
+```tsx
+// src/components/GalaxyLightweight.tsx
+// ...
+
+const GalaxyLightweight: React.FC<Props> = ({ /* ...props */ }) => {
+  // ...
+  return (
+    <div
+      ref={rootRef}
+      className="pointer-events-auto" // 1. 允许容器接收事件
+      style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: heightStyle, zIndex: 1 }}
+    >
+      {/* 缩放容器 */}
+      <div style={{ /* ... */ }}>
+        {Array.from({length:ringCount}).map((_,ri)=> (
+          <div key={ri} style={{
+            /* ... */
+            pointerEvents: 'none', // 2. 旋转层穿透事件
+          }}>
+            {stars.filter(s=>s.ring===ri).map((s)=> {
+              // ...
+              return (
+                <div key={s.id}
+                  data-star-id={s.id}
+                  data-star-info={JSON.stringify({ x: s.x, y: s.y, size: s.size, color: s.color, litColor: s.litColor, source: { type: 'band', data: s } })}
+                  className="galaxy-star-node" // 3. 添加统一类名
+                  style={{
+                    /* ... */
+                    pointerEvents: 'auto', // 4. 让星星可点击
+                  }}/>
+              )
+            })}
+          </div>
+        ))}
+      </div>
+      {/* 背景小星 */}
+      {bgStars && bgStars.map((b, i)=> (
+        <div
+          key={'bg-'+i}
+          className="galaxy-star-node" // 3. 添加统一类名
+          data-star-info={JSON.stringify({ x: b.x, y: b.y, size: b.size, source: { type: 'bg', data: b } })}
+          style={{
+            /* ... */
+            pointerEvents: 'auto', // 4. 让星星可点击
+          }}
+        />
+      ))}
+      {/* ... */}
+    </div>
+  );
+};
+```
+
+**代码修改 (`src/components/InteractiveGalaxyBackground.tsx`)**:
+
+```tsx
+// src/components/InteractiveGalaxyBackground.tsx
+
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { motion, AnimatePresence } from 'framer-motion'; // 引入 motion 和 AnimatePresence
+import GalaxyLightweight from './GalaxyLightweight';
+// 移除 import GalaxyDOMPulseOverlay from './GalaxyDOMPulseOverlay';
+import { useGalaxyStore } from '../store/useGalaxyStore';
+import { useStarStore } from '../store/useStarStore';
+// ... (其他 imports 和工具函数保持不变)
+
+// 1. 新建一个简单的 PulseOverlay 组件
+const PulseOverlay: React.FC<{ pulses: Array<{ id: number; x: number; y: number; size: number; dur: number; color: string; }> }> = ({ pulses }) => (
+  <div className="pointer-events-none" style={{ position: 'fixed', top: 0, left: 0, width: '100%', height: '100vh', zIndex: 10 }}>
+    <AnimatePresence>
+      {pulses.map(p => (
+        <motion.div
+          key={p.id}
+          initial={{ opacity: 1, scale: 0 }}
+          animate={{ opacity: 0, scale: 1 }}
+          exit={{ opacity: 0 }}
+          transition={{ duration: p.dur / 1000, ease: 'easeOut' }}
+          style={{
+            position: 'absolute', left: p.x, top: p.y, width: p.size, height: p.size,
+            borderRadius: '50%', backgroundColor: p.color, transform: 'translate(-50%, -50%)',
+            boxShadow: `0 0 12px ${p.color}`,
+          }}
+        />
+      ))}
+    </AnimatePresence>
+  </div>
+);
+
+const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = ({
+  quality = 'auto',
+  reducedMotion = false,
+  className,
+  onCanvasClick,
+}) => {
+  const [pulses, setPulses] = useState<Array<{ id: number; x: number; y: number; size: number; dur: number; color: string; }>>([]);
+  const highlightTimerRef = useRef<number | null>(null);
+  
+  // ... (其他所有 state 和 hooks 保持不变)
+  const drawInspirationCard = useStarStore(s=>s.drawInspirationCard);
+  const { setGalaxyHighlights, constellationHighlights } = useStarStore(/*...*/);
+
+  // 2. 实现高性能的事件委托点击处理器
+  const handleGalaxyClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const target = e.target as HTMLElement;
+
+    if (target.classList.contains('galaxy-star-node')) {
+      const starInfo = JSON.parse(target.dataset.starInfo || '{}');
+      const rect = target.getBoundingClientRect();
+      const x = rect.left + rect.width / 2;
+      const y = rect.top + rect.height / 2;
+
+      const newPulse = {
+        id: Date.now(), x, y, size: starInfo.size * 20, dur: 850,
+        color: starInfo.litColor || starInfo.color || '#FFE2B0'
+      };
+      setPulses(prev => [...prev, newPulse]);
+      setTimeout(() => setPulses(prev => prev.filter(p => p.id !== newPulse.id)), 850);
+
+      // 延迟执行卡片弹出逻辑，让脉冲动画先启动
+      if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
+      highlightTimerRef.current = window.setTimeout(() => {
+        // ... (此处可以保留原有的 onPersistHighlights 逻辑，用于高亮星星)
+        // 核心：弹出卡片
+        const region = angleToRegion(Math.atan2(e.clientY - window.innerHeight / 2, e.clientX - window.innerWidth / 2));
+        drawInspirationCard(region);
+      }, 100);
+    } else {
+      // 点击空白区域
+      if (onCanvasClick) {
+        const rect = e.currentTarget.getBoundingClientRect();
+        const xPct = ((e.clientX - rect.left) / rect.width) * 100;
+        const yPct = ((e.clientY - rect.top) / rect.height) * 100;
+        const region = angleToRegion(Math.atan2(e.clientY - (rect.top + rect.height / 2), e.clientX - (rect.left + rect.width / 2)));
+        onCanvasClick({ x: xPct, y: yPct, region });
+      }
+    }
+  }, [onCanvasClick, drawInspirationCard]);
+
+  return (
+    // 3. 将点击处理器绑定到根容器
+    <div onClick={handleGalaxyClick} className={className || 'fixed top-0 left-0 w-full h-full -z-10'}>
+      <GalaxyLightweight
+        // ... (props 保持不变)
+      />
+      <PulseOverlay pulses={pulses} />
+      {/* 确保 GalaxyDOMPulseOverlay 组件已被删除 */}
+    </div>
+  );
+};
+
+export default InteractiveGalaxyBackground;
+```
+
+#### **检查点 2**
+
+1.  运行你的应用。
+2.  在主页银河的任意位置（包括星星上和空白处）**快速、连续地点击**。
+3.  **预期结果**：每一次点击都应该立即触发一个视觉效果（脉冲动画或弹出卡片），没有任何延迟或卡顿。浏览器的 CPU 使用率在点击期间应该保持在很低的水平。
+
+---
+
+### **第三步：优化 `StarCollection` 的渲染和滚动性能**
+
+这个问题虽然不是最紧急的，但对整体体验影响很大。
+
+*   **目标**：让星卡收藏集（`StarCollection`）的打开和滚动都变得流畅。
+*   **核心原理**：
+    1.  **列表虚拟化**：只渲染屏幕上看得见的卡片。
+    2.  **动画暂停**：只播放屏幕上看得见的卡片的内部动画。
+    3.  **组件记忆化**：避免不必要的重渲染。
+
+#### **执行方案**
+
+1.  **安装依赖**:
+    ```bash
+    npm install react-window react-intersection-observer
+    npm install -D @types/react-window
+    ```
+
+2.  **修改 `StarCard.tsx`**：
+    *   用 `React.memo` 包裹整个组件。
+    *   引入 `useInView` hook from `react-intersection-observer`。
+    *   将 `useInView` 返回的 `ref` 附加到卡片的根元素。
+    *   修改卡片内部所有无限循环动画的 `transition` prop，使其 `repeat` 属性依赖于 `inView` 的值（`repeat: inView ? Infinity : 0`）。（这个逻辑和第一步中 `InspirationCard` 的 `!isClosing` 类似）。
+
+3.  **修改 `StarCollection.tsx`**：
+    *   引入 `FixedSizeGrid as Grid` from `react-window`。
+    *   创建一个 `Cell` 组件，它将渲染单个 `StarCard` 并接收 `react-window` 传入的 `style` prop。
+    *   用 `<Grid>` 组件替换原来的 `.map()` 循环。你需要根据卡片尺寸和间距设置 `columnCount`, `columnWidth`, `rowCount`, `rowHeight` 等参数。
+
+**由于这部分代码改动较大，我已在之前的回答中提供了完整的、可直接复制粘贴的代码。请参考上一个回答中关于 `StarCollection.tsx` 和 `StarCard.tsx` 虚拟化和 `useInView` 的详细代码。**
+
+#### **检查点 3**
+
+1.  运行你的应用，确保你有足够多的星星（例如，超过 30 颗）以便测试。
+2.  点击按钮打开星卡收藏集。
+3.  在收藏集面板中快速上下滑动。
+4.  **预期结果**：
+    *   收藏集面板应该会立即出现，没有延迟。
+    *   上下滑动列表应该非常流畅，即使有数百张卡片。
+    *   （可选，使用开发者工具）当你快速滚动时，可以看到卡片被动态地加载和卸载，DOM 节点数量保持在一个很低的水平。当卡片滚出屏幕时，其内部动画停止，CPU 使用率下降。
+
+### **最终总结**
+
+完成这三个步骤后，你应用中最关键的性能瓶颈都将被解决。你的应用将变得响应迅速、动画流畅，用户体验会得到质的提升。如果在执行过程中遇到任何问题，随时可以提出。

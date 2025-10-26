@@ -8,6 +8,7 @@ import { InputDrawer } from '@/plugins/InputDrawer';
 import { playSound } from '../utils/soundUtils';
 import { getMobileModalStyles, getMobileModalClasses, fixIOSZIndex, createTopLevelContainer, hideOtherElements } from '../utils/mobileUtils';
 import StarCard from './StarCard';
+import PlanetCard from './PlanetCard';
 
 // 星星样式类型 - 与StarCard组件中的定义保持一致
 const STAR_STYLES = {
@@ -30,7 +31,7 @@ interface StarCollectionProps {
 }
 
 const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
-  const { constellation, drawInspirationCard } = useStarStore();
+  const { constellation, drawInspirationCard, planetCards } = useStarStore();
   const [searchTerm, setSearchTerm] = useState('');
   const [filterType, setFilterType] = useState<'all' | 'special' | 'recent'>('all');
   const [flippedCards, setFlippedCards] = useState<Set<string>>(new Set());
@@ -132,6 +133,8 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
     console.log('📇 灵感卡片已生成:', card.question);
   };
 
+  const displayedPlanets = useMemo(() => [...planetCards].reverse(), [planetCards]);
+
   // Filter stars based on search and filter criteria
   const filteredStars = constellation.stars.filter(star => {
     const matchesSearch = star.question.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -188,6 +191,20 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {displayedPlanets.length > 0 && (
+              <div className="mt-6 mb-6">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-white/90 text-sm tracking-widest uppercase">星球收藏</h3>
+                  <span className="text-xs text-white/60">总数 {displayedPlanets.length}</span>
+                </div>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {displayedPlanets.map(planet => (
+                    <PlanetCard key={planet.id} planet={planet} />
+                  ))}
+                </div>
+              </div>
+            )}
 
             {/* Controls */}
             <div className="collection-controls">

@@ -252,6 +252,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const hoverHs = useGalaxyStore(s=>s.hoverAt)
   const clickHs = useGalaxyStore(s=>s.clickAt)
   const drawInspirationCard = useStarStore(s=>s.drawInspirationCard)
+  const addPlanetCard = useStarStore(state => state.addPlanetCard);
   const constellationStars = useStarStore(state => state.constellation.stars);
   const constellationHighlights = useStarStore(state => state.galaxyHighlights);
   const setGalaxyHighlights = useStarStore(state => state.setGalaxyHighlights);
@@ -752,7 +753,12 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     pendingCardRegionRef.current = meta.region;
     if (onCanvasClick) onCanvasClick({ x: meta.xPct, y: meta.yPct, region: meta.region });
     clickHs(meta.xPx, meta.yPx);
-  }, [clickHs, onCanvasClick]);
+    try {
+      addPlanetCard({ region: meta.region });
+    } catch (error) {
+      console.warn('[InteractiveGalaxyBackground] 生成星球失败:', error);
+    }
+  }, [addPlanetCard, clickHs, onCanvasClick]);
 
   const handleClick: React.MouseEventHandler<HTMLCanvasElement> = (e) => {
     const meta = computeClickMeta({ clientX: e.clientX, clientY: e.clientY });
