@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStarStore } from '../store/useStarStore';
 import { useChatStore } from '../store/useChatStore'; // 添加聊天状态导入
@@ -31,7 +31,13 @@ const Constellation: React.FC = () => {
   // 添加聊天状态检查
   const { messages, isLoading: chatIsLoading } = useChatStore();
   
-  const { stars, connections } = constellation;
+  const { stars: allStars, connections: allConnections } = constellation;
+  const visibleStars = useMemo(() => allStars.filter(star => !star.isTransient), [allStars]);
+  const visibleStarIds = useMemo(() => new Set(visibleStars.map(star => star.id)), [visibleStars]);
+  const visibleConnections = useMemo(
+    () => allConnections.filter(conn => visibleStarIds.has(conn.fromStarId) && visibleStarIds.has(conn.toStarId)),
+    [allConnections, visibleStarIds]
+  );
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 });
   const [sparkles, setSparkles] = useState<Array<{ id: number; x: number; y: number }>>([]);
@@ -223,9 +229,9 @@ const Constellation: React.FC = () => {
             }}
         >
           <defs>
-              {connections.map(connection => {
-                const fromStar = stars.find(s => s.id === connection.fromStarId);
-                const toStar = stars.find(s => s.id === connection.toStarId);
+              {visibleConnections.map(connection => {
+                const fromStar = visibleStars.find(s => s.id === connection.fromStarId);
+                const toStar = visibleStars.find(s => s.id === connection.toStarId);
                 
                 if (!fromStar || !toStar) return null;
                 
@@ -372,9 +378,9 @@ const Constellation: React.FC = () => {
             })}
           </defs>
           
-          {connections.map((connection, index) => {
-            const fromStar = stars.find(s => s.id === connection.fromStarId);
-            const toStar = stars.find(s => s.id === connection.toStarId);
+          {visibleConnections.map((connection, index) => {
+            const fromStar = visibleStars.find(s => s.id === connection.fromStarId);
+            const toStar = visibleStars.find(s => s.id === connection.toStarId);
             
             if (!fromStar || !toStar) return null;
             
@@ -506,17 +512,17 @@ const Constellation: React.FC = () => {
       )}
       
       {/* Stars */}
-      {stars.map(star => {
+      {visibleStars.map(star => {
         const pixelX = (star.x / 100) * dimensions.width;
         const pixelY = (star.y / 100) * dimensions.height;
         const isActive = star.id === activeStarId;
-        
+
         // Find connected stars
-        const connectedStars = connections
+        const connectedStars = visibleConnections
           .filter(conn => conn.fromStarId === star.id || conn.toStarId === star.id)
           .map(conn => conn.fromStarId === star.id ? conn.toStarId : conn.fromStarId);
-        
-        const hasStrongConnections = connections.some(
+
+        const hasStrongConnections = visibleConnections.some(
           conn => (conn.fromStarId === star.id || conn.toStarId === star.id) && conn.strength > 0.4
         );
         

@@ -244,7 +244,8 @@ export const useStarStore = create<StarState>((set, get) => {
       const finalStars = updatedStars.map(star => 
         star.id === newStar.id ? finalStar : star
       );
-      const smartConnections = generateSmartConnections(finalStars);
+      const connectionCandidates = finalStars.filter(star => !star.isTransient);
+      const smartConnections = generateSmartConnections(connectionCandidates);
       
       set({
         constellation: {
@@ -291,11 +292,13 @@ export const useStarStore = create<StarState>((set, get) => {
         suggested_follow_up: card.reflection,
         card_summary: card.question,
         isTemplate: false,
-        isStreaming: false
+        isStreaming: false,
+        isTransient: true
       };
 
       const updatedStars = [...constellation.stars, inspirationStar];
-      const smartConnections = generateSmartConnections(updatedStars);
+      const connectionCandidates = updatedStars.filter(star => !star.isTransient);
+      const smartConnections = generateSmartConnections(connectionCandidates);
 
       console.log('🌟 Drawing inspiration card:', card.question, `#${card.spawnedAt}`);
       set({

@@ -1340,14 +1340,15 @@ export const findSimilarStars = (
 
 // Generate connections with improved algorithm that creates constellations
 export const generateSmartConnections = (stars: Star[]): Connection[] => {
+  const activeStars = stars.filter(star => !star.isTransient);
   const connections: Connection[] = [];
   const processedPairs = new Set<string>();
   const tagToStarsMap: Record<string, string[]> = {}; // Maps tags to star IDs
   
-  console.log('🌟 Generating connections for', stars.length, 'stars');
+  console.log('🌟 Generating connections for', activeStars.length, 'stars');
   
   // First build a map of tags to star IDs to create constellations
-  stars.forEach(star => {
+  activeStars.forEach(star => {
     if (!star.tags || star.tags.length === 0) {
       console.warn(`⚠️ Star "${star.question}" has no tags, skipping connections`);
       return;
@@ -1374,8 +1375,8 @@ export const generateSmartConnections = (stars: Star[]): Connection[] => {
           const pairKey = [star1Id, star2Id].sort().join('-');
           
           if (!processedPairs.has(pairKey)) {
-            const star1 = stars.find(s => s.id === star1Id);
-            const star2 = stars.find(s => s.id === star2Id);
+          const star1 = activeStars.find(s => s.id === star1Id);
+          const star2 = activeStars.find(s => s.id === star2Id);
             
             if (star1 && star2) {
               // Calculate similarity but ensure connection due to shared tag
@@ -1415,7 +1416,7 @@ export const generateSmartConnections = (stars: Star[]): Connection[] => {
   
   // Now check if we should add any additional similarity-based connections
   // that weren't captured by the tag constellations
-  stars.forEach(star => {
+  activeStars.forEach(star => {
     if (!star.tags || star.tags.length === 0) return;
     
     const similarStars = findSimilarStars(star, stars, 0.25, 3);

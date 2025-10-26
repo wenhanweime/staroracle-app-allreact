@@ -253,6 +253,10 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const clickHs = useGalaxyStore(s=>s.clickAt)
   const drawInspirationCard = useStarStore(s=>s.drawInspirationCard)
   const constellationStars = useStarStore(state => state.constellation.stars);
+  const visibleConstellationStars = React.useMemo(
+    () => constellationStars.filter(star => !star.isTransient),
+    [constellationStars]
+  );
   const constellationHighlights = useStarStore(state => state.galaxyHighlights);
   const setGalaxyHighlights = useStarStore(state => state.setGalaxyHighlights);
   const setGalaxyHighlightColor = useStarStore(state => state.setGalaxyHighlightColor);
@@ -774,7 +778,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
   const handleBandPointsReady = React.useCallback((pts: Array<{id:string;x:number;y:number;size:number;band:number;bw:number;bh:number;color?:string;litColor?:string}>) => {
     domBandPointsRef.current = pts;
     if (typeof window === 'undefined') return;
-    if (!constellationStars.length) return;
+    if (!visibleConstellationStars.length) return;
     const width = window.innerWidth || 1;
     const height = window.innerHeight || 1;
     const mapping: Record<string, string> = {};
@@ -782,7 +786,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     pts.forEach(pt => {
       let nearest: string | null = null;
       let nearestDist = Infinity;
-      for (const star of constellationStars) {
+      for (const star of visibleConstellationStars) {
         const sx = (star.x / 100) * width;
         const sy = (star.y / 100) * height;
         const dx = sx - pt.x;
@@ -802,7 +806,7 @@ const InteractiveGalaxyBackground: React.FC<InteractiveGalaxyBackgroundProps> = 
     if (typeof window !== 'undefined') {
       (window as any).__galaxyHighlightMap = mapping;
     }
-  }, [constellationStars]);
+  }, [visibleConstellationStars]);
 
   const handleBgPointsReady = React.useCallback((pts: Array<{x:number;y:number;size:number}>) => {
     domStarPointsRef.current = pts;
