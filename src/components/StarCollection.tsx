@@ -80,11 +80,22 @@ const StarCollection: React.FC<StarCollectionProps> = ({ isOpen, onClose }) => {
   }, [isOpen]);
 
   // 为每个星星生成样式映射
+  const resolveSeed = (star: typeof constellation.stars[number]) => {
+    const parts = star.id.split('-').filter(Boolean);
+    for (const part of parts) {
+      const numeric = Number(part);
+      if (Number.isFinite(numeric)) {
+        return numeric;
+      }
+    }
+    const createdAt = star.createdAt instanceof Date ? star.createdAt : new Date(star.createdAt);
+    return createdAt.getTime() || Date.now();
+  };
+
   const starStyleMap = useMemo(() => {
     const map = new Map();
     constellation.stars.forEach(star => {
-      // 使用星星ID作为随机种子
-      const seed = star.id.split('-')[1] ? parseInt(star.id.split('-')[1]) : Date.now();
+      const seed = resolveSeed(star);
       const seedRandom = (min: number, max: number) => {
         const x = Math.sin(seed) * 10000;
         const r = x - Math.floor(x);

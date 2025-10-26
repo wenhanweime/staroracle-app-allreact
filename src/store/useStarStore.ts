@@ -29,6 +29,22 @@ interface StarPosition {
 
 let inspirationSequence = 0;
 
+const CARD_CATEGORY_TO_PRIMARY: Record<string, Star['primary_category']> = {
+  existential: 'philosophy_and_existence',
+  personal_growth: 'personal_growth',
+  relationships: 'relationships',
+  life_direction: 'career_and_purpose',
+  wellbeing: 'emotional_wellbeing',
+  creative: 'creativity_and_passion'
+};
+
+const CARD_TONE_TO_EMOTION: Record<InspirationCard['emotionalTone'], string> = {
+  positive: '充满希望的',
+  neutral: '中性的',
+  contemplative: '思考的',
+  seeking: '探寻中'
+};
+
 interface StarState {
   constellation: Constellation;
   activeStarId: string | null;
@@ -248,8 +264,49 @@ export const useStarStore = create<StarState>((set, get) => {
         ...rawCard,
         spawnedAt: sequence,
       };
+
+      const { constellation, pendingStarPosition } = get();
+      const baseX = pendingStarPosition?.x ?? (Math.random() * 70 + 15);
+      const baseY = pendingStarPosition?.y ?? (Math.random() * 70 + 15);
+      const toneLabel = CARD_TONE_TO_EMOTION[card.emotionalTone] ?? '探寻中';
+      const primaryCategory = CARD_CATEGORY_TO_PRIMARY[card.category] ?? 'philosophy_and_existence';
+      const inspirationStar: Star = {
+        id: `inspiration-${card.id}-${Date.now()}`,
+        x: baseX,
+        y: baseY,
+        size: Math.random() * 1.2 + 2.8,
+        brightness: 0.6,
+        question: card.question,
+        answer: card.reflection,
+        imageUrl: generateRandomStarImage(),
+        createdAt: new Date(),
+        isSpecial: card.emotionalTone === 'positive',
+        tags: Array.from(new Set([...(card.tags ?? []), 'inspiration_card'])),
+        primary_category: primaryCategory,
+        emotional_tone: [toneLabel],
+        question_type: '灵感火花',
+        insight_level: { value: 2, description: '微光' },
+        initial_luminosity: 55,
+        connection_potential: 2,
+        suggested_follow_up: card.reflection,
+        card_summary: card.question,
+        isTemplate: false,
+        isStreaming: false
+      };
+
+      const updatedStars = [...constellation.stars, inspirationStar];
+      const smartConnections = generateSmartConnections(updatedStars);
+
       console.log('🌟 Drawing inspiration card:', card.question, `#${card.spawnedAt}`);
-      set({ currentInspirationCard: card });
+      set({
+        constellation: {
+          stars: updatedStars,
+          connections: smartConnections,
+        },
+        currentInspirationCard: card,
+        lastCreatedStarId: inspirationStar.id,
+      });
+
       return card;
     },
 
