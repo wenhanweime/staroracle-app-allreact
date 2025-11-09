@@ -24,7 +24,7 @@ struct RootView: View {
           .environmentObject(galaxyStore)
           .ignoresSafeArea()
 
-        homePane
+        primaryPane
           .frame(maxWidth: .infinity, maxHeight: .infinity)
           .offset(x: contentOffset(for: width))
           .scaleEffect(activePane == .home ? 1 : 0.92, anchor: .center)
@@ -47,6 +47,17 @@ struct RootView: View {
           .frame(maxHeight: .infinity, alignment: .top)
           .padding(.leading, 24)
           .transition(.move(edge: .leading))
+
+          HStack(spacing: 0) {
+            Color.clear
+              .frame(width: menuWidth + 24)
+              .allowsHitTesting(false)
+            Color.black.opacity(0.001)
+              .contentShape(Rectangle())
+              .onTapGesture { snapTo(.home) }
+          }
+          .frame(maxWidth: .infinity, maxHeight: .infinity)
+          .ignoresSafeArea()
         }
 
         if activePane == .collection {
@@ -61,11 +72,15 @@ struct RootView: View {
           .frame(maxWidth: .infinity, alignment: .trailing)
         }
       }
-      .overlay(alignment: .top) {
-        topBar
-          .padding(.top, 12)
-          .frame(height: 60, alignment: .center)
-      }
+    }
+  }
+
+  private var primaryPane: some View {
+    ZStack(alignment: .top) {
+      homePane
+      topBar
+        .padding(.top, 12)
+        .frame(height: 60)
     }
   }
 
