@@ -11,20 +11,26 @@ const Constellation: React.FC = () => {
   const {
     constellation,
     activeStarId,
+    highlightedStarId,
+    galaxyHighlightColor,
     viewStar,
     setIsAsking,
     drawInspirationCard,
     pendingStarPosition,
     isLoading,
+    setGalaxyHighlights,
   } = useStarStore(
     useShallow((state) => ({
       constellation: state.constellation,
       activeStarId: state.activeStarId,
+      highlightedStarId: state.highlightedStarId,
+      galaxyHighlightColor: state.galaxyHighlightColor,
       viewStar: state.viewStar,
       setIsAsking: state.setIsAsking,
       drawInspirationCard: state.drawInspirationCard,
       pendingStarPosition: state.pendingStarPosition,
       isLoading: state.isLoading,
+      setGalaxyHighlights: state.setGalaxyHighlights,
     }))
   );
   
@@ -64,6 +70,7 @@ const Constellation: React.FC = () => {
   const handleStarClick = (id: string) => {
     playSound('starClick');
     viewStar(id);
+    setGalaxyHighlights([{ starId: id, color: galaxyHighlightColor }]);
   };
   
   const createSparkle = (x: number, y: number) => {
@@ -528,6 +535,7 @@ const Constellation: React.FC = () => {
         
         return (
           <Star
+            id={star.id}
             key={star.id}
             x={pixelX}
             y={pixelY}
@@ -535,6 +543,7 @@ const Constellation: React.FC = () => {
             brightness={star.brightness}
             isSpecial={star.isSpecial || hasStrongConnections}
             isActive={isActive}
+            isHighlighted={isActive || star.id === highlightedStarId}
             onClick={() => handleStarClick(star.id)}
             tags={star.tags}
             category={star.primary_category} // Updated to use primary_category

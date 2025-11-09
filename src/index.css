@@ -860,6 +860,14 @@ h1, h2, h3, h4, h5, h6 {
   animation: float 6s infinite ease-in-out;
 }
 
+.star-container.highlighted {
+  animation: pulse 1.6s ease-in-out infinite;
+}
+
+.star-container.highlighted .star-core {
+  filter: blur(0);
+}
+
 /*
  * 关键修复：重置 iOS/Safari 上按钮的默认原生外观。
  * 这会移除 iOS 强加的灰色背景和边框，

@@ -145,8 +145,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
         const arr = groups.get(key) || []
         if(arr.length){
           const p = arr.shift()!
-          const durBase = (config?.durationMs ?? 850)
-          const dur = durBase * (0.45 + 0.4*Math.random())
+          const dur = config?.durationMs ?? 850
           const pulseColor = getPulseColor(p)
           chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: pulseColor, litColor: pulseColor, source: p.__source })
         }
@@ -160,8 +159,7 @@ const GalaxyDOMPulseOverlay: React.FC<Props> = ({ pointsRef, bandPointsRef, scal
           const arr = groups.get(key) || []
           if(arr.length){
             const p = arr.shift()!
-            const durBase = (config?.durationMs ?? 850)
-            const dur = durBase * (0.45 + 0.4*Math.random())
+            const dur = config?.durationMs ?? 850
             const pulseColor = getPulseColor(p)
             chosen.push({ id: Date.now()+Math.random(), x: p.x, y: p.y, size: p.size, dur, delay: 0, color: pulseColor, litColor: pulseColor, source: p.__source })
           }
