@@ -63,8 +63,8 @@ struct RootView: View {
       }
       .overlay(alignment: .top) {
         topBar
-          .padding(.top, 8)
-          .padding(.horizontal, 16)
+          .padding(.top, 12)
+          .frame(height: 60, alignment: .center)
       }
     }
   }
@@ -146,23 +146,44 @@ struct RootView: View {
 
   private var topBar: some View {
     HStack {
-      Button(action: { togglePane(.menu) }) {
-        Image(systemName: "line.3.horizontal")
-          .font(.system(size: 18, weight: .medium))
-          .foregroundStyle(.white)
-          .padding(10)
-          .background(Color.white.opacity(0.15), in: Circle())
-      }
-
+      headerMenuButton
       Spacer()
+      headerTitle
+      Spacer()
+      headerStarButton
+    }
+    .padding(.horizontal, 24)
+  }
 
-      Button(action: { togglePane(.collection) }) {
-        Image(systemName: "star.circle.fill")
-          .font(.system(size: 22, weight: .medium))
-          .foregroundStyle(.white)
-          .padding(10)
-          .background(Color.white.opacity(0.15), in: Circle())
-      }
+  private var headerMenuButton: some View {
+    Button(action: { togglePane(.menu) }) {
+      Image(systemName: "line.3.horizontal")
+        .font(.system(size: 16, weight: .medium))
+        .foregroundStyle(.white.opacity(activePane == .menu ? 1 : 0.7))
+        .frame(width: 36, height: 36)
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var headerStarButton: some View {
+    Button(action: { togglePane(.collection) }) {
+      StarRayIconView(size: 18)
+        .frame(width: 36, height: 36)
+        .foregroundStyle(.white.opacity(activePane == .collection ? 1 : 0.7))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var headerTitle: some View {
+    HStack(spacing: 6) {
+      Text("星谕")
+        .font(.system(size: 18, weight: .semibold, design: .serif))
+        .foregroundStyle(.white)
+      Text("(StarOracle)")
+        .font(.caption)
+        .foregroundStyle(.white.opacity(0.7))
     }
   }
 
