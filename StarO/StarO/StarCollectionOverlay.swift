@@ -1,13 +1,25 @@
 import SwiftUI
 import StarOracleCore
 
+enum StarCollectionFilter: CaseIterable {
+  case all, special, recent
+
+  var label: String {
+    switch self {
+    case .all: return "All"
+    case .special: return "Special"
+    case .recent: return "Recent"
+    }
+  }
+}
+
 struct StarCollectionOverlay: View {
   @Binding var isPresented: Bool
   let constellationStars: [Star]
   let inspirationStars: [Star]
 
   @State private var searchText = ""
-  @State private var filter: Filter = .all
+  @State private var filter: StarCollectionFilter = .all
   @State private var flippedIds = Set<String>()
   @State private var visibleCount = 18
 
@@ -24,7 +36,7 @@ struct StarCollectionOverlay: View {
         }
 
       VStack(spacing: 0) {
-        header
+        overlayHeader
         Divider().overlay(Color.white.opacity(0.08))
         controls
         Divider().overlay(Color.white.opacity(0.05))
@@ -45,11 +57,14 @@ struct StarCollectionOverlay: View {
     .onChange(of: isPresented) { _, newValue in
       if newValue {
         visibleCount = 18
+        searchText = ""
+        filter = .all
+        flippedIds = []
       }
     }
   }
 
-  private var header: some View {
+  private var overlayHeader: some View {
     HStack {
       VStack(alignment: .leading, spacing: 4) {
         Text("集星")
@@ -98,7 +113,7 @@ struct StarCollectionOverlay: View {
       Spacer()
 
       Picker("Filter", selection: $filter) {
-        ForEach(Filter.allCases, id: \.self) { filter in
+        ForEach(StarCollectionFilter.allCases, id: \.self) { filter in
           Text(filter.label).tag(filter)
         }
       }
@@ -147,38 +162,19 @@ struct StarCollectionOverlay: View {
     }
   }
 
-  private var mergedStars: [Star] {
-    var unique = [String: Star]()
-    (inspirationStars + constellationStars).forEach { star in
-      unique[star.id] = star
-    }
-    return unique.values.sorted(by: { $0.createdAt > $1.createdAt })
-  }
-
   private var filteredStars: [Star] {
-    mergedStars.filter { star in
-      switch filter {
-      case .all:
-        return matchesSearch(star)
-      case .special:
-        return star.isSpecial && matchesSearch(star)
-      case .recent:
-        guard let days = Calendar.current.dateComponents([.day], from: star.createdAt, to: Date()).day else {
-          return false
-        }
-        return days <= 7 && matchesSearch(star)
-      }
-    }
+    filterStars(
+      stars: mergedStars(
+        constellation: constellationStars,
+        inspiration: inspirationStars
+      ),
+      filter: filter,
+      query: searchText
+    )
   }
 
   private var displayedStars: [Star] {
     Array(filteredStars.prefix(visibleCount))
-  }
-
-  private func matchesSearch(_ star: Star) -> Bool {
-    guard !searchText.isEmpty else { return true }
-    return star.question.localizedCaseInsensitiveContains(searchText) ||
-    star.answer.localizedCaseInsensitiveContains(searchText)
   }
 
   private func toggleFlip(for id: String) {
@@ -196,21 +192,171 @@ struct StarCollectionOverlay: View {
       visibleCount = next
     }
   }
+}
 
-  enum Filter: CaseIterable {
-    case all, special, recent
+struct StarCollectionPane: View {
+  let constellationStars: [Star]
+  let inspirationStars: [Star]
+  var onBack: () -> Void
 
-    var label: String {
-      switch self {
-      case .all: return "All"
-      case .special: return "Special"
-      case .recent: return "Recent"
+  @State private var searchText = ""
+  @State private var filter: StarCollectionFilter = .all
+  @State private var flippedIds = Set<String>()
+  @State private var visibleCount = 18
+
+  private let batchSize = 18
+
+  var body: some View {
+    VStack(spacing: 0) {
+      paneHeader
+      Divider().overlay(Color.white.opacity(0.08))
+      controls
+      Divider().overlay(Color.white.opacity(0.05))
+      gridContent
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+    .background(
+      LinearGradient(
+        colors: [
+          Color(red: 9/255, green: 12/255, blue: 20/255),
+          Color(red: 12/255, green: 18/255, blue: 32/255)
+        ],
+        startPoint: .topLeading,
+        endPoint: .bottomTrailing
+      )
+      .ignoresSafeArea()
+    )
+  }
+
+  private var paneHeader: some View {
+    HStack {
+      Button {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+          onBack()
+        }
+      } label: {
+        Label("返回首页", systemImage: "chevron.left")
+          .font(.footnote.weight(.medium))
+          .padding(.horizontal, 14)
+          .padding(.vertical, 10)
+          .background(Color.white.opacity(0.08), in: Capsule())
       }
+      .buttonStyle(.plain)
+
+      Spacer()
+      VStack(alignment: .trailing, spacing: 4) {
+        Text("Star Collection")
+          .font(.title3.weight(.semibold))
+          .foregroundStyle(.white)
+        Text("\(filteredStars.count) entries")
+          .font(.caption)
+          .foregroundStyle(.white.opacity(0.7))
+      }
+    }
+    .padding(.horizontal, 32)
+    .padding(.top, 56)
+    .padding(.bottom, 16)
+  }
+
+  private var controls: some View {
+    HStack(spacing: 16) {
+      HStack {
+        Image(systemName: "magnifyingglass")
+        TextField("Search your stars...", text: $searchText)
+          .textInputAutocapitalization(.never)
+      }
+      .padding(12)
+      .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 18))
+      .overlay(
+        RoundedRectangle(cornerRadius: 18)
+          .stroke(Color.white.opacity(0.08), lineWidth: 1)
+      )
+
+      Spacer()
+
+      Picker("Filter", selection: $filter) {
+        ForEach(StarCollectionFilter.allCases, id: \.self) { filter in
+          Text(filter.label).tag(filter)
+        }
+      }
+      .pickerStyle(.segmented)
+      .frame(maxWidth: 260)
+    }
+    .padding(.horizontal, 32)
+    .padding(.bottom, 16)
+  }
+
+  private var gridContent: some View {
+    ScrollView {
+      LazyVGrid(columns: [
+        GridItem(.adaptive(minimum: 280), spacing: 20)
+      ], spacing: 20) {
+        ForEach(displayedStars) { star in
+          StarCollectionCard(
+            star: star,
+            flipped: flippedIds.contains(star.id)
+          ) {
+            toggleFlip(for: star.id)
+          }
+          .onAppear {
+            if star.id == displayedStars.last?.id {
+              loadMore()
+            }
+          }
+        }
+      }
+      .padding(.horizontal, 32)
+      .padding(.bottom, 32)
+
+      if visibleCount < filteredStars.count {
+        ProgressView("加载更多星卡...")
+          .tint(.white)
+          .padding(.bottom, 40)
+      } else if filteredStars.isEmpty {
+        VStack(spacing: 12) {
+          Image(systemName: "sparkles")
+            .font(.largeTitle)
+          Text("没有匹配的星卡")
+            .foregroundStyle(.white.opacity(0.7))
+        }
+        .frame(maxWidth: .infinity, minHeight: 240)
+      }
+    }
+  }
+
+  private var filteredStars: [Star] {
+    filterStars(
+      stars: mergedStars(
+        constellation: constellationStars,
+        inspiration: inspirationStars
+      ),
+      filter: filter,
+      query: searchText
+    )
+  }
+
+  private var displayedStars: [Star] {
+    Array(filteredStars.prefix(visibleCount))
+  }
+
+  private func toggleFlip(for id: String) {
+    if flippedIds.contains(id) {
+      flippedIds.remove(id)
+    } else {
+      flippedIds.insert(id)
+    }
+  }
+
+  private func loadMore() {
+    guard visibleCount < filteredStars.count else { return }
+    let next = min(filteredStars.count, visibleCount + batchSize)
+    withAnimation(.easeOut(duration: 0.35)) {
+      visibleCount = next
     }
   }
 }
 
-private struct StarCollectionCard: View {
+fileprivate struct StarCollectionCard: View {
   let star: Star
   let flipped: Bool
   let onTap: () -> Void
@@ -258,51 +404,57 @@ private struct StarCollectionCard: View {
         Text(flipped ? star.answer : star.question)
           .font(.system(.body, design: .serif))
           .foregroundStyle(.white)
-          .multilineTextAlignment(.leading)
-          .lineLimit(5)
-          .frame(maxWidth: .infinity, alignment: .leading)
+          .lineLimit(4)
 
-        Spacer()
+        Spacer(minLength: 0)
 
-        HStack {
-          Label(categoryLabel, systemImage: "circle.grid.cross")
-            .font(.caption2)
-            .foregroundStyle(.white.opacity(0.8))
-          Spacer()
-          Button {
+        Button {
+          withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
             onTap()
-          } label: {
-            Text(flipped ? "查看提问" : "查看回答")
-              .font(.caption)
-              .padding(.horizontal, 12)
-              .padding(.vertical, 6)
-              .background(Color.white.opacity(0.12), in: Capsule())
           }
-          .buttonStyle(.plain)
+        } label: {
+          Text(flipped ? "查看问题" : "查看回答")
+            .font(.caption.weight(.medium))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 8)
+            .background(Color.white.opacity(0.15), in: Capsule())
         }
+        .buttonStyle(.plain)
       }
-      .padding(24)
+      .padding(20)
     }
-    .frame(height: 220)
-    .rotation3DEffect(
-      .degrees(flipped ? 180 : 0),
-      axis: (x: 0, y: 1, z: 0)
-    )
-    .animation(.spring(response: 0.6, dampingFraction: 0.75), value: flipped)
-    .onTapGesture {
-      onTap()
-    }
+    .frame(minHeight: 220)
   }
+}
 
-  private var categoryLabel: String {
-    switch star.primaryCategory {
-    case "relationships": return "关系"
-    case "personal_growth": return "成长"
-    case "career_and_purpose": return "事业"
-    case "emotional_wellbeing": return "情绪"
-    case "creativity_and_passion": return "创造"
-    case "daily_life": return "日常"
-    default: return "探索"
+private func mergedStars(constellation: [Star], inspiration: [Star]) -> [Star] {
+  var unique = [String: Star]()
+  (inspiration + constellation).forEach { star in
+    unique[star.id] = star
+  }
+  return unique.values.sorted(by: { $0.createdAt > $1.createdAt })
+}
+
+private func filterStars(
+  stars: [Star],
+  filter: StarCollectionFilter,
+  query: String
+) -> [Star] {
+  stars.filter { star in
+    let matchesQuery = query.isEmpty ||
+    star.question.localizedCaseInsensitiveContains(query) ||
+    star.answer.localizedCaseInsensitiveContains(query)
+
+    switch filter {
+    case .all:
+      return matchesQuery
+    case .special:
+      return star.isSpecial && matchesQuery
+    case .recent:
+      guard let days = Calendar.current.dateComponents([.day], from: star.createdAt, to: Date()).day else {
+        return false
+      }
+      return days <= 7 && matchesQuery
     }
   }
 }
