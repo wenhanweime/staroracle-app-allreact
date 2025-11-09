@@ -12,6 +12,7 @@ struct RootView: View {
 
   @State private var activePane: ActivePane = .home
   @State private var selectedStar: Star?
+  @State private var dragOffset: CGFloat = 0
 
   var body: some View {
     GeometryReader { geometry in
@@ -26,7 +27,7 @@ struct RootView: View {
 
         primaryPane
           .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .offset(x: contentOffset(for: width))
+          .offset(x: contentOffset(for: width) + dragOffset)
           .scaleEffect(activePane == .home ? 1 : 0.92, anchor: .center)
           .animation(.spring(response: 0.4, dampingFraction: 0.85), value: activePane)
           .disabled(activePane != .home)
@@ -72,6 +73,16 @@ struct RootView: View {
           .frame(maxWidth: .infinity, alignment: .trailing)
         }
       }
+      .contentShape(Rectangle())
+      .gesture(
+        DragGesture(minimumDistance: 15)
+          .onChanged { value in
+            handleDragChanged(value.translation.width, width: width)
+          }
+          .onEnded { value in
+            handleDragEnded(value.translation.width, width: width)
+          }
+      )
     }
   }
 
@@ -216,6 +227,7 @@ struct RootView: View {
   private func snapTo(_ pane: ActivePane) {
     withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
       activePane = pane
+      dragOffset = 0
     }
   }
 
@@ -224,6 +236,44 @@ struct RootView: View {
       snapTo(.home)
     } else {
       snapTo(pane)
+    }
+  }
+
+  private func handleDragChanged(_ translation: CGFloat, width: CGFloat) {
+    let limit = width * 0.5
+    switch activePane {
+    case .home:
+      dragOffset = max(-limit, min(limit, translation))
+    case .menu:
+      dragOffset = max(-limit, min(0, translation))
+    case .collection:
+      dragOffset = max(0, min(limit, translation))
+    }
+  }
+
+  private func handleDragEnded(_ translation: CGFloat, width: CGFloat) {
+    let threshold = width * 0.2
+    defer { dragOffset = 0 }
+
+    switch activePane {
+    case .home:
+      if translation > threshold {
+        snapTo(.menu)
+      } else if translation < -threshold {
+        snapTo(.collection)
+      }
+    case .menu:
+      if translation < -threshold {
+        snapTo(.home)
+      } else {
+        snapTo(.menu)
+      }
+    case .collection:
+      if translation > threshold {
+        snapTo(.home)
+      } else {
+        snapTo(.collection)
+      }
     }
   }
 
