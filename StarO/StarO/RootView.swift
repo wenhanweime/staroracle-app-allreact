@@ -9,6 +9,7 @@ struct RootView: View {
   @EnvironmentObject private var starStore: StarStore
   @EnvironmentObject private var galaxyStore: GalaxyStore
   @EnvironmentObject private var conversationStore: ConversationStore
+  @EnvironmentObject private var chatBridge: NativeChatBridge
 
   @State private var activePane: ActivePane = .home
   @State private var selectedStar: Star?
@@ -73,6 +74,10 @@ struct RootView: View {
           .frame(maxWidth: .infinity, alignment: .trailing)
         }
       }
+      .overlay(
+        ChatOverlayHostView(bridge: chatBridge)
+          .allowsHitTesting(false)
+      )
       .contentShape(Rectangle())
       .gesture(
         DragGesture(minimumDistance: 15)
@@ -83,6 +88,19 @@ struct RootView: View {
             handleDragEnded(value.translation.width, width: width)
           }
       )
+      .onAppear {
+        chatBridge.activateIfNeeded()
+        let offset = activePane == .menu ? menuWidth + 24 : 0
+        chatBridge.setHorizontalOffset(offset, animated: false)
+        chatBridge.ensureOverlayVisible(collapsed: true)
+      }
+      .onChange(of: activePane) { _, newValue in
+        let offset = newValue == .menu ? menuWidth + 24 : 0
+        chatBridge.setHorizontalOffset(offset, animated: true)
+        if newValue != .menu {
+          chatBridge.ensureOverlayVisible(collapsed: true)
+        }
+      }
     }
   }
 
@@ -171,11 +189,12 @@ struct RootView: View {
   }
 
   private var topBar: some View {
-    HStack {
+    HStack(spacing: 16) {
       headerMenuButton
       Spacer()
       headerTitle
       Spacer()
+      headerChatButton
       headerStarButton
     }
     .padding(.horizontal, 24)
@@ -197,6 +216,18 @@ struct RootView: View {
       StarRayIconView(size: 18)
         .frame(width: 36, height: 36)
         .foregroundStyle(.white.opacity(activePane == .collection ? 1 : 0.7))
+        .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var headerChatButton: some View {
+    let isActive = chatBridge.presentationState != .hidden
+    return Button(action: { chatBridge.toggleOverlay(expanded: true) }) {
+      Image(systemName: isActive ? "bubble.left.and.bubble.right.fill" : "bubble.left.and.bubble.right")
+        .font(.system(size: 16, weight: .medium))
+        .foregroundStyle(.white.opacity(isActive ? 1 : 0.7))
+        .frame(width: 36, height: 36)
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
     .buttonStyle(.plain)

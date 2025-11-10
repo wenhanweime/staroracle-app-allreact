@@ -2,12 +2,15 @@ import Foundation
 import Combine
 import StarOracleCore
 
+typealias CoreChatMessage = StarOracleCore.ChatMessage
+
 extension Notification.Name {
   static let conversationStoreChanged = Notification.Name("conversationStoreChanged")
 }
 
-@MainActor
 final class ConversationStore: ObservableObject {
+  static let shared = ConversationStore()
+
   struct Session: Identifiable, Codable, Equatable {
     let id: String
     var title: String
@@ -125,11 +128,11 @@ final class ConversationStore: ObservableObject {
 
   // MARK: - Messages
 
-  func messages(for id: String? = nil) -> [ChatMessage] {
+  func messages(forSession id: String? = nil) -> [CoreChatMessage] {
     let sessionId = id ?? currentSessionId
     guard let session = sessions.first(where: { $0.id == sessionId }) else { return [] }
     return session.messages.map { persist in
-      ChatMessage(
+      CoreChatMessage(
         id: persist.id,
         text: persist.text,
         isUser: persist.isUser,
@@ -139,7 +142,7 @@ final class ConversationStore: ObservableObject {
     }
   }
 
-  func updateCurrentSessionMessages(_ messages: [ChatMessage]) {
+  func updateCurrentSessionMessages(_ messages: [CoreChatMessage]) {
     guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
     sessions[index].messages = messages.map { message in
       PersistMessage(
@@ -151,6 +154,36 @@ final class ConversationStore: ObservableObject {
     }
     sessions[index].updatedAt = Date()
     scheduleSave()
+  }
+
+  var messages: [OverlayChatMessage] {
+    messages(forSession: currentSessionId).map { $0.toOverlayMessage() }
+  }
+
+  func setMessages(_ list: [OverlayChatMessage]) {
+    let converted = list.map { $0.toCoreMessage() }
+    updateCurrentSessionMessages(converted)
+  }
+
+  func append(_ message: OverlayChatMessage) {
+    guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
+    var updated = sessions[index].messages
+    updated.append(message.toPersistMessage())
+    sessions[index].messages = updated
+    sessions[index].updatedAt = Date()
+    scheduleSave()
+  }
+
+  func replaceLastAssistantText(_ text: String) {
+    guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
+    var updated = sessions[index].messages
+    if let lastIndex = updated.lastIndex(where: { !$0.isUser }) {
+      let target = updated[lastIndex]
+      updated[lastIndex] = PersistMessage(id: target.id, text: text, isUser: target.isUser, timestamp: Date())
+      sessions[index].messages = updated
+      sessions[index].updatedAt = Date()
+      scheduleSave()
+    }
   }
 
   func setSystemPrompt(_ prompt: String, sessionId: String? = nil) {
@@ -196,3 +229,37 @@ final class ConversationStore: ObservableObject {
     return dir.appendingPathComponent("conversation_sessions.json")
   }
 }
+
+private extension OverlayChatMessage {
+  func toCoreMessage() -> CoreChatMessage {
+    CoreChatMessage(
+      id: id,
+      text: text,
+      isUser: isUser,
+      timestamp: Date(timeIntervalSince1970: timestamp / 1000),
+      isResponse: !isUser
+    )
+  }
+
+  func toPersistMessage() -> ConversationStore.PersistMessage {
+    ConversationStore.PersistMessage(
+      id: id,
+      text: text,
+      isUser: isUser,
+      timestamp: Date(timeIntervalSince1970: timestamp / 1000)
+    )
+  }
+}
+
+private extension CoreChatMessage {
+  func toOverlayMessage() -> OverlayChatMessage {
+    OverlayChatMessage(
+      id: id,
+      text: text,
+      isUser: isUser,
+      timestamp: timestamp.timeIntervalSince1970 * 1000
+    )
+  }
+}
+
+extension ConversationStore: @unchecked Sendable {}

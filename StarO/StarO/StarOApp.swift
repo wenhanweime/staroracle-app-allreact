@@ -20,6 +20,7 @@ struct StarOApp: App {
         .environmentObject(environment.galaxyStore)
         .environmentObject(environment.galaxyGridStore)
         .environmentObject(environment.conversationStore)
+        .environmentObject(environment.chatBridge)
     }
   }
 }
