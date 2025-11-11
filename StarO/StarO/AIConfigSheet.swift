@@ -5,10 +5,10 @@ import StarOracleServices
 struct AIConfigSheet: View {
   @EnvironmentObject private var environment: AppEnvironment
   @State private var config: AIConfiguration = AIConfiguration(
-    provider: "mock",
+    provider: "openai",
     apiKey: "",
-    endpoint: URL(string: "https://example.com/mock")!,
-    model: "mock-gpt"
+    endpoint: URL(string: "https://api.openai.com/v1/chat/completions")!,
+    model: "gpt-4o-mini"
   )
   @State private var validationMessage: String?
   @State private var isValidating = false
@@ -57,7 +57,7 @@ struct AIConfigSheet: View {
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             } else {
-              Text("验证将使用当前输入与 Mock AIService 进行模拟，后续接入真实接口。")
+              Text("验证会直接向配置的 Endpoint 发送一次最小请求，用于确认 API Key / 模型是否可用。")
                 .font(.footnote)
                 .foregroundStyle(.secondary)
             }

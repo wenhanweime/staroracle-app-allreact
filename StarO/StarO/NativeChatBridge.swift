@@ -65,6 +65,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   }
 
   func ensureInputDrawerVisible() {
+    NSLog("🎯 NativeChatBridge.ensureInputDrawerVisible")
     inputManager.show(animated: true) { [weak self] success in
       guard let self else { return }
       if success { self.isInputDrawerVisible = true }
@@ -78,6 +79,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   }
 
   func toggleOverlay(expanded: Bool = true) {
+    NSLog("🎯 NativeChatBridge.toggleOverlay expanded=\(expanded) state=\(presentationState)")
     switch presentationState {
     case .hidden:
       openOverlay(expanded: expanded)
@@ -93,19 +95,26 @@ final class NativeChatBridge: NSObject, ObservableObject {
   }
 
   func openOverlay(expanded: Bool) {
+    NSLog("🎯 NativeChatBridge.openOverlay expanded=\(expanded)")
     overlayManager.show(animated: true, expanded: expanded) { [weak self] success in
       guard let self, success else { return }
-      self.presentationState = expanded ? .expanded : .collapsed
+      DispatchQueue.main.async {
+        self.presentationState = expanded ? .expanded : .collapsed
+      }
     }
   }
 
   func hideOverlay() {
+    NSLog("🎯 NativeChatBridge.hideOverlay")
     overlayManager.hide(animated: true) { [weak self] in
-      self?.presentationState = .hidden
+      DispatchQueue.main.async {
+        self?.presentationState = .hidden
+      }
     }
   }
 
   func ensureOverlayVisible(collapsed: Bool = true) {
+    NSLog("🎯 NativeChatBridge.ensureOverlayVisible collapsed=\(collapsed) current=\(presentationState)")
     switch presentationState {
     case .hidden:
       openOverlay(expanded: !collapsed)
@@ -128,6 +137,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   func sendMessage(_ text: String) {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
+    NSLog("🎯 NativeChatBridge.sendMessage text=\(trimmed)")
     if presentationState == .hidden {
       openOverlay(expanded: true)
     }
@@ -149,6 +159,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     chatStore.setLoading(true)
     overlayManager.setLoading(true)
     let history = chatStore.messages
+    let systemPrompt = conversationStore.currentSession()?.systemPrompt ?? ""
     let configuration = await preferenceService.loadAIConfiguration() ?? AIConfiguration(
       provider: "mock",
       apiKey: "",
@@ -160,7 +171,10 @@ final class NativeChatBridge: NSObject, ObservableObject {
     let stream = aiService.streamResponse(
       for: question,
       configuration: configuration,
-      context: AIRequestContext(history: history, metadata: [:])
+      context: AIRequestContext(
+        history: history,
+        metadata: systemPrompt.isEmpty ? [:] : ["systemPrompt": systemPrompt]
+      )
     )
 
     do {
@@ -184,6 +198,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
   private func observeChatStore() {
     chatStore.$messages
+      .removeDuplicates()
       .receive(on: DispatchQueue.main)
       .sink { [weak self] messages in
         guard let self else { return }
@@ -213,15 +228,17 @@ final class NativeChatBridge: NSObject, ObservableObject {
       .sink { [weak self] notification in
         guard let self else { return }
         guard let stateValue = notification.userInfo?["state"] as? String else { return }
-        switch stateValue {
-        case "expanded":
-          self.presentationState = .expanded
-        case "collapsed":
-          self.presentationState = .collapsed
-        case "hidden":
-          self.presentationState = .hidden
-        default:
-          break
+        DispatchQueue.main.async {
+          switch stateValue {
+          case "expanded":
+            self.presentationState = .expanded
+          case "collapsed":
+            self.presentationState = .collapsed
+          case "hidden":
+            self.presentationState = .hidden
+          default:
+            break
+          }
         }
       }
       .store(in: &cancellables)
@@ -270,16 +287,28 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
 extension NativeChatBridge: InputDrawerDelegate {
   nonisolated func inputDrawerDidSubmit(_ text: String) {
+    NSLog("🎯 NativeChatBridge.inputDrawerDidSubmit text=\(text)")
     Task { @MainActor [weak self] in
       self?.sendMessage(text)
     }
   }
 
   nonisolated func inputDrawerDidChange(_ text: String) {
-    // 保留接口，暂不需要额外处理
+    NSLog("🎯 NativeChatBridge.inputDrawerDidChange text=\(text)")
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      if self.presentationState == .hidden {
+        self.ensureOverlayVisible(collapsed: true)
+      }
+    }
   }
 
-  nonisolated func inputDrawerDidFocus() {}
+  nonisolated func inputDrawerDidFocus() {
+    NSLog("🎯 NativeChatBridge.inputDrawerDidFocus")
+    Task { @MainActor [weak self] in
+      self?.ensureOverlayVisible(collapsed: true)
+    }
+  }
 
   nonisolated func inputDrawerDidBlur() {}
 }

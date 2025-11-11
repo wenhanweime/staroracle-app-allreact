@@ -10,7 +10,7 @@ final class ConversationSyncService {
     chatStore.$messages
       .receive(on: DispatchQueue.main)
       .sink { messages in
-        Task { @MainActor in
+        DispatchQueue.main.async {
           conversationStore.updateCurrentSessionMessages(messages)
         }
       }
