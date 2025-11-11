@@ -29,6 +29,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private var didActivate = false
   private weak var windowScene: UIWindowScene?
   private weak var registeredBackgroundView: UIView?
+  private var pendingEnsureWorkItem: DispatchWorkItem?
 
   init(
     chatStore: ChatStore,
@@ -68,13 +69,23 @@ final class NativeChatBridge: NSObject, ObservableObject {
     NSLog("🎯 NativeChatBridge.ensureInputDrawerVisible")
     inputManager.show(animated: true) { [weak self] success in
       guard let self else { return }
-      if success { self.isInputDrawerVisible = true }
+      if success {
+        DispatchQueue.main.async {
+          if self.isInputDrawerVisible != true {
+            self.isInputDrawerVisible = true
+          }
+        }
+      }
     }
   }
 
   func hideInputDrawer() {
     inputManager.hide(animated: true) { [weak self] in
-      self?.isInputDrawerVisible = false
+      DispatchQueue.main.async {
+        if self?.isInputDrawerVisible == true {
+          self?.isInputDrawerVisible = false
+        }
+      }
     }
   }
 
@@ -99,7 +110,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     overlayManager.show(animated: true, expanded: expanded) { [weak self] success in
       guard let self, success else { return }
       DispatchQueue.main.async {
-        self.presentationState = expanded ? .expanded : .collapsed
+        self.updatePresentationState(expanded ? .expanded : .collapsed)
       }
     }
   }
@@ -108,13 +119,22 @@ final class NativeChatBridge: NSObject, ObservableObject {
     NSLog("🎯 NativeChatBridge.hideOverlay")
     overlayManager.hide(animated: true) { [weak self] in
       DispatchQueue.main.async {
-        self?.presentationState = .hidden
+        self?.updatePresentationState(.hidden)
       }
     }
   }
 
   func ensureOverlayVisible(collapsed: Bool = true) {
     NSLog("🎯 NativeChatBridge.ensureOverlayVisible collapsed=\(collapsed) current=\(presentationState)")
+    pendingEnsureWorkItem?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      self?.performEnsureOverlayVisible(collapsed: collapsed)
+    }
+    pendingEnsureWorkItem = work
+    DispatchQueue.main.async(execute: work)
+  }
+
+  private func performEnsureOverlayVisible(collapsed: Bool) {
     switch presentationState {
     case .hidden:
       openOverlay(expanded: !collapsed)
@@ -231,11 +251,11 @@ final class NativeChatBridge: NSObject, ObservableObject {
         DispatchQueue.main.async {
           switch stateValue {
           case "expanded":
-            self.presentationState = .expanded
+            self.updatePresentationState(.expanded)
           case "collapsed":
-            self.presentationState = .collapsed
+            self.updatePresentationState(.collapsed)
           case "hidden":
-            self.presentationState = .hidden
+            self.updatePresentationState(.hidden)
           default:
             break
           }
@@ -251,6 +271,11 @@ final class NativeChatBridge: NSObject, ObservableObject {
       isUser: message.isUser,
       timestamp: message.timestamp.timeIntervalSince1970 * 1000
     )
+  }
+
+  private func updatePresentationState(_ newState: PresentationState) {
+    guard presentationState != newState else { return }
+    presentationState = newState
   }
 
   func attach(to scene: UIWindowScene) {

@@ -119,14 +119,16 @@ public class ChatOverlayManager {
                 NSLog("🎯 设置状态为: \(self.currentState)")
                 
                 // 发送状态通知，让InputDrawer先调整位置
-                NotificationCenter.default.post(
-                    name: .chatOverlayStateChanged,
-                    object: nil,
-                    userInfo: [
-                        "state": expanded ? "expanded" : "collapsed", 
-                        "height": expanded ? UIScreen.main.bounds.height - 100 : 65
-                    ]
-                )
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .chatOverlayStateChanged,
+                        object: nil,
+                        userInfo: [
+                            "state": expanded ? "expanded" : "collapsed",
+                            "height": expanded ? UIScreen.main.bounds.height - 100 : 65
+                        ]
+                    )
+                }
                 
                 // 稍微延迟更新UI，确保InputDrawer已经调整位置
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -158,11 +160,9 @@ public class ChatOverlayManager {
                     
                     // 发送通知让InputDrawer调整位置
                     if self.currentState == .collapsed {
-                        NotificationCenter.default.post(
-                            name: .chatOverlayStateChanged,
-                            object: nil,
-                            userInfo: ["state": "collapsed", "height": 65]
-                        )
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
+                        }
                     }
                     
                     completion(true)
@@ -174,11 +174,9 @@ public class ChatOverlayManager {
                 
                 // 发送通知让InputDrawer调整位置
                 if self.currentState == .collapsed {
-                    NotificationCenter.default.post(
-                        name: .chatOverlayStateChanged,
-                        object: nil,
-                        userInfo: ["state": "collapsed", "height": 65]
-                    )
+                        DispatchQueue.main.async {
+                            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
+                        }
                 }
                 
                 completion(true)
@@ -206,14 +204,12 @@ public class ChatOverlayManager {
             self.onStateChange?(.hidden)
             
             // 🔧 只发送状态通知，移除冗余的可见性通知  
-            NotificationCenter.default.post(
-                name: .chatOverlayStateChanged,
-                object: nil,
-                userInfo: [
+            DispatchQueue.main.async {
+                NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: [
                     "state": "hidden",
-                    "visible": false  // 🔧 在状态通知中包含可见性信息
-                ]
-            )
+                    "visible": false
+                ])
+            }
             if animated {
                 UIView.animate(withDuration: 0.3) {
                     window.alpha = 0
@@ -329,11 +325,9 @@ public class ChatOverlayManager {
         currentState = .collapsed
 
         // 先发送状态变化通知，让InputDrawer调整位置
-        NotificationCenter.default.post(
-            name: .chatOverlayStateChanged,
-            object: nil,
-            userInfo: ["state": "collapsed", "height": 65]
-        )
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
+        }
         // 取消任何挂起的延迟任务，避免与后续展开竞态
         pendingCollapsedWork?.cancel()
         pendingCollapsedWork = nil
@@ -371,11 +365,9 @@ public class ChatOverlayManager {
         currentState = .collapsed
         
         // 发送状态变化通知
-        NotificationCenter.default.post(
-            name: .chatOverlayStateChanged,
-            object: nil,
-            userInfo: ["state": "collapsed", "height": 65]
-        )
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
+        }
         
         // 🚨 【动画冲突修复】同时触发UI和背景动画，避免时序冲突
         updateUI(animated: true)
@@ -397,11 +389,9 @@ public class ChatOverlayManager {
         onStateChange?(.expanded)
         
         // 发送状态变化通知
-        NotificationCenter.default.post(
-            name: .chatOverlayStateChanged,
-            object: nil,
-            userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100]
-        )
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100])
+        }
     }
     
     func toggleState() {
@@ -600,6 +590,8 @@ class OverlayViewController: UIViewController {
     private var backgroundMaskView: UIView!
     private var messagesList: UITableView!
     private var dragIndicator: UIView!
+    private var expandedViewConstraints: [NSLayoutConstraint] = []
+    private var isExpandedLayoutActive = true
     // 去除渐变，改为与输入框一致的风格（纯色+浅色描边）
     
     // 渲染层可见消息（与数据层解耦）：用于发送动画期间隐藏AI占位
@@ -979,7 +971,7 @@ class OverlayViewController: UIViewController {
         bottomSpaceView.translatesAutoresizingMaskIntoConstraints = false
         expandedView.addSubview(bottomSpaceView)
         
-        NSLayoutConstraint.activate([
+        expandedViewConstraints = [
             // 展开视图填满容器
             expandedView.leadingAnchor.constraint(equalTo: containerView.leadingAnchor),
             expandedView.trailingAnchor.constraint(equalTo: containerView.trailingAnchor),
@@ -1015,7 +1007,10 @@ class OverlayViewController: UIViewController {
             bottomSpaceView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor),
             bottomSpaceView.bottomAnchor.constraint(equalTo: expandedView.bottomAnchor),
             bottomSpaceView.heightAnchor.constraint(equalToConstant: 120)  // 增加到120px，为输入框预留足够空间
-        ])
+        ]
+        NSLayoutConstraint.activate(expandedViewConstraints)
+        isExpandedLayoutActive = true
+        setExpandedLayout(active: false)
     }
     
     func updateForState(_ state: OverlayState) {
@@ -1027,6 +1022,8 @@ class OverlayViewController: UIViewController {
         
         switch state {
         case .collapsed:
+            setExpandedLayout(active: false)
+            detachExpandedView()
             // 收缩状态：浮窗顶部与收缩状态下输入框底部-10px对齐
             let floatingHeight: CGFloat = 65
             let gap: CGFloat = 10  // 浮窗顶部与输入框底部的间隙
@@ -1065,6 +1062,8 @@ class OverlayViewController: UIViewController {
             NSLog("🎯 收缩状态 - 输入框底部: \(inputDrawerBottomCollapsed)px, 浮窗顶部: \(floatingTop)px, 相对安全区顶部: \(relativeTopFromSafeArea)px, 间距: \(gap)px")
             
         case .expanded:
+            attachExpandedViewIfNeeded()
+            setExpandedLayout(active: true)
             // 展开状态：覆盖整个屏幕高度，营造从屏幕外延伸的效果
             let expandedTopMargin = max(safeAreaTop, 80)  // 顶部留空
             let expandedBottomExtension: CGFloat = 20  // 底部向外延伸20px，营造延伸效果
@@ -1092,6 +1091,8 @@ class OverlayViewController: UIViewController {
             NSLog("🎯 展开状态 - 顶部位置: \(expandedTopMargin)px, 高度: \(screenHeight - expandedTopMargin + expandedBottomExtension)px, 底部延伸: \(expandedBottomExtension)px")
             
         case .hidden:
+            setExpandedLayout(active: false)
+            detachExpandedView()
             // 隐藏状态：不显示
             containerView.alpha = 0
             hasTriggeredScrollCollapse = false
@@ -1099,6 +1100,31 @@ class OverlayViewController: UIViewController {
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
+    }
+    
+    private func setExpandedLayout(active: Bool) {
+        guard active != isExpandedLayoutActive else { return }
+        if active {
+            NSLayoutConstraint.activate(expandedViewConstraints)
+            expandedView.isHidden = false
+            expandedView.alpha = 1
+        } else {
+            NSLayoutConstraint.deactivate(expandedViewConstraints)
+            expandedView.isHidden = true
+            expandedView.alpha = 0
+        }
+        isExpandedLayoutActive = active
+    }
+
+    private func attachExpandedViewIfNeeded() {
+        guard expandedView.superview == nil else { return }
+        containerView.addSubview(expandedView)
+    }
+
+    private func detachExpandedView() {
+        guard expandedView.superview != nil else { return }
+        expandedView.removeFromSuperview()
+        expandedView.isHidden = true
     }
 
     func setHorizontalOffset(_ offset: CGFloat, animated: Bool) {
@@ -1619,15 +1645,17 @@ class OverlayViewController: UIViewController {
                     // 🚨 【统一动画指挥权】在ChatOverlay动画中同步控制InputDrawer位移
                     // 发送消息后，ChatOverlay通常会切换到collapsed状态，InputDrawer需要上移
                     NSLog("🚨 【统一动画】同步控制InputDrawer位移到collapsed位置")
-                    NotificationCenter.default.post(
-                        name: Notification.Name("chatOverlayStateChanged"),
-                        object: nil,
-                        userInfo: [
-                            "state": "collapsed",
-                            "visible": true,
-                            "source": "unified_animation"  // 标记这是统一动画控制
-                        ]
-                    )
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(
+                            name: Notification.Name("chatOverlayStateChanged"),
+                            object: nil,
+                            userInfo: [
+                                "state": "collapsed",
+                                "visible": true,
+                                "source": "unified_animation"
+                            ]
+                        )
+                    }
                 },
                 completion: { finished in
                     NSLog("🎯 🚨 用户消息动画完成, finished: \(finished)")
@@ -1638,7 +1666,9 @@ class OverlayViewController: UIViewController {
                     self.animationState = .aiStreaming  // 转换到AI流式状态
                     NSLog("🚨 【状态机】用户消息动画完成，状态转换: userAnimating -> aiStreaming")
                     // 📣 通知JS：发送插入动画已完成（用于解锁逐字流式泵）
-                    NotificationCenter.default.post(name: Notification.Name("chatOverlaySendAnimationCompleted"), object: nil)
+                    DispatchQueue.main.async {
+                        NotificationCenter.default.post(name: Notification.Name("chatOverlaySendAnimationCompleted"), object: nil)
+                    }
                     
                     // 🔧 动画完成后，继续短暂抑制AI滚动动画，避免紧随的首包造成叠加观感
                     self.suppressAIAnimatedScrollUntil = CACurrentMediaTime() + 0.15
@@ -1983,3 +2013,4 @@ class ChatPassthroughView: UIView {
     }
 }
     // removed misplaced viewDidLayoutSubviews (now correctly inside OverlayViewController)
+    private func postNotification(_ name: Notification.Name, userInfo: [AnyHashable: Any]? = nil) {}

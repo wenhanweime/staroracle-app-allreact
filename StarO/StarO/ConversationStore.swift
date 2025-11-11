@@ -10,6 +10,7 @@ extension Notification.Name {
 
 final class ConversationStore: ObservableObject {
   static let shared = ConversationStore()
+  var __updateSignature: String = ""
 
   struct Session: Identifiable, Codable, Equatable {
     let id: String
@@ -143,17 +144,20 @@ final class ConversationStore: ObservableObject {
   }
 
   func updateCurrentSessionMessages(_ messages: [CoreChatMessage]) {
-    guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
-    sessions[index].messages = messages.map { message in
-      PersistMessage(
-        id: message.id,
-        text: message.text,
-        isUser: message.isUser,
-        timestamp: message.timestamp
-      )
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      guard let index = self.sessions.firstIndex(where: { $0.id == self.currentSessionId }) else { return }
+      self.sessions[index].messages = messages.map { message in
+        PersistMessage(
+          id: message.id,
+          text: message.text,
+          isUser: message.isUser,
+          timestamp: message.timestamp
+        )
+      }
+      self.sessions[index].updatedAt = Date()
+      self.scheduleSave()
     }
-    sessions[index].updatedAt = Date()
-    scheduleSave()
   }
 
   var messages: [OverlayChatMessage] {
@@ -212,12 +216,14 @@ final class ConversationStore: ObservableObject {
   private func scheduleSave() {
     saveTask?.cancel()
     let snapshot = PersistModel(currentSessionId: currentSessionId, sessions: sessions)
-    saveTask = Task { [fileURL] in
-      try? await Task.sleep(nanoseconds: 200_000_000) // debounce 0.2s
+    saveTask = Task.detached(priority: .utility) { [fileURL] in
+      try? await Task.sleep(nanoseconds: 200_000_000)
       do {
         let data = try JSONEncoder().encode(snapshot)
         try data.write(to: fileURL, options: .atomic)
-        NotificationCenter.default.post(name: .conversationStoreChanged, object: nil)
+        await MainActor.run {
+          NotificationCenter.default.post(name: .conversationStoreChanged, object: nil)
+        }
       } catch {
         print("⚠️ ConversationStore save failed: \(error.localizedDescription)")
       }
