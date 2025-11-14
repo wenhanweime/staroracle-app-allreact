@@ -3,16 +3,27 @@ import StarOracleServices
 
 enum AIConfigurationDefaults {
   static func load() -> AIConfiguration? {
-    if let envConfig = loadFromProcessEnvironment() {
-      return envConfig
+    if let env = loadFromProcessEnvironment() {
+      return env.config
     }
-    if let plistConfig = loadFromInfoPlist() {
-      return plistConfig
+    if let plist = loadFromInfoPlist() {
+      return plist.config
     }
     return nil
   }
 
-  private static func loadFromProcessEnvironment() -> AIConfiguration? {
+  static func defaultSystemPrompt() -> String? {
+    if let env = loadFromProcessEnvironment(),
+       let prompt = env.prompt {
+      return prompt
+    }
+    if let plist = loadFromInfoPlist() {
+      return plist.prompt
+    }
+    return nil
+  }
+
+  private static func loadFromProcessEnvironment() -> (config: AIConfiguration, prompt: String?)? {
     let env = ProcessInfo.processInfo.environment
     guard let apiKey = normalized(env["VITE_OPENAI_API_KEY"]) ??
             normalized(env["VITE_DEFAULT_API_KEY"]),
@@ -27,10 +38,10 @@ enum AIConfigurationDefaults {
       normalized(env["VITE_DEFAULT_MODEL"]) ??
       "gpt-3.5-turbo"
     NSLog("ℹ️ [AIConfigurationDefaults] 使用环境变量配置 provider=%@ model=%@ endpoint=%@", provider, model, endpointString)
-    return AIConfiguration(provider: provider, apiKey: apiKey, endpoint: url, model: model)
+    return (AIConfiguration(provider: provider, apiKey: apiKey, endpoint: url, model: model), nil)
   }
 
-  private static func loadFromInfoPlist() -> AIConfiguration? {
+  private static func loadFromInfoPlist() -> (config: AIConfiguration, prompt: String?)? {
     guard let url = Bundle.main.url(forResource: "AIConfigurationDefaults", withExtension: "plist"),
           let data = try? Data(contentsOf: url),
           let dict = try? PropertyListSerialization.propertyList(from: data, options: [], format: nil) as? [String: Any] else {
@@ -47,8 +58,9 @@ enum AIConfigurationDefaults {
     }
     let provider = normalized(dict["Provider"] as? String) ?? "openai"
     let model = normalized(dict["Model"] as? String) ?? "gpt-3.5-turbo"
+    let prompt = normalized(dict["SystemPrompt"] as? String)
     NSLog("ℹ️ [AIConfigurationDefaults] 使用 plist 默认配置 provider=%@ model=%@ endpoint=%@", provider, model, endpointString)
-    return AIConfiguration(provider: provider, apiKey: apiKey, endpoint: url, model: model)
+    return (AIConfiguration(provider: provider, apiKey: apiKey, endpoint: url, model: model), prompt)
   }
 
   private static func normalized(_ value: String?) -> String? {

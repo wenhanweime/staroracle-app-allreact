@@ -197,7 +197,10 @@ final class LiveAIService: AIServiceProtocol {
     var result: [StreamingClient.Message] = []
     if let prompt = context.metadata["systemPrompt"]?.trimmingCharacters(in: .whitespacesAndNewlines),
        !prompt.isEmpty {
+      NSLog("🎯 LiveAIService.makeMessages | 注入 systemPrompt 前30字: %@...", String(prompt.prefix(30)))
       result.append(.init(role: "system", content: prompt))
+    } else {
+      NSLog("ℹ️ LiveAIService.makeMessages | 无系统提示")
     }
     for message in context.history {
       let trimmed = message.text.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -51,6 +51,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     inputManager.delegate = self
     observeChatStore()
     observeOverlayNotifications()
+    bootstrapSystemPromptIfNeeded()
   }
 
   deinit {
@@ -192,6 +193,11 @@ final class NativeChatBridge: NSObject, ObservableObject {
     overlayManager.setLoading(true)
     let history = chatStore.messages
     let systemPrompt = conversationStore.currentSession()?.systemPrompt ?? ""
+    if systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      NSLog("ℹ️ NativeChatBridge.performStreaming | 当前会话系统提示为空")
+    } else {
+      NSLog("🎯 NativeChatBridge.performStreaming | systemPrompt 前30字: %@...", String(systemPrompt.prefix(30)))
+    }
     guard let configuration = await preferenceService.loadAIConfiguration() else {
       NSLog("⚠️ NativeChatBridge.performStreaming | 未找到 AI 配置")
       chatStore.setLoading(false)
@@ -356,6 +362,18 @@ final class NativeChatBridge: NSObject, ObservableObject {
       return
     }
     registerBackgroundView(rootView)
+  }
+
+  private func bootstrapSystemPromptIfNeeded() {
+    conversationStore.bootstrapIfNeeded()
+    guard let session = conversationStore.currentSession() else {
+      NSLog("ℹ️ NativeChatBridge | 无可用会话，无法写入系统提示")
+      return
+    }
+    let prompt = session.systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard prompt.isEmpty else { return }
+    NSLog("ℹ️ NativeChatBridge | 会话无系统提示，写入默认 prompt")
+    conversationStore.setSystemPrompt(SystemPrompt.defaultPrompt, sessionId: session.id)
   }
 }
 
