@@ -4,13 +4,22 @@ import StarOracleServices
 
 @MainActor
 public final class ChatStore: ObservableObject, ChatStoreProtocol {
-  @Published public private(set) var messages: [ChatMessage]
-  @Published public private(set) var isLoading: Bool
-  @Published public private(set) var conversationTitle: String
-  @Published public private(set) var conversationAwareness: ConversationAwareness
+  @Published public private(set) var messages: [ChatMessage] {
+    willSet { logStateChange("messages -> \(newValue.count)") }
+  }
+  @Published public private(set) var isLoading: Bool {
+    willSet { logStateChange("isLoading -> \(newValue)") }
+  }
+  @Published public private(set) var conversationTitle: String {
+    willSet { logStateChange("conversationTitle -> \(newValue)") }
+  }
+  @Published public private(set) var conversationAwareness: ConversationAwareness {
+    willSet { logStateChange("conversationAwareness updated") }
+  }
 
   private let aiService: AIServiceProtocol
   private let configurationProvider: @Sendable () async -> AIConfiguration?
+  private let stateLoggingEnabled = true
 
   public init(
     messages: [ChatMessage] = [],
@@ -144,6 +153,13 @@ public final class ChatStore: ObservableObject, ChatStoreProtocol {
       configuration: config
     )
     conversationTitle = title
+  }
+}
+
+private extension ChatStore {
+  func logStateChange(_ label: String) {
+    guard stateLoggingEnabled else { return }
+    NSLog("⚠️ ChatStore mutate \(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
   }
 }
 

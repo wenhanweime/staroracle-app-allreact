@@ -365,6 +365,7 @@ public class ChatOverlayManager {
     // 说明：当前项目主要由 JS 发起请求并通过 appendAIChunk/updateLastAI 增量更新。
     // 若需要从原生直接请求，可调用此方法。
     func startNativeStreaming(endpoint: String, apiKey: String, model: String, messages: [ChatMessage], temperature: Double? = nil, maxTokens: Int? = nil) {
+        NSLog("🎯 [NativeStream] startNativeStreaming | endpoint=%@ model=%@ messages=%d", endpoint, model, messages.count)
         // 1) UI侧仅基于原生已有消息源进行追加，不用外部messages重置UI，避免上一轮AI被覆盖
         //    外部messages仅用于LLM上下文（reqMessages）
         // 若被标记为“下次输入新会话”，先创建并切换
@@ -434,12 +435,18 @@ public class ChatOverlayManager {
             temperature: temperature,
             maxTokens: maxTokens,
             onChunk: { [weak self] (delta: String) in
+                NSLog("✉️ [NativeStream] chunk len=%d", delta.count)
                 guard let self = self else { return }
                 if !started { started = true }
                 self.appendAIChunk(delta: delta, messageId: lastId)
             },
             onComplete: { [weak self] (full: String?, error: Error?) in
                 guard let self = self else { return }
+                if let error = error {
+                    NSLog("❌ [NativeStream] 完成时错误: \(error.localizedDescription)")
+                } else {
+                    NSLog("✅ [NativeStream] 完成 fullLen=%d", full?.count ?? 0)
+                }
                 if let text = full, !text.isEmpty {
                     self.updateLastAI(text: text, messageId: lastId)
                 }

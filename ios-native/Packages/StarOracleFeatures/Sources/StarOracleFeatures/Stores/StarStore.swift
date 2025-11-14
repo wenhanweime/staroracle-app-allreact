@@ -4,19 +4,45 @@ import StarOracleServices
 
 @MainActor
 public final class StarStore: ObservableObject, StarStoreProtocol {
-  @Published public private(set) var constellation: Constellation
-  @Published public private(set) var inspirationStars: [Star]
-  @Published public private(set) var activeStarId: String?
-  @Published public private(set) var highlightedStarId: String?
-  @Published public private(set) var galaxyHighlights: [String: GalaxyHighlight]
-  @Published public private(set) var galaxyHighlightColor: String
-  @Published public private(set) var isAsking: Bool
-  @Published public private(set) var isLoading: Bool
-  @Published public private(set) var pendingStarPosition: StarPosition?
-  @Published public private(set) var currentInspirationCard: InspirationCard?
-  @Published public private(set) var hasTemplate: Bool
-  @Published public private(set) var templateInfo: ConstellationTemplateInfo?
-  @Published public private(set) var lastCreatedStarId: String?
+  @Published public private(set) var constellation: Constellation {
+    willSet { logStateChange("constellation -> \(newValue.stars.count) stars") }
+  }
+  @Published public private(set) var inspirationStars: [Star] {
+    willSet { logStateChange("inspirationStars -> \(newValue.count)") }
+  }
+  @Published public private(set) var activeStarId: String? {
+    willSet { logStateChange("activeStarId -> \(String(describing: newValue))") }
+  }
+  @Published public private(set) var highlightedStarId: String? {
+    willSet { logStateChange("highlightedStarId -> \(String(describing: newValue))") }
+  }
+  @Published public private(set) var galaxyHighlights: [String: GalaxyHighlight] {
+    willSet { logStateChange("galaxyHighlights -> \(newValue.count)") }
+  }
+  @Published public private(set) var galaxyHighlightColor: String {
+    willSet { logStateChange("galaxyHighlightColor -> \(newValue)") }
+  }
+  @Published public private(set) var isAsking: Bool {
+    willSet { logStateChange("isAsking -> \(newValue)") }
+  }
+  @Published public private(set) var isLoading: Bool {
+    willSet { logStateChange("isLoading -> \(newValue)") }
+  }
+  @Published public private(set) var pendingStarPosition: StarPosition? {
+    willSet { logStateChange("pendingStarPosition updated") }
+  }
+  @Published public private(set) var currentInspirationCard: InspirationCard? {
+    willSet { logStateChange("currentInspirationCard -> \(String(describing: newValue?.id))") }
+  }
+  @Published public private(set) var hasTemplate: Bool {
+    willSet { logStateChange("hasTemplate -> \(newValue)") }
+  }
+  @Published public private(set) var templateInfo: ConstellationTemplateInfo? {
+    willSet { logStateChange("templateInfo updated") }
+  }
+  @Published public private(set) var lastCreatedStarId: String? {
+    willSet { logStateChange("lastCreatedStarId -> \(String(describing: newValue))") }
+  }
 
   private let aiService: AIServiceProtocol
   private let inspirationService: InspirationServiceProtocol
@@ -24,6 +50,8 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
   private let preferenceService: PreferenceServiceProtocol
   private let soundService: SoundServiceProtocol?
   private let hapticService: HapticServiceProtocol?
+
+  private let stateLoggingEnabled = true
 
   public init(
     constellation: Constellation = Constellation(),
@@ -65,6 +93,11 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
     self.preferenceService = preferenceService
     self.soundService = soundService
     self.hapticService = hapticService
+  }
+
+  private func logStateChange(_ label: String) {
+    guard stateLoggingEnabled else { return }
+    NSLog("⚠️ StarStore mutate \(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
   }
 
   public func addStar(question: String, at position: StarPosition?) async throws -> Star {

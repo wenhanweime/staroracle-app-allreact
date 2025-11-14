@@ -3,12 +3,21 @@ import StarOracleCore
 
 @MainActor
 public final class GalaxyGridStore: ObservableObject, GalaxyGridStoreProtocol {
-  @Published public private(set) var width: Double
-  @Published public private(set) var height: Double
-  @Published public private(set) var sites: [GalaxyGridSite]
-  @Published public private(set) var activeIds: [String]
+  @Published public private(set) var width: Double {
+    willSet { logStateChange("width -> \(newValue)") }
+  }
+  @Published public private(set) var height: Double {
+    willSet { logStateChange("height -> \(newValue)") }
+  }
+  @Published public private(set) var sites: [GalaxyGridSite] {
+    willSet { logStateChange("sites -> \(newValue.count)") }
+  }
+  @Published public private(set) var activeIds: [String] {
+    willSet { logStateChange("activeIds -> \(newValue)") }
+  }
 
   private var neighbors: [[Int]]
+  private let stateLoggingEnabled = true
 
   public init(
     width: Double = 0,
@@ -130,6 +139,11 @@ public final class GalaxyGridStore: ObservableObject, GalaxyGridStoreProtocol {
       }
     }
     return distances
+  }
+
+  private func logStateChange(_ label: String) {
+    guard stateLoggingEnabled else { return }
+    NSLog("⚠️ GalaxyGridStore mutate \(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
   }
 }
 

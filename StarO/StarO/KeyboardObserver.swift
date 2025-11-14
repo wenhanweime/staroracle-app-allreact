@@ -7,7 +7,9 @@ import UIKit
 @MainActor
 final class KeyboardObserver: ObservableObject {
   static let shared = KeyboardObserver()
-  @Published var keyboardHeight: CGFloat = 0
+  @Published var keyboardHeight: CGFloat = 0 {
+    willSet { logStateChange("keyboardHeight -> \(newValue)") }
+  }
   private var cancellables = Set<AnyCancellable>()
 
   private init() {
@@ -24,6 +26,12 @@ final class KeyboardObserver: ObservableObject {
         }
       }
       .store(in: &cancellables)
+  }
+}
+
+private extension KeyboardObserver {
+  func logStateChange(_ label: String) {
+    NSLog("⚠️ KeyboardObserver mutate \(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
   }
 }
 #endif

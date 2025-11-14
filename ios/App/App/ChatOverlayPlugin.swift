@@ -342,7 +342,7 @@ public class ChatOverlayPlugin: CAPPlugin, CAPBridgedPlugin {
         let apiKey = call.getString("apiKey") ?? ""
         let temperature = call.getDouble("temperature")
         let maxTokens = call.getInt("maxTokens")
-
+        NSLog("🎯 [NativeStream] JS 请求参数 endpoint=%@ model=%@ apiKeyLen=%d", endpoint, model, apiKey.count)
         var messages: [ChatMessage] = []
         if let msgs = call.getArray("messages", Any.self) as? [[String: Any]] {
             messages = msgs.compactMap { m in

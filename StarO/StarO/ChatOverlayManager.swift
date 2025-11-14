@@ -119,16 +119,13 @@ public class ChatOverlayManager {
                 NSLog("🎯 设置状态为: \(self.currentState)")
                 
                 // 发送状态通知，让InputDrawer先调整位置
-                DispatchQueue.main.async {
-                    NotificationCenter.default.post(
-                        name: .chatOverlayStateChanged,
-                        object: nil,
-                        userInfo: [
-                            "state": expanded ? "expanded" : "collapsed",
-                            "height": expanded ? UIScreen.main.bounds.height - 100 : 65
-                        ]
-                    )
-                }
+                self.postNotification(
+                    .chatOverlayStateChanged,
+                    userInfo: [
+                        "state": expanded ? "expanded" : "collapsed",
+                        "height": expanded ? UIScreen.main.bounds.height - 100 : 65
+                    ]
+                )
                 
                 // 稍微延迟更新UI，确保InputDrawer已经调整位置
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
@@ -160,9 +157,7 @@ public class ChatOverlayManager {
                     
                     // 发送通知让InputDrawer调整位置
                     if self.currentState == .collapsed {
-                        DispatchQueue.main.async {
-                            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
-                        }
+                        self.postNotification(.chatOverlayStateChanged, userInfo: ["state": "collapsed", "height": 65])
                     }
                     
                     completion(true)
@@ -174,9 +169,7 @@ public class ChatOverlayManager {
                 
                 // 发送通知让InputDrawer调整位置
                 if self.currentState == .collapsed {
-                        DispatchQueue.main.async {
-                            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
-                        }
+                    self.postNotification(.chatOverlayStateChanged, userInfo: ["state": "collapsed", "height": 65])
                 }
                 
                 completion(true)
@@ -204,12 +197,10 @@ public class ChatOverlayManager {
             self.onStateChange?(.hidden)
             
             // 🔧 只发送状态通知，移除冗余的可见性通知  
-            DispatchQueue.main.async {
-                NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: [
-                    "state": "hidden",
-                    "visible": false
-                ])
-            }
+            self.postNotification(.chatOverlayStateChanged, userInfo: [
+                "state": "hidden",
+                "visible": false
+            ])
             if animated {
                 UIView.animate(withDuration: 0.3) {
                     window.alpha = 0
@@ -325,9 +316,7 @@ public class ChatOverlayManager {
         currentState = .collapsed
 
         // 先发送状态变化通知，让InputDrawer调整位置
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
-        }
+        postNotification(.chatOverlayStateChanged, userInfo: ["state": "collapsed", "height": 65])
         // 取消任何挂起的延迟任务，避免与后续展开竞态
         pendingCollapsedWork?.cancel()
         pendingCollapsedWork = nil
@@ -365,9 +354,7 @@ public class ChatOverlayManager {
         currentState = .collapsed
         
         // 发送状态变化通知
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "collapsed", "height": 65])
-        }
+        postNotification(.chatOverlayStateChanged, userInfo: ["state": "collapsed", "height": 65])
         
         // 🚨 【动画冲突修复】同时触发UI和背景动画，避免时序冲突
         updateUI(animated: true)
@@ -389,9 +376,7 @@ public class ChatOverlayManager {
         onStateChange?(.expanded)
         
         // 发送状态变化通知
-        DispatchQueue.main.async {
-            NotificationCenter.default.post(name: .chatOverlayStateChanged, object: nil, userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100])
-        }
+        postNotification(.chatOverlayStateChanged, userInfo: ["state": "expanded", "height": UIScreen.main.bounds.height - 100])
     }
     
     func toggleState() {
@@ -408,6 +393,12 @@ public class ChatOverlayManager {
     
     func setOnStateChange(_ callback: @escaping (OverlayState) -> Void) {
         self.onStateChange = callback
+    }
+
+    fileprivate func postNotification(_ name: Notification.Name, userInfo: [AnyHashable: Any]? = nil) {
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: name, object: nil, userInfo: userInfo)
+        }
     }
 
     // 会话/上下文管理（原生模式下由 ChatStore 负责，这里仅作占位）
@@ -1643,19 +1634,12 @@ class OverlayViewController: UIViewController {
                     cell.alpha = 1.0           // 渐变显示
                     
                     // 🚨 【统一动画指挥权】在ChatOverlay动画中同步控制InputDrawer位移
-                    // 发送消息后，ChatOverlay通常会切换到collapsed状态，InputDrawer需要上移
                     NSLog("🚨 【统一动画】同步控制InputDrawer位移到collapsed位置")
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(
-                            name: Notification.Name("chatOverlayStateChanged"),
-                            object: nil,
-                            userInfo: [
-                                "state": "collapsed",
-                                "visible": true,
-                                "source": "unified_animation"
-                            ]
-                        )
-                    }
+                    self.manager?.postNotification(Notification.Name("chatOverlayStateChanged"), userInfo: [
+                        "state": "collapsed",
+                        "visible": true,
+                        "source": "unified_animation"
+                    ])
                 },
                 completion: { finished in
                     NSLog("🎯 🚨 用户消息动画完成, finished: \(finished)")
@@ -1666,9 +1650,7 @@ class OverlayViewController: UIViewController {
                     self.animationState = .aiStreaming  // 转换到AI流式状态
                     NSLog("🚨 【状态机】用户消息动画完成，状态转换: userAnimating -> aiStreaming")
                     // 📣 通知JS：发送插入动画已完成（用于解锁逐字流式泵）
-                    DispatchQueue.main.async {
-                        NotificationCenter.default.post(name: Notification.Name("chatOverlaySendAnimationCompleted"), object: nil)
-                    }
+                    self.manager?.postNotification(Notification.Name("chatOverlaySendAnimationCompleted"), userInfo: nil)
                     
                     // 🔧 动画完成后，继续短暂抑制AI滚动动画，避免紧随的首包造成叠加观感
                     self.suppressAIAnimatedScrollUntil = CACurrentMediaTime() + 0.15
@@ -2013,4 +1995,3 @@ class ChatPassthroughView: UIView {
     }
 }
     // removed misplaced viewDidLayoutSubviews (now correctly inside OverlayViewController)
-    private func postNotification(_ name: Notification.Name, userInfo: [AnyHashable: Any]? = nil) {}

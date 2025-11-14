@@ -8,6 +8,7 @@ extension Notification.Name {
   static let conversationStoreChanged = Notification.Name("conversationStoreChanged")
 }
 
+@MainActor
 final class ConversationStore: ObservableObject {
   static let shared = ConversationStore()
   var __updateSignature: String = ""
@@ -46,21 +47,30 @@ final class ConversationStore: ObservableObject {
     var sessions: [Session]
   }
 
-  @Published private(set) var sessions: [Session] = []
-  @Published private(set) var currentSessionId: String = ""
+  private var sessionsStorage: [Session] = [] {
+    didSet {
+      logStateChange("sessions -> \(sessionsStorage.count)")
+    }
+  }
+  private var currentSessionIdStorage: String = "" {
+    didSet {
+      logStateChange("currentSessionId -> \(currentSessionIdStorage)")
+    }
+  }
+
+  var sessions: [Session] { sessionsStorage }
+  var currentSessionId: String { currentSessionIdStorage }
 
   private let fileURL: URL
   private var saveTask: Task<Void, Never>?
+  private var pendingMessageUpdate: DispatchWorkItem?
+  private let stateLoggingEnabled = true
+  private var isPublishingEnabled = false
+  private var isBootstrapped = false
+  private var isPublishScheduled = false
 
   init(fileURL: URL = ConversationStore.defaultURL()) {
     self.fileURL = fileURL
-    load()
-    if sessions.isEmpty {
-      _ = createSession(title: "默认会话")
-    }
-    if currentSessionId.isEmpty {
-      currentSessionId = sessions.first?.id ?? ""
-    }
   }
 
   // MARK: - Session management
@@ -79,19 +89,11 @@ final class ConversationStore: ObservableObject {
 
   @discardableResult
   func createSession(title: String?) -> Session {
-    let now = Date()
-    let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    let session = Session(
-      id: UUID().uuidString,
-      title: cleanTitle.isEmpty ? "新会话" : cleanTitle,
-      systemPrompt: "",
-      messages: [],
-      createdAt: now,
-      updatedAt: now,
-      hasCustomTitle: !cleanTitle.isEmpty
-    )
-    sessions.insert(session, at: 0)
-    currentSessionId = session.id
+    let session = makeSession(title: title)
+    mutateState {
+      self.sessionsStorage.insert(session, at: 0)
+      self.currentSessionIdStorage = session.id
+    }
     scheduleSave()
     return session
   }
@@ -99,29 +101,36 @@ final class ConversationStore: ObservableObject {
   @discardableResult
   func switchSession(to id: String) -> Session? {
     guard sessions.contains(where: { $0.id == id }) else { return nil }
-    currentSessionId = id
+    mutateState {
+      self.currentSessionIdStorage = id
+    }
     scheduleSave()
     return session(id: id)
   }
 
   func renameSession(id: String, title: String) {
     guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
-    sessions[index].title = title
-    sessions[index].hasCustomTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-    sessions[index].updatedAt = Date()
+    mutateState {
+      self.sessionsStorage[index].title = title
+      self.sessionsStorage[index].hasCustomTitle = !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+      self.sessionsStorage[index].updatedAt = Date()
+    }
     scheduleSave()
   }
 
   func deleteSession(id: String) {
     guard let index = sessions.firstIndex(where: { $0.id == id }) else { return }
-    let deletingCurrent = sessions[index].id == currentSessionId
-    sessions.remove(at: index)
-    if deletingCurrent {
-      if let first = sessions.first {
-        currentSessionId = first.id
-      } else {
-        let newSession = createSession(title: "默认会话")
-        currentSessionId = newSession.id
+    mutateState {
+      let deletingCurrent = self.sessionsStorage[index].id == self.currentSessionIdStorage
+      self.sessionsStorage.remove(at: index)
+      if deletingCurrent {
+        if let first = self.sessionsStorage.first {
+          self.currentSessionIdStorage = first.id
+        } else {
+          let newSession = makeSession(title: "默认会话")
+          self.sessionsStorage.insert(newSession, at: 0)
+          self.currentSessionIdStorage = newSession.id
+        }
       }
     }
     scheduleSave()
@@ -144,20 +153,35 @@ final class ConversationStore: ObservableObject {
   }
 
   func updateCurrentSessionMessages(_ messages: [CoreChatMessage]) {
-    DispatchQueue.main.async { [weak self] in
+    pendingMessageUpdate?.cancel()
+    let snapshot = messages
+    let work = DispatchWorkItem { [weak self] in
       guard let self else { return }
-      guard let index = self.sessions.firstIndex(where: { $0.id == self.currentSessionId }) else { return }
-      self.sessions[index].messages = messages.map { message in
-        PersistMessage(
-          id: message.id,
-          text: message.text,
-          isUser: message.isUser,
-          timestamp: message.timestamp
-        )
+      Task { @MainActor [weak self] in
+        self?.performUpdateCurrentSessionMessages(snapshot)
       }
-      self.sessions[index].updatedAt = Date()
-      self.scheduleSave()
     }
+    pendingMessageUpdate = work
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.02, execute: work)
+  }
+
+  @MainActor
+  private func performUpdateCurrentSessionMessages(_ messages: [CoreChatMessage]) {
+    NSLog("🚨 updateCurrentSessionMessages called | stack: \(Thread.callStackSymbols.joined(separator: "\n"))")
+    guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
+    let converted = messages.map { message in
+      PersistMessage(
+        id: message.id,
+        text: message.text,
+        isUser: message.isUser,
+        timestamp: message.timestamp
+      )
+    }
+    mutateState {
+      self.sessionsStorage[index].messages = converted
+      self.sessionsStorage[index].updatedAt = Date()
+    }
+    scheduleSave()
   }
 
   var messages: [OverlayChatMessage] {
@@ -173,43 +197,81 @@ final class ConversationStore: ObservableObject {
     guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
     var updated = sessions[index].messages
     updated.append(message.toPersistMessage())
-    sessions[index].messages = updated
-    sessions[index].updatedAt = Date()
+    mutateState {
+      self.sessionsStorage[index].messages = updated
+      self.sessionsStorage[index].updatedAt = Date()
+    }
     scheduleSave()
   }
 
   func replaceLastAssistantText(_ text: String) {
     guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
     var updated = sessions[index].messages
-    if let lastIndex = updated.lastIndex(where: { !$0.isUser }) {
-      let target = updated[lastIndex]
-      updated[lastIndex] = PersistMessage(id: target.id, text: text, isUser: target.isUser, timestamp: Date())
-      sessions[index].messages = updated
-      sessions[index].updatedAt = Date()
-      scheduleSave()
+    guard let lastIndex = updated.lastIndex(where: { !$0.isUser }) else { return }
+    let target = updated[lastIndex]
+    updated[lastIndex] = PersistMessage(id: target.id, text: text, isUser: target.isUser, timestamp: Date())
+    mutateState {
+      self.sessionsStorage[index].messages = updated
+      self.sessionsStorage[index].updatedAt = Date()
     }
+    scheduleSave()
   }
 
   func setSystemPrompt(_ prompt: String, sessionId: String? = nil) {
     guard let index = sessions.firstIndex(where: { $0.id == (sessionId ?? currentSessionId) }) else { return }
-    sessions[index].systemPrompt = prompt
-    sessions[index].updatedAt = Date()
+    mutateState {
+      self.sessionsStorage[index].systemPrompt = prompt
+      self.sessionsStorage[index].updatedAt = Date()
+    }
     scheduleSave()
   }
 
   // MARK: - Persistence
 
-  private func load() {
-    guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+  func bootstrapIfNeeded() {
+    guard !isBootstrapped else { return }
+    performInitialLoad()
+    isPublishingEnabled = true
+    isBootstrapped = true
+  }
+
+  private func performInitialLoad() {
+    let model = loadPersistedModel()
+    var initialSessions = model?.sessions ?? []
+    var initialCurrentId = model?.currentSessionId ?? ""
+    var needsSave = false
+
+    if initialSessions.isEmpty {
+      let defaultSession = makeSession(title: "默认会话")
+      initialSessions = [defaultSession]
+      initialCurrentId = defaultSession.id
+      needsSave = true
+    }
+
+    if initialCurrentId.isEmpty {
+      initialCurrentId = initialSessions.first?.id ?? ""
+      needsSave = true
+    }
+
+    let sessionsSnapshot = initialSessions
+    let currentSnapshot = initialCurrentId
+    mutateState(sendChange: false) { [sessionsSnapshot, currentSnapshot] in
+      self.sessionsStorage = sessionsSnapshot
+      self.currentSessionIdStorage = currentSnapshot
+    }
+    if needsSave {
+      scheduleSave()
+    }
+  }
+
+  private func loadPersistedModel() -> PersistModel? {
+    guard FileManager.default.fileExists(atPath: fileURL.path) else { return nil }
     do {
       let data = try Data(contentsOf: fileURL)
-      let model = try JSONDecoder().decode(PersistModel.self, from: data)
-      sessions = model.sessions
-      currentSessionId = model.currentSessionId
+      return try JSONDecoder().decode(PersistModel.self, from: data)
     } catch {
       print("⚠️ ConversationStore load failed: \(error.localizedDescription)")
-      sessions = []
-      currentSessionId = ""
+      return nil
     }
   }
 
@@ -228,6 +290,48 @@ final class ConversationStore: ObservableObject {
         print("⚠️ ConversationStore save failed: \(error.localizedDescription)")
       }
     }
+  }
+
+  private func logStateChange(_ label: String) {
+    guard stateLoggingEnabled else { return }
+    NSLog("🚨 ConversationStore.\(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
+  }
+
+  private func mutateState(sendChange: Bool = true, _ updates: () -> Void) {
+    updates()
+    if sendChange && isPublishingEnabled {
+      logPendingPublishStack()
+      schedulePublish()
+    }
+  }
+
+  private func schedulePublish() {
+    guard !isPublishScheduled else { return }
+    isPublishScheduled = true
+    DispatchQueue.main.async { [weak self] in
+      guard let self else { return }
+      self.isPublishScheduled = false
+      self.objectWillChange.send()
+    }
+  }
+
+  private func logPendingPublishStack() {
+    guard stateLoggingEnabled else { return }
+    NSLog("⚠️ ConversationStore 即将 publish objectWillChange | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
+  }
+
+  private func makeSession(title: String?) -> Session {
+    let now = Date()
+    let cleanTitle = title?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return Session(
+      id: UUID().uuidString,
+      title: cleanTitle.isEmpty ? "新会话" : cleanTitle,
+      systemPrompt: "",
+      messages: [],
+      createdAt: now,
+      updatedAt: now,
+      hasCustomTitle: !cleanTitle.isEmpty
+    )
   }
 
   private static func defaultURL() -> URL {
@@ -267,5 +371,3 @@ private extension CoreChatMessage {
     )
   }
 }
-
-extension ConversationStore: @unchecked Sendable {}

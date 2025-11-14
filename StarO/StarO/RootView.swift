@@ -90,19 +90,16 @@ struct RootView: View {
       )
       .onAppear {
         DispatchQueue.main.async {
+          environment.bootstrapConversationIfNeeded()
           chatBridge.activateIfNeeded()
           let offset = activePane == .menu ? menuWidth + 24 : 0
           chatBridge.setHorizontalOffset(offset, animated: false)
-          chatBridge.ensureOverlayVisible(collapsed: true)
         }
       }
       .onChange(of: activePane) { _, newValue in
         DispatchQueue.main.async {
           let offset = newValue == .menu ? menuWidth + 24 : 0
           chatBridge.setHorizontalOffset(offset, animated: true)
-          if newValue != .menu {
-            chatBridge.ensureOverlayVisible(collapsed: true)
-          }
         }
       }
     }

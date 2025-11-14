@@ -3,11 +3,24 @@ import StarOracleCore
 
 @MainActor
 public final class GalaxyStore: ObservableObject, GalaxyStoreProtocol {
-  @Published public private(set) var width: Double
-  @Published public private(set) var height: Double
-  @Published public private(set) var hotspots: [GalaxyHotspot]
-  @Published public private(set) var ripples: [GalaxyRipple]
-  @Published public private(set) var hoveredId: String?
+  @Published public private(set) var width: Double {
+    willSet { logStateChange("width -> \(newValue)") }
+  }
+  @Published public private(set) var height: Double {
+    willSet { logStateChange("height -> \(newValue)") }
+  }
+  @Published public private(set) var hotspots: [GalaxyHotspot] {
+    willSet { logStateChange("hotspots -> \(newValue.count)") }
+  }
+  @Published public private(set) var ripples: [GalaxyRipple] {
+    willSet { logStateChange("ripples -> \(newValue.count)") }
+  }
+  @Published public private(set) var hoveredId: String? {
+    willSet { logStateChange("hoveredId -> \(String(describing: newValue))") }
+  }
+
+  private let stateLoggingEnabled = true
+  private var pendingCanvasSizeWork: DispatchWorkItem?
 
   public init(
     width: Double = 0,
@@ -24,8 +37,19 @@ public final class GalaxyStore: ObservableObject, GalaxyStoreProtocol {
   }
 
   public func setCanvasSize(width: Double, height: Double) {
-    self.width = width
-    self.height = height
+    guard width > 0, height > 0 else { return }
+    if abs(self.width - width) < 0.5 && abs(self.height - height) < 0.5 {
+      return
+    }
+    logStateChange("schedule setCanvasSize -> \(width)x\(height)")
+    pendingCanvasSizeWork?.cancel()
+    let work = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      self.width = width
+      self.height = height
+    }
+    pendingCanvasSizeWork = work
+    DispatchQueue.main.async(execute: work)
   }
 
   public func generateHotspots(count: Int) {
@@ -80,6 +104,11 @@ public final class GalaxyStore: ObservableObject, GalaxyStoreProtocol {
   public func cleanupEffects() {
     let now = Date()
     ripples.removeAll { now.timeIntervalSince($0.startAt) > $0.duration }
+  }
+
+  private func logStateChange(_ label: String) {
+    guard stateLoggingEnabled else { return }
+    NSLog("⚠️ GalaxyStore mutate \(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
   }
 
   private func clamp(_ value: Double) -> Double {

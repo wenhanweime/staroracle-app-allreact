@@ -36,6 +36,7 @@ public final class StreamingClient {
         onComplete: @escaping (_ fullText: String?, _ error: Error?) -> Void
     ) {
         cancel()
+        NSLog("🚀 [StreamingClient] start endpoint=%@ model=%@ messages=%d", endpoint, model, messages.count)
 
         currentTask = Task { [weak self] in
             var request = URLRequest(url: URL(string: endpoint)!)
@@ -53,6 +54,7 @@ public final class StreamingClient {
             do {
                 request.httpBody = try JSONEncoder().encode(body)
             } catch {
+                NSLog("❌ [StreamingClient] encode error: %@", error.localizedDescription)
                 onComplete(nil, error)
                 return
             }
@@ -67,6 +69,7 @@ public final class StreamingClient {
                 guard (200..<300).contains(http.statusCode) else {
                     let text = try? String(bytes: Data(try await bytes.reduce(into: [UInt8](), { $0.append($1) })), encoding: .utf8)
                     let mapped = Self.mapStatus(http.statusCode)
+                    NSLog("❌ [StreamingClient] HTTP %d %@", http.statusCode, text ?? "")
                     onComplete(nil, NSError(domain: "StreamingClient", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "\(mapped). \(text ?? "")"]))
                     return
                 }
@@ -82,13 +85,16 @@ public final class StreamingClient {
                        let delta = choices.first?["delta"] as? [String: Any],
                        let content = delta["content"] as? String, !content.isEmpty {
                         full += content
+                        NSLog("✉️ [StreamingClient] chunk len=%d", content.count)
                         onChunk(content)
                     }
                 }
+                NSLog("✅ [StreamingClient] finish, totalLen=%d", full.count)
                 onComplete(full, nil)
             } catch is CancellationError {
                 onComplete(full.isEmpty ? nil : full, NSError(domain: NSCocoaErrorDomain, code: NSUserCancelledError, userInfo: nil))
             } catch {
+                NSLog("❌ [StreamingClient] error: %@", error.localizedDescription)
                 onComplete(full.isEmpty ? nil : full, error)
             }
             // clear task when finished
@@ -112,4 +118,3 @@ public final class StreamingClient {
         }
     }
 }
-

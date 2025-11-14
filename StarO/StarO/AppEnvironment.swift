@@ -15,8 +15,7 @@ final class AppEnvironment: ObservableObject {
   let galaxyGridStore: GalaxyGridStore
   let conversationStore: ConversationStore
   let chatBridge: NativeChatBridge
-
-  private let conversationSync: ConversationSyncService
+  private var didBootstrapConversation = false
 
   init(conversationStore: ConversationStore = .shared) {
     let aiService = LiveAIService()
@@ -48,17 +47,12 @@ final class AppEnvironment: ObservableObject {
     galaxyGridStore = GalaxyGridStore()
 
     self.conversationStore = conversationStore
-    let initialMessages = conversationStore.messages(forSession: nil)
-    if !initialMessages.isEmpty {
-      chatStore.loadMessages(initialMessages, title: conversationStore.currentSession()?.displayTitle)
-    }
     chatBridge = NativeChatBridge(
       chatStore: chatStore,
       conversationStore: conversationStore,
       aiService: aiService,
       preferenceService: preferenceService
     )
-    conversationSync = ConversationSyncService(chatStore: chatStore, conversationStore: conversationStore)
   }
 
   func switchSession(to sessionId: String) {
@@ -81,6 +75,16 @@ final class AppEnvironment: ObservableObject {
     let messages = conversationStore.messages(forSession: nil)
     chatStore.loadMessages(messages, title: conversationStore.currentSession()?.displayTitle)
   }
+
+  func bootstrapConversationIfNeeded() {
+    guard !didBootstrapConversation else { return }
+    didBootstrapConversation = true
+    conversationStore.bootstrapIfNeeded()
+    let initialMessages = conversationStore.messages(forSession: nil)
+    if !initialMessages.isEmpty {
+      chatStore.loadMessages(initialMessages, title: conversationStore.currentSession()?.displayTitle)
+    }
+  }
 }
 
 // MARK: - Live AI Service (OpenAI-compatible)
@@ -101,9 +105,11 @@ final class LiveAIService: AIServiceProtocol {
     context: AIRequestContext
   ) -> AsyncThrowingStream<String, Error> {
     guard Self.isLive(configuration: configuration) else {
+      NSLog("ℹ️ LiveAIService.streamResponse | 使用 mock provider=%@", configuration.provider)
       return fallback.streamResponse(for: question, configuration: configuration, context: context)
     }
 
+    NSLog("🎯 LiveAIService.streamResponse | provider=%@ endpoint=%@ model=%@", configuration.provider, configuration.endpoint.absoluteString, configuration.model)
     let messages = makeMessages(for: question, context: context)
     let endpoint = configuration.endpoint.absoluteString
     let apiKey = configuration.apiKey.trimmingCharacters(in: .whitespacesAndNewlines)

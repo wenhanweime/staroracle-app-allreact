@@ -112,6 +112,7 @@ final class StreamingClient: @unchecked Sendable {
     onComplete: @escaping @Sendable (_ fullText: String?, _ error: Error?) -> Void
   ) {
     cancel()
+    NSLog("🚀 StreamingClient.start | endpoint=%@ model=%@ messages=%d", endpoint, model, messages.count)
 
     let chunkHandler = ChunkHandler(onChunk)
     let completionHandler = CompletionHandler(onComplete)
@@ -131,6 +132,7 @@ final class StreamingClient: @unchecked Sendable {
     do {
       request.httpBody = try JSONEncoder().encode(body)
     } catch {
+      NSLog("❌ StreamingClient.encode | %@", error.localizedDescription)
       completionHandler.call(nil, error)
       return
     }

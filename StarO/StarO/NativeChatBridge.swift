@@ -6,6 +6,8 @@ import StarOracleCore
 import StarOracleFeatures
 import StarOracleServices
 
+extension ObservableObjectPublisher: @unchecked Sendable {}
+
 @MainActor
 final class NativeChatBridge: NSObject, ObservableObject {
   enum PresentationState {
@@ -14,9 +16,12 @@ final class NativeChatBridge: NSObject, ObservableObject {
     case expanded
   }
 
-  @Published private(set) var presentationState: PresentationState = .hidden
-  @Published private(set) var isInputDrawerVisible = false
-  @Published private(set) var lastErrorMessage: String?
+  nonisolated let objectWillChange = ObservableObjectPublisher()
+  private var presentationStateStorage: PresentationState = .hidden
+  var presentationState: PresentationState { presentationStateStorage }
+  private(set) var isInputDrawerVisible = false
+  private var lastErrorMessageStorage: String?
+  var lastErrorMessage: String? { lastErrorMessageStorage }
 
   private let overlayManager = ChatOverlayManager()
   private let inputManager = InputDrawerManager()
@@ -30,6 +35,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private weak var windowScene: UIWindowScene?
   private weak var registeredBackgroundView: UIView?
   private var pendingEnsureWorkItem: DispatchWorkItem?
+  private var pendingPresentationStateWorkItem: DispatchWorkItem?
 
   init(
     chatStore: ChatStore,
@@ -62,28 +68,34 @@ final class NativeChatBridge: NSObject, ObservableObject {
     ensureInputDrawerVisible()
     overlayManager.setConversationTitle(chatStore.conversationTitle)
     overlayManager.updateMessages(chatStore.messages.map(makeOverlayMessage))
-    ensureOverlayVisible(collapsed: true)
   }
+
+  private var pendingInputVisibleWork: DispatchWorkItem?
 
   func ensureInputDrawerVisible() {
     NSLog("🎯 NativeChatBridge.ensureInputDrawerVisible")
-    inputManager.show(animated: true) { [weak self] success in
+    pendingInputVisibleWork?.cancel()
+    let work = DispatchWorkItem { [weak self] in
       guard let self else { return }
-      if success {
-        DispatchQueue.main.async {
-          if self.isInputDrawerVisible != true {
-            self.isInputDrawerVisible = true
+      self.inputManager.show(animated: true) { [weak self] success in
+        guard let self else { return }
+        if success, self.isInputDrawerVisible != true {
+          DispatchQueue.main.asyncAfter(deadline: .now() + 0.02) {
+            self.setInputDrawerVisible(true)
           }
         }
       }
     }
+    pendingInputVisibleWork = work
+    DispatchQueue.main.async(execute: work)
   }
 
   func hideInputDrawer() {
     inputManager.hide(animated: true) { [weak self] in
-      DispatchQueue.main.async {
-        if self?.isInputDrawerVisible == true {
-          self?.isInputDrawerVisible = false
+      DispatchQueue.main.async { [weak self] in
+        guard let self else { return }
+        if self.isInputDrawerVisible == true {
+          self.setInputDrawerVisible(false)
         }
       }
     }
@@ -109,8 +121,8 @@ final class NativeChatBridge: NSObject, ObservableObject {
     NSLog("🎯 NativeChatBridge.openOverlay expanded=\(expanded)")
     overlayManager.show(animated: true, expanded: expanded) { [weak self] success in
       guard let self, success else { return }
-      DispatchQueue.main.async {
-        self.updatePresentationState(expanded ? .expanded : .collapsed)
+      DispatchQueue.main.asyncAfter(deadline: .now() + 0.01) { [weak self] in
+        self?.updatePresentationState(expanded ? .expanded : .collapsed)
       }
     }
   }
@@ -118,7 +130,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   func hideOverlay() {
     NSLog("🎯 NativeChatBridge.hideOverlay")
     overlayManager.hide(animated: true) { [weak self] in
-      DispatchQueue.main.async {
+      DispatchQueue.main.async { [weak self] in
         self?.updatePresentationState(.hidden)
       }
     }
@@ -163,7 +175,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     }
     chatStore.addUserMessage(trimmed)
     inputManager.setText("")
-    lastErrorMessage = nil
+    setLastErrorMessage(nil)
     startStreaming(for: trimmed)
   }
 
@@ -180,12 +192,14 @@ final class NativeChatBridge: NSObject, ObservableObject {
     overlayManager.setLoading(true)
     let history = chatStore.messages
     let systemPrompt = conversationStore.currentSession()?.systemPrompt ?? ""
-    let configuration = await preferenceService.loadAIConfiguration() ?? AIConfiguration(
-      provider: "mock",
-      apiKey: "",
-      endpoint: URL(string: "https://example.com/mock")!,
-      model: "mock-gpt"
-    )
+    guard let configuration = await preferenceService.loadAIConfiguration() else {
+      NSLog("⚠️ NativeChatBridge.performStreaming | 未找到 AI 配置")
+      chatStore.setLoading(false)
+      overlayManager.setLoading(false)
+      setLastErrorMessage("尚未配置 AI 接口，请先在设置中填写。")
+      return
+    }
+    NSLog("🎯 NativeChatBridge.performStreaming | provider=%@ model=%@ endpoint=%@", configuration.provider, configuration.model, configuration.endpoint.absoluteString)
     let messageId = chatStore.beginStreamingAIMessage(initial: "")
     var buffer = ""
     let stream = aiService.streamResponse(
@@ -200,19 +214,22 @@ final class NativeChatBridge: NSObject, ObservableObject {
     do {
       for try await chunk in stream {
         buffer.append(chunk)
+        NSLog("✉️ NativeChatBridge.chunk | len=%d", chunk.count)
         chatStore.updateStreamingMessage(id: messageId, text: buffer)
       }
+      NSLog("✅ NativeChatBridge.performStreaming | 完成")
       chatStore.finalizeStreamingMessage(id: messageId)
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
       try? await chatStore.generateConversationTitle()
-      lastErrorMessage = nil
+      setLastErrorMessage(nil)
     } catch {
+      NSLog("❌ NativeChatBridge.performStreaming | error=%@", error.localizedDescription)
       chatStore.updateStreamingMessage(id: messageId, text: "未能获取星语回应，请稍后再试。")
       chatStore.finalizeStreamingMessage(id: messageId)
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
-      lastErrorMessage = "发送失败：\(error.localizedDescription)"
+      setLastErrorMessage("发送失败：\(error.localizedDescription)")
     }
   }
 
@@ -275,7 +292,39 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
   private func updatePresentationState(_ newState: PresentationState) {
     guard presentationState != newState else { return }
-    presentationState = newState
+    pendingPresentationStateWorkItem?.cancel()
+    let workItem = DispatchWorkItem { [weak self] in
+      guard let self else { return }
+      NSLog("🎯 presentationState commit -> \(newState)")
+      self.pendingPresentationStateWorkItem = nil
+      self.setPresentationStateValue(newState)
+    }
+    NSLog("🎯 schedule presentationState -> \(newState) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
+    pendingPresentationStateWorkItem = workItem
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.03, execute: workItem)
+  }
+  
+  private func setPresentationStateValue(_ newState: PresentationState) {
+    guard presentationStateStorage != newState else { return }
+    publishBridgeChange("presentationState -> \(newState)")
+    presentationStateStorage = newState
+  }
+
+  private func setLastErrorMessage(_ newValue: String?) {
+    guard lastErrorMessageStorage != newValue else { return }
+    publishBridgeChange("lastErrorMessage changed")
+    lastErrorMessageStorage = newValue
+  }
+  
+  private func setInputDrawerVisible(_ visible: Bool) {
+    guard isInputDrawerVisible != visible else { return }
+    publishBridgeChange("isInputDrawerVisible -> \(visible)")
+    isInputDrawerVisible = visible
+  }
+
+  private func publishBridgeChange(_ label: String) {
+    NSLog("⚠️ NativeChatBridge 即将 publish (\(label)) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
+    objectWillChange.send()
   }
 
   func attach(to scene: UIWindowScene) {
@@ -320,19 +369,10 @@ extension NativeChatBridge: InputDrawerDelegate {
 
   nonisolated func inputDrawerDidChange(_ text: String) {
     NSLog("🎯 NativeChatBridge.inputDrawerDidChange text=\(text)")
-    Task { @MainActor [weak self] in
-      guard let self else { return }
-      if self.presentationState == .hidden {
-        self.ensureOverlayVisible(collapsed: true)
-      }
-    }
   }
 
   nonisolated func inputDrawerDidFocus() {
     NSLog("🎯 NativeChatBridge.inputDrawerDidFocus")
-    Task { @MainActor [weak self] in
-      self?.ensureOverlayVisible(collapsed: true)
-    }
   }
 
   nonisolated func inputDrawerDidBlur() {}
