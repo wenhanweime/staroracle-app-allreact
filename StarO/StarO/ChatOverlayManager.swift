@@ -76,12 +76,18 @@ public class ChatOverlayManager {
     // 协调延迟任务：收缩态更新可能的延迟任务（用于在展开前取消以避免竞态）
     private var pendingCollapsedWork: DispatchWorkItem?
     fileprivate var horizontalOffset: CGFloat = 0
+    private var keyboardWillShowObserver: NSObjectProtocol?
+    private var keyboardWillHideObserver: NSObjectProtocol?
+    private let defaultWindowLevel = UIWindow.Level.statusBar - 1
+    // 🔧 键盘事件不再提升到 alert 层级，保持与默认层级一致以避免切层闪烁
+    private let elevatedWindowLevel = UIWindow.Level.statusBar - 1
     
     // 状态变化回调
     private var onStateChange: ((OverlayState) -> Void)?
     
     // 背景视图变换 - 用于3D缩放效果
     private weak var backgroundView: UIView?
+    private var lastBackgroundState: OverlayState?
     
     // 动画触发跟踪 - 🎯 【关键新增】用Set管理已播放动画的消息ID
     internal var animatedMessageIDs = Set<String>()  // 改为internal，让OverlayViewController能访问
@@ -95,8 +101,19 @@ public class ChatOverlayManager {
     private var lastMessagesHash: String = ""
 
     // MARK: - Public API
+    public init() {
+        // 🔧 取消键盘层级调整：键盘弹起/收回时不再切换浮窗窗口层级，避免窗口重排导致的闪烁
+        keyboardWillShowObserver = nil
+        keyboardWillHideObserver = nil
+    }
+    
+    deinit {}
     
     func attach(to scene: UIWindowScene) {
+        // 若已经绑定同一 scene，避免重复 rebind 造成窗口闪烁
+        if windowScene === scene, let window = overlayWindow, window.windowScene === scene {
+            return
+        }
         windowScene = scene
         if let window = overlayWindow {
             window.windowScene = scene
@@ -427,6 +444,11 @@ public class ChatOverlayManager {
             return 
         }
 
+        if state == lastBackgroundState {
+            NSLog("ℹ️ 背景状态未变化(\(state))，跳过变换")
+            return
+        }
+
         NSLog("🎯 应用背景3D变换，状态: \(state)")
         // 若插入动画进行中，避免与发送动画叠加，改为无动画
         let shouldAnimate = (overlayViewController?.isAnimatingInsert == true) ? false : animated
@@ -437,7 +459,6 @@ public class ChatOverlayManager {
             CATransaction.setDisableActions(true)
             backgroundView.layer.removeAllAnimations()
             backgroundView.layer.transform = CATransform3DIdentity
-            backgroundView.alpha = 1.0
             CATransaction.commit()
             NSLog("🧭 基线校准：已无动画重置为 scale=1.0, alpha=1.0")
         }
@@ -457,12 +478,10 @@ public class ChatOverlayManager {
                     transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)  // 绕X轴旋转4度
                     
                     backgroundView.layer.transform = transform
-                    backgroundView.alpha = 0.6  // 降低亮度到60%
                     
                 case .collapsed, .hidden:
                     // 收缩状态或隐藏状态：还原到原始状态
                     backgroundView.layer.transform = CATransform3DIdentity
-                    backgroundView.alpha = 1.0  // 恢复原始亮度
                 }
             }, completion: nil)
         } else {
@@ -476,13 +495,59 @@ public class ChatOverlayManager {
                 transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)
                 
                 backgroundView.layer.transform = transform
-                backgroundView.alpha = 0.6
                 
             case .collapsed, .hidden:
                 backgroundView.layer.transform = CATransform3DIdentity
-                backgroundView.alpha = 1.0
             }
         }
+        lastBackgroundState = state
+    }
+    
+    private func logOverlayDebugState(reason: String) {
+        let windowAlpha = overlayWindow?.alpha ?? -1
+        let windowHidden = overlayWindow?.isHidden ?? true
+        let containerAlpha = overlayViewController?.containerView.alpha ?? -1
+        let containerFrame = overlayViewController?.containerView.frame ?? .zero
+        let frameString = NSCoder.string(for: containerFrame)
+        let maskAlpha = overlayViewController?.backgroundMaskAlpha ?? -1
+        let expandedHidden = overlayViewController?.isExpandedHidden ?? true
+#if os(iOS)
+        let windowLevels = UIApplication.shared.windows.map { window -> String in
+            let level = window.windowLevel.rawValue
+            let key = window.isKeyWindow ? "key" : "-"
+            let hidden = window.isHidden ? "hidden" : "visible"
+            let className = String(describing: type(of: window))
+            return String(format: "%@ (level=%.2f, %@, %@)", className, level, key, hidden)
+        }.joined(separator: " | ")
+        NSLog("🛰 OverlayDebug[%@] windowAlpha=%.3f hidden=%@ containerAlpha=%.3f frame=%@ maskAlpha=%.3f expandedHidden=%@ | windows: %@",
+              reason,
+              windowAlpha,
+              windowHidden.description as NSString,
+              containerAlpha,
+              frameString,
+              maskAlpha,
+              expandedHidden.description as NSString,
+              windowLevels)
+        #else
+        NSLog("🛰 OverlayDebug[%@] windowAlpha=%.3f hidden=%@ containerAlpha=%.3f frame=%@ maskAlpha=%.3f expandedHidden=%@",
+              reason,
+              windowAlpha,
+              windowHidden.description as NSString,
+              containerAlpha,
+              NSStringFromCGRect(containerFrame),
+              maskAlpha,
+              expandedHidden.description as NSString)
+        #endif
+    }
+    
+    private func adjustOverlayWindowLevel(isElevated: Bool, reason: String) {
+        logOverlayDebugState(reason: reason)
+        guard let window = overlayWindow else { return }
+        let targetLevel = isElevated ? elevatedWindowLevel : defaultWindowLevel
+        // 层级已保持一致，不再弹跳到 alert 级别，避免窗口被移出/再插入导致闪烁
+        if abs(window.windowLevel.rawValue - targetLevel.rawValue) < 0.1 { return }
+        window.windowLevel = targetLevel
+        NSLog("🛰 OverlayDebug[%@] 维持windowLevel -> %.2f", reason, targetLevel.rawValue)
     }
     
     // MARK: - Private Methods
@@ -584,6 +649,12 @@ class OverlayViewController: UIViewController {
     private var expandedViewConstraints: [NSLayoutConstraint] = []
     private var isExpandedLayoutActive = true
     // 去除渐变，改为与输入框一致的风格（纯色+浅色描边）
+    var backgroundMaskAlpha: CGFloat {
+        backgroundMaskView?.alpha ?? 0
+    }
+    var isExpandedHidden: Bool {
+        expandedView?.isHidden ?? true
+    }
     
     // 渲染层可见消息（与数据层解耦）：用于发送动画期间隐藏AI占位
     fileprivate var visibleMessages: [ChatMessage] = []
@@ -1015,6 +1086,7 @@ class OverlayViewController: UIViewController {
         case .collapsed:
             setExpandedLayout(active: false)
             detachExpandedView()
+            containerView.alpha = 1  // 确保收缩状态下容器完全可见，避免短暂透明
             // 收缩状态：浮窗顶部与收缩状态下输入框底部-10px对齐
             let floatingHeight: CGFloat = 65
             let gap: CGFloat = 10  // 浮窗顶部与输入框底部的间隙

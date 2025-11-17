@@ -334,12 +334,18 @@ final class NativeChatBridge: NSObject, ObservableObject {
   }
 
   func attach(to scene: UIWindowScene) {
+    // 若已绑定同一 scene，避免重复 rebind 造成窗口闪烁
+    let isSameScene = windowScene === scene
     let isNewScene = windowScene !== scene
     windowScene = scene
     overlayManager.attach(to: scene)
     inputManager.attach(to: scene)
     if isNewScene {
       registeredBackgroundView = nil
+    }
+    // 已绑定且背景视图有效则无需重复配置
+    if isSameScene, let view = registeredBackgroundView, view.window != nil {
+      return
     }
     configureBackgroundViewIfNeeded()
   }
