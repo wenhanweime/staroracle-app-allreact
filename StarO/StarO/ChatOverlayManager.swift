@@ -787,7 +787,7 @@ class OverlayViewController: UIViewController {
     }
     
     private func setupInputDrawerObservers() {
-        // 监听输入框实际位置变化：仅用于首次收缩的精确对齐（之后不再依赖）
+        // 监听输入框实际位置变化：在collapsed状态下对齐浮窗位置，在expanded状态下调整内容区域
         NotificationCenter.default.addObserver(
             forName: Notification.Name("inputDrawerActualPositionChanged"),
             object: nil,
@@ -797,28 +797,95 @@ class OverlayViewController: UIViewController {
             Task { @MainActor [weak self] in
                 guard let self = self else { return }
                 guard let manager = self.manager else { return }
-                guard manager.currentState == .collapsed else { return }
                 guard let value = bottomSpace else { return }
 
-                let screenHeight = UIScreen.main.bounds.height
-                let safeAreaTop = self.view.safeAreaInsets.top
-                let gap: CGFloat = 10
-                let floatingTop = screenHeight - value + gap
-                let relativeTopFromSafeArea = floatingTop - safeAreaTop
+                // 根据不同状态采取不同策略
+                switch manager.currentState {
+                case .collapsed:
+                    // Collapsed 状态：调整浮窗顶部位置对齐输入框
+                    let screenHeight = UIScreen.main.bounds.height
+                    let safeAreaTop = self.view.safeAreaInsets.top
+                    let gap: CGFloat = 10
+                    let floatingTop = screenHeight - value + gap
+                    let relativeTopFromSafeArea = floatingTop - safeAreaTop
 
-                if self.awaitingFirstCollapseAlign && !self.didFirstCollapseAlign {
-                    self.containerTopConstraint.constant = relativeTopFromSafeArea
-                    UIView.animate(
-                        withDuration: 0.26,
-                        delay: 0,
-                        options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
-                    ) {
-                        self.view.layoutIfNeeded()
-                    } completion: { _ in
-                        self.didFirstCollapseAlign = true
-                        self.awaitingFirstCollapseAlign = false
-                        NSLog("🎯 ChatOverlay: 首次收缩对齐完成 actualBottom=\(value), top=\(relativeTopFromSafeArea)")
+                    if self.awaitingFirstCollapseAlign && !self.didFirstCollapseAlign {
+                        self.containerTopConstraint.constant = relativeTopFromSafeArea
+                        UIView.animate(
+                            withDuration: 0.26,
+                            delay: 0,
+                            options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
+                        ) {
+                            self.view.layoutIfNeeded()
+                        } completion: { _ in
+                            self.didFirstCollapseAlign = true
+                            self.awaitingFirstCollapseAlign = false
+                            NSLog("🎯 ChatOverlay: 首次收缩对齐完成 actualBottom=\(value), top=\(relativeTopFromSafeArea)")
+                        }
                     }
+                    
+                case .expanded:
+                    // 🔧 新增：Expanded 状态下调整内容区域的底部内边距，为键盘腾出空间
+                    self.adjustExpandedContentInset(for: value)
+                    
+                case .hidden:
+                    break
+                }
+            }
+        }
+    }
+    
+    // 🔧 新增：在 Expanded 状态下调整内容区域内边距，为键盘腾出空间
+    private func adjustExpandedContentInset(for inputDrawerBottomSpace: CGFloat) {
+        guard let messagesList = messagesList else { return }
+        
+        let screenHeight = UIScreen.main.bounds.height
+        let safeAreaBottom = view.safeAreaInsets.bottom
+        
+        // 计算输入框顶部的 Y 坐标
+        let inputDrawerTopY = screenHeight - inputDrawerBottomSpace
+        
+        // 计算浮窗容器底部的 Y 坐标
+        let containerBottomY = containerView.frame.maxY
+        
+        // 如果输入框在浮窗底部之上（重叠），需要调整内边距
+        if inputDrawerTopY < containerBottomY {
+            // 计算重叠高度，并额外加上间隙确保视觉清晰
+            let overlap = containerBottomY - inputDrawerTopY + 16  // 加上 16px 间隙
+            
+            var currentInsets = messagesList.contentInset
+            let oldBottom = currentInsets.bottom
+            currentInsets.bottom = overlap
+            
+            NSLog("🎯 Expanded 键盘调整：inputDrawerBottom=\(inputDrawerBottomSpace)px, overlap=\(overlap)px, 内边距 \(oldBottom)px → \(overlap)px")
+            
+            UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                messagesList.contentInset = currentInsets
+                messagesList.scrollIndicatorInsets = currentInsets
+                
+                // 如果接近底部，自动滚动保持可见
+                if self.shouldAutoScrollToBottom() {
+                    let lastRow = self.visibleMessages.count - 1
+                    if lastRow >= 0 {
+                        let indexPath = IndexPath(row: lastRow, section: 0)
+                        self.safeScrollToRow(indexPath, at: .bottom, animated: true, reason: "键盘弹起自动滚动")
+                    }
+                }
+            }
+        } else {
+            // 输入框在浮窗底部之下或齐平，恢复默认内边距（120px 为输入框预留空间）
+            var currentInsets = messagesList.contentInset
+            let defaultBottomInset: CGFloat = 120
+            
+            if abs(currentInsets.bottom - defaultBottomInset) > 1 {
+                let oldBottom = currentInsets.bottom
+                currentInsets.bottom = defaultBottomInset
+                
+                NSLog("🎯 Expanded 键盘恢复：inputDrawerBottom=\(inputDrawerBottomSpace)px, 内边距 \(oldBottom)px → \(defaultBottomInset)px")
+                
+                UIView.animate(withDuration: 0.3, delay: 0, options: [.curveEaseOut, .beginFromCurrentState]) {
+                    messagesList.contentInset = currentInsets
+                    messagesList.scrollIndicatorInsets = currentInsets
                 }
             }
         }
