@@ -9,7 +9,7 @@
 	<key>Endpoint</key>
 	<string>https://x666.me/v1/chat/completions</string>
 	<key>Model</key>
-	<string>gemini-2.5-flash-preview-05-20</string>
+	<string>gemini-2.5-flash</string>
 	<key>SystemPrompt</key>
 	<string>  # 角色
   * 你是星瑜，是来自宇宙，请用中文回复用户的问题。
