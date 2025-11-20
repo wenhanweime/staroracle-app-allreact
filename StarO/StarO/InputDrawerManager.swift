@@ -682,14 +682,34 @@ class InputViewController: UIViewController {
         
         NSLog("🎯 InputDrawer实际位置 - 容器底部Y: \(containerBottom), 屏幕高度: \(screenHeight), 实际底部距离: \(actualBottomSpaceFromScreen)")
         
-        // 向ChatOverlay广播输入框的实际底部距离，便于其在收缩态精准对齐
-        NotificationCenter.default.post(
-            name: Notification.Name("inputDrawerActualPositionChanged"),
-            object: nil,
-            userInfo: ["actualBottomSpace": actualBottomSpaceFromScreen]
-        )
-        
-        NSLog("🎯 InputDrawer: 已广播实际位置 actualBottomSpace=\(actualBottomSpaceFromScreen)")
+        // 记录最新的实际位置，供 ChatOverlay 初次出现时立即读取
+        InputDrawerState.shared.latestActualBottomSpace = actualBottomSpaceFromScreen
+
+        // 去通知化：不再通过全局通知广播，改由协议回调（InputDrawerPositionObservable）
+        NSLog("🎯 InputDrawer: 已更新实际位置 actualBottomSpace=\(actualBottomSpaceFromScreen)")
+    }
+}
+
+// MARK: - 输入框共享状态（供 ChatOverlay 初次出现时立即对齐）
+@MainActor
+final class InputDrawerState: InputDrawerPositionObservable {
+    static let shared = InputDrawerState()
+    private init() {}
+
+    // 位置变化回调（供协调者使用）
+    var onBottomSpaceChanged: ((CGFloat) -> Void)?
+
+    // 兼容旧字段（保持与已有调用的一致性）
+    var latestActualBottomSpace: CGFloat = 70 {
+        didSet {
+            // 同步到新协议字段并回调
+            latestBottomSpace = latestActualBottomSpace
+        }
+    }
+
+    // 协议所需字段：屏幕底部到输入框底部的实际距离（px）
+    var latestBottomSpace: CGFloat = 70 {
+        didSet { onBottomSpaceChanged?(latestBottomSpace) }
     }
 }
 

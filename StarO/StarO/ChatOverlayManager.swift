@@ -630,7 +630,7 @@ public class ChatOverlayManager {
 
 // MARK: - OverlayViewController - 处理双状态UI显示
 @MainActor
-class OverlayViewController: UIViewController {
+class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
     
     // 🚨 【关键修复】动画状态枚举
     enum AnimationState {
@@ -761,6 +761,7 @@ class OverlayViewController: UIViewController {
     private var containerLeadingConstraint: NSLayoutConstraint!
     private var containerTrailingConstraint: NSLayoutConstraint!
     private var horizontalOffset: CGFloat = 0
+    private var layoutCoordinator: InputDrawerLayoutCoordinator?
     
     init(manager: ChatOverlayManager) {
         self.manager = manager
@@ -774,9 +775,11 @@ class OverlayViewController: UIViewController {
     override func viewDidLoad() {
         super.viewDidLoad()
         setupUI()
-        setupInputDrawerObservers()  // 新增：监听输入框位置变化
+        // 去通知化：不再监听全局输入框位置通知
         // 初始化可见消息为当前数据层
         visibleMessages = manager?.messages ?? []
+        // 组装协调者：输入框位置 -> 布局能力
+        layoutCoordinator = InputDrawerLayoutCoordinator(layout: self, observable: InputDrawerState.shared)
     }
     
     override func viewDidAppear(_ animated: Bool) {
@@ -784,56 +787,15 @@ class OverlayViewController: UIViewController {
         
         // 在视图出现后设置触摸事件透传
         setupPassthroughView()
-    }
-    
-    private func setupInputDrawerObservers() {
-        // 监听输入框实际位置变化：在collapsed状态下对齐浮窗位置，在expanded状态下调整内容区域
-        NotificationCenter.default.addObserver(
-            forName: Notification.Name("inputDrawerActualPositionChanged"),
-            object: nil,
-            queue: .main
-        ) { [weak self] note in
-            let bottomSpace = note.userInfo?["actualBottomSpace"] as? CGFloat
-            Task { @MainActor [weak self] in
-                guard let self = self else { return }
-                guard let manager = self.manager else { return }
-                guard let value = bottomSpace else { return }
 
-                // 根据不同状态采取不同策略
-                switch manager.currentState {
-                case .collapsed:
-                    // Collapsed 状态：调整浮窗顶部位置对齐输入框
-                    let screenHeight = UIScreen.main.bounds.height
-                    let safeAreaTop = self.view.safeAreaInsets.top
-                    let gap: CGFloat = 10
-                    let floatingTop = screenHeight - value + gap
-                    let relativeTopFromSafeArea = floatingTop - safeAreaTop
-
-                    if self.awaitingFirstCollapseAlign && !self.didFirstCollapseAlign {
-                        self.containerTopConstraint.constant = relativeTopFromSafeArea
-                        UIView.animate(
-                            withDuration: 0.26,
-                            delay: 0,
-                            options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]
-                        ) {
-                            self.view.layoutIfNeeded()
-                        } completion: { _ in
-                            self.didFirstCollapseAlign = true
-                            self.awaitingFirstCollapseAlign = false
-                            NSLog("🎯 ChatOverlay: 首次收缩对齐完成 actualBottom=\(value), top=\(relativeTopFromSafeArea)")
-                        }
-                    }
-                    
-                case .expanded:
-                    // 🔧 新增：Expanded 状态下调整内容区域的底部内边距，为键盘腾出空间
-                    self.adjustExpandedContentInset(for: value)
-                    
-                case .hidden:
-                    break
-                }
-            }
+        // 🚨 强规则：首次出现时（尤其在键盘已弹起且InputDrawer已在屏幕上）
+        // 立即依据最新的输入框位置，调整展开态消息区域的底部内边距，避免被遮挡
+        if manager?.currentState == .expanded {
+            layoutCoordinator?.syncInitialLayout()
         }
     }
+    
+    // 去通知化：移除基于 NotificationCenter 的输入框位置监听
     
     // 🔧 新增：在 Expanded 状态下调整内容区域内边距，为键盘腾出空间
     private func adjustExpandedContentInset(for inputDrawerBottomSpace: CGFloat) {
@@ -914,6 +876,37 @@ class OverlayViewController: UIViewController {
         ])
         
         NSLog("🎯 ChatOverlay: PassthroughView设置完成，保持原有布局")
+    }
+
+    // MARK: - InputOverlayAvoidingLayout
+    func updateLayoutForInputDrawer(bottomSpaceFromScreen: CGFloat) {
+        guard let manager = manager else { return }
+        switch manager.currentState {
+        case .expanded:
+            // 展开态：调整消息区域 bottom inset，保证气泡不被输入框遮挡
+            adjustExpandedContentInset(for: bottomSpaceFromScreen)
+        case .collapsed:
+            // 首次收缩态对齐：让浮窗顶部与输入框间保持稳定间距
+            if awaitingFirstCollapseAlign && !didFirstCollapseAlign {
+                let screenHeight = UIScreen.main.bounds.height
+                let safeAreaTop = view.safeAreaInsets.top
+                let gap: CGFloat = 10
+                let floatingTop = screenHeight - bottomSpaceFromScreen + gap
+                let relativeTop = floatingTop - safeAreaTop
+                containerTopConstraint.constant = relativeTop
+                UIView.animate(withDuration: 0.26,
+                               delay: 0,
+                               options: [.allowUserInteraction, .curveEaseInOut, .beginFromCurrentState]) {
+                    self.view.layoutIfNeeded()
+                } completion: { _ in
+                    self.didFirstCollapseAlign = true
+                    self.awaitingFirstCollapseAlign = false
+                    NSLog("🎯 ChatOverlay: 收缩态首次对齐完成 bottom=\(bottomSpaceFromScreen), top=\(relativeTop)")
+                }
+            }
+        case .hidden:
+            break
+        }
     }
     
     private func setupUI() {
@@ -1219,6 +1212,10 @@ class OverlayViewController: UIViewController {
             hasTriggeredScrollCollapse = false
             
             NSLog("🎯 展开状态 - 顶部位置: \(expandedTopMargin)px, 高度: \(screenHeight - expandedTopMargin + expandedBottomExtension)px, 底部延伸: \(expandedBottomExtension)px")
+
+            // 🚨 强规则：刷新布局后，同步一次，避免竞态
+            self.view.layoutIfNeeded() // 确保 frame 更新
+            layoutCoordinator?.syncInitialLayout()
             
         case .hidden:
             setExpandedLayout(active: false)
@@ -1230,6 +1227,15 @@ class OverlayViewController: UIViewController {
         }
         
         NSLog("🎯 最终约束 - Top: \(containerTopConstraint.constant), Height: \(containerHeightConstraint.constant)")
+    }
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        // 🚨 强规则：每次布局更新后，重新检查并应用输入框避让规则
+        // 这确保了在旋转、大小改变或任何布局失效后，气泡始终不被遮挡
+        if manager?.currentState == .expanded {
+            layoutCoordinator?.syncInitialLayout()
+        }
     }
     
     private func setExpandedLayout(active: Bool) {
