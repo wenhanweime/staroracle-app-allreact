@@ -38,6 +38,25 @@ final class StreamingClient: @unchecked Sendable {
           completionHandler.call(nil, StreamingError.http(status: http.statusCode, body: text ?? ""))
           return
         }
+        // 非 SSE 响应回退为一次性 JSON 解析（OpenAI 兼容）
+        let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
+        let isSSE = contentType.lowercased().contains("text/event-stream")
+        if !isSSE {
+          let raw = try await bytes.reduce(into: [UInt8]()) { $0.append($1) }
+          let data = Data(raw)
+          if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+             let choices = json["choices"] as? [[String: Any]],
+             let message = choices.first?["message"] as? [String: Any],
+             let content = message["content"] as? String, !content.isEmpty {
+            full = content
+            completionHandler.call(full, nil)
+            return
+          }
+          // 无法解析，返回错误
+          let text = String(data: data, encoding: .utf8) ?? ""
+          completionHandler.call(nil, StreamingError.http(status: 200, body: "Invalid non-SSE response: \(text.prefix(200))"))
+          return
+        }
         for try await line in bytes.lines {
           try Task.checkCancellation()
           let trimmed = line.trimmingCharacters(in: .whitespacesAndNewlines)

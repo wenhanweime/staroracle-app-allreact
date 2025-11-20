@@ -34,32 +34,35 @@ struct RootView: View {
           .disabled(activePane != .home)
 
         if activePane == .menu {
-          DrawerMenuView(
-            onClose: { snapTo(.home) },
-            onOpenTemplate: {},
-            onOpenCollection: { snapTo(.collection) },
-            onOpenAIConfig: {},
-            onOpenInspiration: {},
-            onSwitchSession: { id in environment.switchSession(to: id) },
-            onCreateSession: { title in environment.createSession(title: title) },
-            onRenameSession: { id, title in environment.renameSession(id: id, title: title) },
-            onDeleteSession: { id in environment.deleteSession(id: id) }
-          )
-          .frame(width: menuWidth, alignment: .leading)
-          .frame(maxHeight: .infinity, alignment: .top)
-          .padding(.leading, 24)
-          .transition(.move(edge: .leading))
+          Group {
+            DrawerMenuView(
+              onClose: { snapTo(.home) },
+              onOpenTemplate: {},
+              onOpenCollection: { snapTo(.collection) },
+              onOpenAIConfig: {},
+              onOpenInspiration: {},
+              onSwitchSession: { id in environment.switchSession(to: id) },
+              onCreateSession: { title in environment.createSession(title: title) },
+              onRenameSession: { id, title in environment.renameSession(id: id, title: title) },
+              onDeleteSession: { id in environment.deleteSession(id: id) }
+            )
+            .frame(width: menuWidth, alignment: .leading)
+            .frame(maxHeight: .infinity, alignment: .top)
+            .padding(.leading, 24)
+            .transition(.move(edge: .leading))
 
-          HStack(spacing: 0) {
-            Color.clear
-              .frame(width: menuWidth + 24)
-              .allowsHitTesting(false)
-            Color.black.opacity(0.001)
-              .contentShape(Rectangle())
-              .onTapGesture { snapTo(.home) }
+            HStack(spacing: 0) {
+              Color.clear
+                .frame(width: menuWidth + 24)
+                .allowsHitTesting(false)
+              Color.black.opacity(0.001)
+                .contentShape(Rectangle())
+                .onTapGesture { snapTo(.home) }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .ignoresSafeArea()
           }
-          .frame(maxWidth: .infinity, maxHeight: .infinity)
-          .ignoresSafeArea()
+          .offset(x: dragOffset)
         }
 
         if activePane == .collection {
@@ -72,15 +75,15 @@ struct RootView: View {
           .frame(maxHeight: .infinity)
           .transition(.move(edge: .trailing))
           .frame(maxWidth: .infinity, alignment: .trailing)
+          .offset(x: dragOffset)
         }
       }
       .overlay(
         ChatOverlayHostView(bridge: chatBridge)
           .allowsHitTesting(false)
       )
-      .contentShape(Rectangle())
       .gesture(
-        DragGesture(minimumDistance: 15)
+        DragGesture(minimumDistance: 8)
           .onChanged { value in
             handleDragChanged(value.translation.width, width: width)
           }
@@ -115,19 +118,21 @@ struct RootView: View {
   }
 
   private var homePane: some View {
-    ScrollView {
-      VStack(spacing: 20) {
-        Text("StarOracle Native")
-          .font(.title)
-          .foregroundStyle(.white)
+    VStack(spacing: 20) {
+      Text("StarOracle Native")
+        .font(.title)
+        .foregroundStyle(.white)
 
-        summarySection
-        latestStarsSection
-      }
-      .padding(.top, 96)
-      .padding(.horizontal, 24)
-      .padding(.bottom, 40)
+      summarySection
+      latestStarsSection
+      
+      Spacer()
     }
+    .padding(.top, 96)
+    .padding(.horizontal, 24)
+    .padding(.bottom, 40)
+    .frame(maxHeight: .infinity, alignment: .top)
+    .contentShape(Rectangle())
   }
 
   private var summarySection: some View {
@@ -144,6 +149,7 @@ struct RootView: View {
     .frame(maxWidth: .infinity)
     .padding()
     .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
+    .allowsHitTesting(false)
   }
 
   private func summaryTile(title: String, value: Int) -> some View {
@@ -168,19 +174,21 @@ struct RootView: View {
           .foregroundStyle(.white.opacity(0.6))
       } else {
         ForEach(Array(starStore.constellation.stars.suffix(5)).reversed()) { star in
-          VStack(alignment: .leading, spacing: 6) {
-            Text(star.question)
-              .font(.subheadline.weight(.medium))
-              .foregroundStyle(.white)
-            if !star.answer.isEmpty {
-              Text(star.answer)
-                .font(.footnote)
-                .foregroundStyle(.white.opacity(0.8))
+          Button(action: { selectedStar = star }) {
+            VStack(alignment: .leading, spacing: 6) {
+              Text(star.question)
+                .font(.subheadline.weight(.medium))
+                .foregroundStyle(.white)
+              if !star.answer.isEmpty {
+                Text(star.answer)
+                  .font(.footnote)
+                  .foregroundStyle(.white.opacity(0.8))
+              }
             }
+            .padding()
+            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
           }
-          .padding()
-          .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-          .onTapGesture { selectedStar = star }
+          .buttonStyle(.plain)
         }
       }
     }

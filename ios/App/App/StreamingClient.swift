@@ -42,7 +42,7 @@ public final class StreamingClient {
             var request = URLRequest(url: URL(string: endpoint)!)
             request.httpMethod = "POST"
             request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-            request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+            request.setValue(Self.authHeaderValue(for: apiKey), forHTTPHeaderField: "Authorization")
 
             let body = RequestBody(
                 model: model,
@@ -71,6 +71,30 @@ public final class StreamingClient {
                     let mapped = Self.mapStatus(http.statusCode)
                     NSLog("❌ [StreamingClient] HTTP %d %@", http.statusCode, text ?? "")
                     onComplete(nil, NSError(domain: "StreamingClient", code: http.statusCode, userInfo: [NSLocalizedDescriptionKey: "\(mapped). \(text ?? "")"]))
+                    return
+                }
+                // Detect non-SSE response and fallback to JSON parsing
+                let contentType = http.value(forHTTPHeaderField: "Content-Type") ?? ""
+                let isSSE = contentType.lowercased().contains("text/event-stream")
+
+                if !isSSE {
+                    // Accumulate full body and parse as OpenAI-compatible JSON
+                    let raw = try await bytes.reduce(into: [UInt8]()) { $0.append($1) }
+                    let data = Data(raw)
+                    if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                       let choices = json["choices"] as? [[String: Any]] {
+                        if let msg = choices.first?["message"] as? [String: Any],
+                           let content = msg["content"] as? String, !content.isEmpty {
+                            full = content
+                            NSLog("✅ [StreamingClient] JSON fallback parsed len=%d", full.count)
+                            onComplete(full, nil)
+                            return
+                        }
+                    }
+                    // Fallback failed; return whole text for diagnostics
+                    let text = String(data: data, encoding: .utf8)
+                    NSLog("⚠️ [StreamingClient] JSON fallback failed, body=%@", text ?? "<nil>")
+                    onComplete(nil, NSError(domain: "StreamingClient", code: -2, userInfo: [NSLocalizedDescriptionKey: "Invalid non-SSE response"]))
                     return
                 }
                 for try await line in bytes.lines {
@@ -116,5 +140,10 @@ public final class StreamingClient {
         case 500...599: return "服务端异常（\(code)）"
         default: return "请求失败（\(code)）"
         }
+    }
+
+    private static func authHeaderValue(for apiKey: String) -> String {
+        let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.lowercased().hasPrefix("bearer ") ? trimmed : "Bearer \(trimmed)"
     }
 }
