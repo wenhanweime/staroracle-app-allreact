@@ -49,46 +49,35 @@ struct GalaxyMetalView: UIViewRepresentable {
         var renderer: GalaxyMetalRenderer?
         var displayLink: CADisplayLink?
         var canvasSize: CGSize = .zero
-        var startTime: CFTimeInterval?
+        var startTime: CFTimeInterval = 0
         var currentElapsed: Double = 0
         var deviceScale: CGFloat = deviceScaleValue()
         
         // deinit removed to avoid concurrency violation.
         // CADisplayLink retains 'self', so deinit is only called after invalidate() breaks the cycle.
         
-        @objc func tick(_ link: CADisplayLink) {
-            guard let viewModel, let renderer else { return }
-            guard canvasSize.width > 0, canvasSize.height > 0 else { return }
-            let currentTime = link.timestamp
-            if startTime == nil {
-                startTime = currentTime
-            }
-            currentElapsed = currentTime - (startTime ?? currentTime)
+        @objc func tick(displayLink: CADisplayLink) { // Changed parameter name
+            guard let viewModel, let renderer else { return } // Kept viewModel guard
+            guard canvasSize.width > 0, canvasSize.height > 0 else { return } // Kept canvas size guard
             
-            // 优化：不再每帧调用 viewModel.update(elapsed:)，避免 CPU 计算开销
-            // viewModel.update(elapsed: currentElapsed)
+            let currentTime = displayLink.timestamp
+            if startTime == 0 { startTime = currentTime } // Changed startTime initialization
+            currentElapsed = currentTime - startTime // Changed currentElapsed calculation
+            
+            // Update ViewModel time (for rotation cache and cleanup)
+            // This might trigger SwiftUI updates if @Published properties change (e.g. pulses removed)
             viewModel.updateElapsedTimeOnly(elapsed: currentElapsed)
             
-            renderer.updateViewport(pointSize: canvasSize, scale: deviceScale)
+            // ❌ STOP per-frame vertex upload.
+            // Vertices are now only rebuilt when viewModel structure changes (via updateUIView -> forceUpdate).
+            // renderer.updateStarVertices(...) 
             
-            // 优化：不再每帧重建顶点，除非需要（例如高亮变化，或者初始化）
-            // 目前为了保持高亮动画逻辑，我们仍然每帧构建，但构建过程不再包含旋转计算
-            // 旋转计算已移至 GPU
-            
-            let vertices = GalaxyMetalView.buildVertices(
-                viewModel: viewModel,
-                size: canvasSize,
-                elapsed: currentElapsed,
-                deviceScale: deviceScale
-            )
-            if !vertices.isEmpty {
-                renderer.updateStarVertices(vertices)
-            }
+            // Note: Rendering is driven by MTKViewDelegate.draw(in:), which runs on the GPU cadence.
         }
         
         func ensureDisplayLink() {
             guard displayLink == nil else { return }
-            let link = CADisplayLink(target: self, selector: #selector(tick(_:)))
+            let link = CADisplayLink(target: self, selector: #selector(tick(displayLink:))) // Updated selector
             link.add(to: .main, forMode: .common)
             displayLink = link
             startTime = CACurrentMediaTime()
@@ -189,12 +178,12 @@ struct GalaxyMetalView: UIViewRepresentable {
             
             let position = SIMD2<Float>(dx, dy)
             let sizeValue = max(0.6, Float(star.size))
-            vertices.append(.init(initialPosition: position, size: sizeValue, type: 0.0, color: backgroundColor, progress: 0.0, ringIndex: -1.0))
+            // Type 0: Background
+            vertices.append(.init(initialPosition: position, size: sizeValue, type: 0.0, color: backgroundColor, highlightStartTime: 0, ringIndex: -1.0, highlightDuration: 0))
         }
 
-        let now = CACurrentMediaTime()
-        // 更短的闪烁时长，提升流畅感
-        let highlightDuration = 0.60
+        // let now = CACurrentMediaTime() // 不需要了，时间由 GPU 统一管理
+        let highlightDuration: Float = 0.60
 
         var normalVertices: [GalaxyMetalRenderer.StarVertex] = []
         var highlightedBaseVertices: [GalaxyMetalRenderer.StarVertex] = []
@@ -227,7 +216,8 @@ struct GalaxyMetalView: UIViewRepresentable {
                 
                 let rIndex = Float(ringIndex)
                 // 基础层：区分普通与高亮，确保高亮的基础层始终绘制在最上层（避免被后续普通星覆盖）
-                let baseVertex = GalaxyMetalRenderer.StarVertex(initialPosition: initialPos, size: baseSize, type: 0.0, color: baseColor, progress: 0.0, ringIndex: rIndex)
+                // Type 0: Normal/Base
+                let baseVertex = GalaxyMetalRenderer.StarVertex(initialPosition: initialPos, size: baseSize, type: 0.0, color: baseColor, highlightStartTime: 0, ringIndex: rIndex, highlightDuration: 0)
                 if isHighlighted {
                     highlightedBaseVertices.append(baseVertex)
                 } else {
@@ -236,22 +226,17 @@ struct GalaxyMetalView: UIViewRepresentable {
                 
                 // 2. Lit Layer (高亮时光晕层) - 存入单独数组，稍后追加
                 if let highlight = viewModel.highlights[star.id] {
-                    let highlightElapsed = now - highlight.activatedAt
-                    if highlightElapsed >= 0 && highlightElapsed < highlightDuration {
-                        let p = Float(highlightElapsed / highlightDuration)
-                        // 对称正弦：0->1->0，确保起落时间对称、从1.0平滑开始
-                        let intensity = sin(p * .pi)
-                        let amplitude: Float = 0.8 // 峰值约 1.8x
-                        let scale = 1.0 + intensity * amplitude
-                        let litSize = baseSize * scale
-                        // 颜色：在纯白与“高亮绿”之间按 whiteBias 随机分布，形成差异化；“高亮绿”= 提交风格高亮基色
-                        let litAlpha = 0.06 + 0.90 * intensity
-                        let white = hexToColor("#FFFFFF", alpha: litAlpha)
-                        let targetGreen = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
-                        let t = Float(max(0.0, min(1.0, viewModel.highlights[star.id]?.whiteBias ?? 0.0)))
-                        let litColor = GalaxyMetalView.mixColor(white, targetGreen, t: t)
-                        litVertices.append(.init(initialPosition: initialPos, size: litSize, type: 1.0, color: litColor, progress: p, ringIndex: rIndex))
-                    }
+                    // Type 1: Lit Star (GPU Animation)
+                    let litAlpha: Float = 1.0 // Shader will modulate this
+                    let white = hexToColor("#FFFFFF", alpha: litAlpha)
+                    let targetGreen = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
+                    let t = Float(max(0.0, min(1.0, viewModel.highlights[star.id]?.whiteBias ?? 0.0)))
+                    let litColor = GalaxyMetalView.mixColor(white, targetGreen, t: t)
+                    
+                    let now = CACurrentMediaTime()
+                    let relativeStart = Float(highlight.activatedAt - now + elapsed)
+                    
+                    litVertices.append(.init(initialPosition: initialPos, size: baseSize, type: 1.0, color: litColor, highlightStartTime: relativeStart, ringIndex: rIndex, highlightDuration: highlightDuration))
                 }
             }
         }
@@ -259,22 +244,23 @@ struct GalaxyMetalView: UIViewRepresentable {
         vertices.append(contentsOf: normalVertices)
         vertices.append(contentsOf: highlightedBaseVertices)
         vertices.append(contentsOf: litVertices)
+        
         for pulse in viewModel.pulses {
-            let progress = Float((elapsed - pulse.startTime) / pulse.duration)
-            if progress < 0 || progress > 1 { continue }
-            let fade = max(0.0, 1.0 - progress)
-            let color = colorToSIMD(pulse.color, alpha: Float(fade * 0.9))
-            
-            // Pulse 也是相对于中心的偏移？
+            // Type 2: Pulse (GPU Animation)
             // Pulse position 是绝对坐标，需要转换
             let bandCenter = CGPoint(x: viewModel.bandSize.width / 2.0, y: viewModel.bandSize.height / 2.0)
             let dx = Float(pulse.position.x - bandCenter.x)
             let dy = Float(pulse.position.y - bandCenter.y)
             let position = SIMD2<Float>(dx, dy)
             
-            let sizeValue = Float(pulse.size) * (1.15 + progress * 1.7)
-            // Pulse 不旋转，ringIndex = -1
-            vertices.append(.init(initialPosition: position, size: sizeValue, type: 1.0, color: color, progress: progress, ringIndex: -1.0))
+            let sizeValue = Float(pulse.size) // Base size, shader scales it
+            let color = colorToSIMD(pulse.color, alpha: 1.0) // Shader fades it
+            
+            let now = CACurrentMediaTime()
+            let relativeStart = Float(pulse.startTime - now + elapsed)
+            let duration = Float(pulse.duration)
+            
+            vertices.append(.init(initialPosition: position, size: sizeValue, type: 2.0, color: color, highlightStartTime: relativeStart, ringIndex: -1.0, highlightDuration: duration))
         }
 
         // 移除每帧调试输出，避免影响渲染流畅度

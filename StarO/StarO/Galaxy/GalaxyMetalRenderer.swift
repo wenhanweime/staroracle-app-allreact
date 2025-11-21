@@ -8,8 +8,9 @@ final class GalaxyMetalRenderer: NSObject, MTKViewDelegate {
         var size: Float
         var type: Float
         var color: SIMD4<Float>
-        var progress: Float
+        var highlightStartTime: Float // Replaces progress
         var ringIndex: Float
+        var highlightDuration: Float
     }
 
     struct Uniforms {
@@ -48,7 +49,7 @@ final class GalaxyMetalRenderer: NSObject, MTKViewDelegate {
         descriptor.attributes[3].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 2
         descriptor.attributes[3].bufferIndex = 0
         
-        // Attribute 4: progress (float)
+        // Attribute 4: highlightStartTime (float)
         descriptor.attributes[4].format = .float
         descriptor.attributes[4].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 2 + MemoryLayout<SIMD4<Float>>.stride
         descriptor.attributes[4].bufferIndex = 0
@@ -57,6 +58,11 @@ final class GalaxyMetalRenderer: NSObject, MTKViewDelegate {
         descriptor.attributes[5].format = .float
         descriptor.attributes[5].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 3 + MemoryLayout<SIMD4<Float>>.stride
         descriptor.attributes[5].bufferIndex = 0
+        
+        // Attribute 6: highlightDuration (float)
+        descriptor.attributes[6].format = .float
+        descriptor.attributes[6].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 4 + MemoryLayout<SIMD4<Float>>.stride
+        descriptor.attributes[6].bufferIndex = 0
         
         descriptor.layouts[0].stride = MemoryLayout<StarVertex>.stride
         descriptor.layouts[0].stepRate = 1

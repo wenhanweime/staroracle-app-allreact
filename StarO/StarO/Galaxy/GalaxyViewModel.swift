@@ -138,8 +138,16 @@ final class GalaxyViewModel: ObservableObject {
 
     func updateElapsedTimeOnly(elapsed: TimeInterval) {
         elapsedTime = max(0, elapsed)
-        // 仅更新高亮/脉冲的时间状态，不进行位置计算
-        pulses.removeAll { elapsedTime - $0.startTime > $0.duration }
+        
+        // 仅当有脉冲过期时才修改数组，避免每帧触发 @Published 更新
+        if !pulses.isEmpty {
+            let countBefore = pulses.count
+            let filtered = pulses.filter { elapsedTime - $0.startTime <= $0.duration }
+            if filtered.count != countBefore {
+                pulses = filtered
+            }
+        }
+        
         purgeExpiredHighlights()
         
         // 仍然更新旋转缓存，以便 handleTap 时能计算正确位置（开销很小，仅10个环）
