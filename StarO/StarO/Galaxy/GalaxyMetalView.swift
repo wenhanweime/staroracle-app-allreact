@@ -233,12 +233,10 @@ struct GalaxyMetalView: UIViewRepresentable {
                     let now = CACurrentMediaTime()
                     let hElapsed = now - highlight.activatedAt
                     if hElapsed >= 0 && hElapsed < Double(highlightDuration) {
-                        // Type 1: Lit Star (GPU Animation)
-                        let litAlpha: Float = 1.0 // Shader will modulate this
-                        let white = hexToColor("#FFFFFF", alpha: litAlpha)
-                        let targetGreen = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
-                        let t = Float(max(0.0, min(1.0, viewModel.highlights[star.id]?.whiteBias ?? 0.0)))
-                        let litColor = GalaxyMetalView.mixColor(white, targetGreen, t: t)
+                    // Type 1: Lit Star (GPU Animation)
+                    // 直接使用目标高亮色（去除“偏白”混合），避免初始帧出现纯白后再“染色”的体验问题
+                    let litAlpha: Float = 1.0 // Shader 将按强度调制 alpha
+                    let litColor = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
                         let relativeStart = Float(highlight.activatedAt - now + elapsed)
                         litVertices.append(.init(initialPosition: initialPos, size: baseSize, type: 1.0, color: litColor, highlightStartTime: relativeStart, ringIndex: rIndex, highlightDuration: highlightDuration))
                     }
