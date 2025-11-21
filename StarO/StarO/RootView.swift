@@ -119,12 +119,7 @@ struct RootView: View {
 
   private var homePane: some View {
     VStack(spacing: 20) {
-      Text("StarOracle Native")
-        .font(.title)
-        .foregroundStyle(.white)
 
-      summarySection
-      latestStarsSection
       
       Spacer()
     }
@@ -135,67 +130,9 @@ struct RootView: View {
     .contentShape(Rectangle())
   }
 
-  private var summarySection: some View {
-    VStack(spacing: 12) {
-      Text("概览")
-        .font(.headline)
-        .foregroundStyle(.white)
-      HStack(spacing: 16) {
-        summaryTile(title: "星卡", value: starStore.constellation.stars.count)
-        summaryTile(title: "灵感", value: starStore.inspirationStars.count)
-        summaryTile(title: "会话", value: conversationStore.listSessions().count)
-      }
-    }
-    .frame(maxWidth: .infinity)
-    .padding()
-    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 24))
-    .allowsHitTesting(false)
-  }
 
-  private func summaryTile(title: String, value: Int) -> some View {
-    VStack(spacing: 4) {
-      Text("\(value)")
-        .font(.title2.bold())
-        .foregroundStyle(.white)
-      Text(title)
-        .font(.caption)
-        .foregroundStyle(.white.opacity(0.7))
-    }
-    .frame(maxWidth: .infinity)
-  }
 
-  private var latestStarsSection: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("最新星卡")
-        .font(.headline)
-        .foregroundStyle(.white)
-      if starStore.constellation.stars.isEmpty {
-        Text("暂无星卡")
-          .foregroundStyle(.white.opacity(0.6))
-      } else {
-        ForEach(Array(starStore.constellation.stars.suffix(5)).reversed()) { star in
-          Button(action: { selectedStar = star }) {
-            VStack(alignment: .leading, spacing: 6) {
-              Text(star.question)
-                .font(.subheadline.weight(.medium))
-                .foregroundStyle(.white)
-              if !star.answer.isEmpty {
-                Text(star.answer)
-                  .font(.footnote)
-                  .foregroundStyle(.white.opacity(0.8))
-              }
-            }
-            .padding()
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 20))
-          }
-          .buttonStyle(.plain)
-        }
-      }
-    }
-    .sheet(item: $selectedStar) { star in
-      StarDetailSheet(star: star) { selectedStar = nil }
-    }
-  }
+
 
   private var topBar: some View {
     HStack(spacing: 16) {
