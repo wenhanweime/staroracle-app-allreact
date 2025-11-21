@@ -18,10 +18,10 @@ struct GalaxyMetalContainer: View {
                     .frame(width: size.width, height: size.height)
                     .allowsHitTesting(false)
                 
-                GalaxyTouchOverlay { point in
-                    print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f)", point.x, point.y))
+                GalaxyTouchOverlay { point, ts in
+                    print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f) ts=%.3f", point.x, point.y, ts))
                     viewModel.onRegionSelected = onRegionSelected
-                    viewModel.handleTap(at: point, in: size)
+                    viewModel.handleTap(at: point, in: size, tapTimestamp: ts)
                 }
                 .frame(width: size.width, height: size.height)
             }
@@ -81,6 +81,7 @@ struct GalaxyMetalView: UIViewRepresentable {
             link.add(to: .main, forMode: .common)
             displayLink = link
             startTime = CACurrentMediaTime()
+            viewModel?.timeOrigin = startTime
         }
         
         func forceUpdate() {
@@ -176,7 +177,8 @@ struct GalaxyMetalView: UIViewRepresentable {
             let dx = Float(star.position.x - bandCenter.x)
             let dy = Float(star.position.y - bandCenter.y)
             
-            let position = SIMD2<Float>(dx, dy)
+            let s = Float(viewModel.params.galaxyScale)
+            let position = SIMD2<Float>(dx, dy) * s
             let sizeValue = max(0.6, Float(star.size))
             // Type 0: Background
             vertices.append(.init(initialPosition: position, size: sizeValue, type: 0.0, color: backgroundColor, highlightStartTime: 0, ringIndex: -1.0, highlightDuration: 0))
@@ -198,7 +200,8 @@ struct GalaxyMetalView: UIViewRepresentable {
                 let bandCenter = CGPoint(x: star.bandSize.width / 2.0, y: star.bandSize.height / 2.0)
                 let dx = Float(star.position.x - bandCenter.x)
                 let dy = Float(star.position.y - bandCenter.y)
-                let initialPos = SIMD2<Float>(dx, dy)
+                let s = Float(viewModel.params.galaxyScale)
+                let initialPos = SIMD2<Float>(dx, dy) * s
                 
                 let baseSize = max(0.8, Float(star.size))
                 // 基础颜色：如果高亮，则使用 litHex（常亮高亮色），否则使用 displayHex（暗色）
@@ -226,17 +229,19 @@ struct GalaxyMetalView: UIViewRepresentable {
                 
                 // 2. Lit Layer (高亮时光晕层) - 存入单独数组，稍后追加
                 if let highlight = viewModel.highlights[star.id] {
-                    // Type 1: Lit Star (GPU Animation)
-                    let litAlpha: Float = 1.0 // Shader will modulate this
-                    let white = hexToColor("#FFFFFF", alpha: litAlpha)
-                    let targetGreen = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
-                    let t = Float(max(0.0, min(1.0, viewModel.highlights[star.id]?.whiteBias ?? 0.0)))
-                    let litColor = GalaxyMetalView.mixColor(white, targetGreen, t: t)
-                    
+                    // 仅在动画时窗内追加 Lit 顶点，避免颜色残留
                     let now = CACurrentMediaTime()
-                    let relativeStart = Float(highlight.activatedAt - now + elapsed)
-                    
-                    litVertices.append(.init(initialPosition: initialPos, size: baseSize, type: 1.0, color: litColor, highlightStartTime: relativeStart, ringIndex: rIndex, highlightDuration: highlightDuration))
+                    let hElapsed = now - highlight.activatedAt
+                    if hElapsed >= 0 && hElapsed < Double(highlightDuration) {
+                        // Type 1: Lit Star (GPU Animation)
+                        let litAlpha: Float = 1.0 // Shader will modulate this
+                        let white = hexToColor("#FFFFFF", alpha: litAlpha)
+                        let targetGreen = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
+                        let t = Float(max(0.0, min(1.0, viewModel.highlights[star.id]?.whiteBias ?? 0.0)))
+                        let litColor = GalaxyMetalView.mixColor(white, targetGreen, t: t)
+                        let relativeStart = Float(highlight.activatedAt - now + elapsed)
+                        litVertices.append(.init(initialPosition: initialPos, size: baseSize, type: 1.0, color: litColor, highlightStartTime: relativeStart, ringIndex: rIndex, highlightDuration: highlightDuration))
+                    }
                 }
             }
         }
@@ -251,7 +256,8 @@ struct GalaxyMetalView: UIViewRepresentable {
             let bandCenter = CGPoint(x: viewModel.bandSize.width / 2.0, y: viewModel.bandSize.height / 2.0)
             let dx = Float(pulse.position.x - bandCenter.x)
             let dy = Float(pulse.position.y - bandCenter.y)
-            let position = SIMD2<Float>(dx, dy)
+            let s = Float(viewModel.params.galaxyScale)
+            let position = SIMD2<Float>(dx, dy) * s
             
             let sizeValue = Float(pulse.size) // Base size, shader scales it
             let color = colorToSIMD(pulse.color, alpha: 1.0) // Shader fades it

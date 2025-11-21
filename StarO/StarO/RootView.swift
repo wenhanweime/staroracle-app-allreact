@@ -82,15 +82,21 @@ struct RootView: View {
         ChatOverlayHostView(bridge: chatBridge)
           .allowsHitTesting(false)
       )
-      .gesture(
-        DragGesture(minimumDistance: 8)
-          .onChanged { value in
-            handleDragChanged(value.translation.width, width: width)
-          }
-          .onEnded { value in
-            handleDragEnded(value.translation.width, width: width)
-          }
-      )
+      // 将全屏拖拽改为仅左侧边缘响应，避免阻挡中心区域点击银河
+      .overlay(alignment: .leading) {
+        Color.clear
+          .frame(width: 28)
+          .contentShape(Rectangle())
+          .gesture(
+            DragGesture(minimumDistance: 8)
+              .onChanged { value in
+                handleDragChanged(value.translation.width, width: width)
+              }
+              .onEnded { value in
+                handleDragEnded(value.translation.width, width: width)
+              }
+          )
+      }
       .onAppear {
         DispatchQueue.main.async {
           environment.bootstrapConversationIfNeeded()
@@ -127,7 +133,8 @@ struct RootView: View {
     .padding(.horizontal, 24)
     .padding(.bottom, 40)
     .frame(maxHeight: .infinity, alignment: .top)
-    .contentShape(Rectangle())
+    // 避免中心内容层拦截点击，让银河接收触摸
+    .allowsHitTesting(false)
   }
 
 

@@ -52,6 +52,7 @@ final class GalaxyViewModel: ObservableObject {
     private var ringRotationCache: [RotationCache] = []
     private var screenPositionLookup: [String: CGPoint] = [:]
     private let highlightTintHex: String
+    var timeOrigin: CFTimeInterval = 0 // 与渲染对齐的时间原点
 
     var onRegionSelected: ((GalaxyRegion) -> Void)?
     var onHighlightsPersisted: (([GalaxyHighlightEntry]) -> Void)?
@@ -175,13 +176,20 @@ final class GalaxyViewModel: ObservableObject {
         let region = region(for: location, in: size)
         onRegionSelected?(region)
 
-        // 计算搜索半径 - 缩小为原来的 2/3
+        // 计算搜索半径（恢复原版下限 30）
         let radiusBase = min(size.width, size.height) * glowConfig.radiusFactor
-        // 用户要求直径缩小为 2/3，原版 minRadius 为 30，现在调整为 20
-        let radius = max(CGFloat(20.0), CGFloat(radiusBase))
+        let radius = max(CGFloat(30.0), CGFloat(radiusBase))
+
+        // 计算点击时的 elapsed（对齐渲染时间原点），命中按此时刻的位置进行
+        let elapsedAtTap: TimeInterval = {
+            if let ts = tapTimestamp, timeOrigin > 0 {
+                return max(0, ts - timeOrigin)
+            }
+            return elapsedTime
+        }()
         
-        // 收集点击范围内的候选星星
-        let candidates = collectCandidates(at: location, in: size, radius: radius)
+        // 收集点击范围内的候选星星（按点击瞬间的 elapsed 计算位置）
+        let candidates = collectCandidates(at: location, in: size, radius: radius, elapsed: elapsedAtTap)
         
         guard !candidates.isEmpty else {
             #if DEBUG
@@ -202,8 +210,8 @@ final class GalaxyViewModel: ObservableObject {
         print("[GalaxyViewModel] selected: \(selected.count) stars for highlight")
         #endif
         
-        // ❌ 禁用脉冲动画（不生成黄色大球）
-        // appendPulses(for: selected)
+        // 启用脉冲动画（GPU脉冲层）
+        appendPulses(for: selected)
         
         // 应用高亮状态（用于星星变大变亮）
         let entries = applyHighlights(from: selected)
@@ -217,13 +225,13 @@ final class GalaxyViewModel: ObservableObject {
         }
     }
 
-    private func collectCandidates(at location: CGPoint, in size: CGSize, radius: CGFloat) -> [HighlightCandidate] {
+    private func collectCandidates(at location: CGPoint, in size: CGSize, radius: CGFloat, elapsed: TimeInterval) -> [HighlightCandidate] {
         var results: [HighlightCandidate] = []
         let radiusSquared = radius * radius
         for (index, ring) in rings.enumerated() {
             for star in ring {
                 // 这里按需计算位置，虽然比查表慢，但因为只在点击时触发，完全可接受
-                let pos = screenPosition(for: star, ringIndex: index, in: size, elapsed: elapsedTime)
+                let pos = screenPosition(for: star, ringIndex: index, in: size, elapsed: elapsed)
                 let dx = pos.x - location.x
                 let dy = pos.y - location.y
                 let distanceSquared = dx * dx + dy * dy
@@ -237,7 +245,7 @@ final class GalaxyViewModel: ObservableObject {
             var minDst = Double.greatestFiniteMagnitude
             for (index, ring) in rings.enumerated() {
                 for star in ring {
-                    let pos = screenPosition(for: star, ringIndex: index, in: size, elapsed: elapsedTime)
+                    let pos = screenPosition(for: star, ringIndex: index, in: size, elapsed: elapsed)
                     let dx = pos.x - location.x
                     let dy = pos.y - location.y
                     let distanceSquared = dx * dx + dy * dy

@@ -3,7 +3,7 @@ import UIKit
 import QuartzCore
 
 final class GalaxyTouchUIView: UIView {
-    var onTap: ((CGPoint) -> Void)?
+    var onTap: ((CGPoint, CFTimeInterval) -> Void)?
     private static let sparkleImage: CGImage = {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 48, height: 48))
         let image = renderer.image { context in
@@ -53,11 +53,13 @@ final class GalaxyTouchUIView: UIView {
 
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesEnded(touches, with: event)
-        guard let location = touches.first?.location(in: self) else { return }
-        print("[TouchOverlay] tap at (\(location.x), \(location.y))")
+        guard let touch = touches.first else { return }
+        let location = touch.location(in: self)
+        let timestamp = touch.timestamp
+        print("[TouchOverlay] tap at (\(location.x), \(location.y)) ts=\(timestamp)")
         // ❌ 已禁用粒子爆炸
         // burst(at: location)
-        onTap?(location)
+        onTap?(location, timestamp)
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
@@ -102,18 +104,18 @@ final class GalaxyTouchUIView: UIView {
 
 struct GalaxyTouchOverlay: UIViewRepresentable {
     final class Coordinator {
-        var onTapClosure: (CGPoint) -> Void
+        var onTapClosure: (CGPoint, CFTimeInterval) -> Void
 
-        init(onTap: @escaping (CGPoint) -> Void) {
+        init(onTap: @escaping (CGPoint, CFTimeInterval) -> Void) {
             self.onTapClosure = onTap
         }
 
-        func handleTap(_ point: CGPoint) {
-            onTapClosure(point)
+        func handleTap(_ point: CGPoint, _ timestamp: CFTimeInterval) {
+            onTapClosure(point, timestamp)
         }
     }
 
-    var onTap: (CGPoint) -> Void
+    var onTap: (CGPoint, CFTimeInterval) -> Void
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onTap: onTap)
@@ -122,16 +124,16 @@ struct GalaxyTouchOverlay: UIViewRepresentable {
     func makeUIView(context: Context) -> GalaxyTouchUIView {
         let view = GalaxyTouchUIView(frame: .zero)
         context.coordinator.onTapClosure = onTap
-        view.onTap = { point in
-            context.coordinator.handleTap(point)
+        view.onTap = { point, ts in
+            context.coordinator.handleTap(point, ts)
         }
         return view
     }
 
     func updateUIView(_ uiView: GalaxyTouchUIView, context: Context) {
         context.coordinator.onTapClosure = onTap
-        uiView.onTap = { point in
-            context.coordinator.handleTap(point)
+        uiView.onTap = { point, ts in
+            context.coordinator.handleTap(point, ts)
         }
     }
 }
