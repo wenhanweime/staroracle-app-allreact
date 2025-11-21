@@ -210,8 +210,8 @@ final class GalaxyViewModel: ObservableObject {
         print("[GalaxyViewModel] selected: \(selected.count) stars for highlight")
         #endif
         
-        // 启用脉冲动画（GPU脉冲层）
-        appendPulses(for: selected)
+        // 禁用脉冲动画（删除大球形闪烁，仅保留星点高亮）
+        // appendPulses(for: selected)
         
         // 应用高亮状态（用于星星变大变亮）
         let entries = applyHighlights(from: selected)

@@ -250,24 +250,7 @@ struct GalaxyMetalView: UIViewRepresentable {
         vertices.append(contentsOf: highlightedBaseVertices)
         vertices.append(contentsOf: litVertices)
         
-        for pulse in viewModel.pulses {
-            // Type 2: Pulse (GPU Animation)
-            // Pulse position 是绝对坐标，需要转换
-            let bandCenter = CGPoint(x: viewModel.bandSize.width / 2.0, y: viewModel.bandSize.height / 2.0)
-            let dx = Float(pulse.position.x - bandCenter.x)
-            let dy = Float(pulse.position.y - bandCenter.y)
-            let s = Float(viewModel.params.galaxyScale)
-            let position = SIMD2<Float>(dx, dy) * s
-            
-            let sizeValue = Float(pulse.size) // Base size, shader scales it
-            let color = colorToSIMD(pulse.color, alpha: 1.0) // Shader fades it
-            
-            let now = CACurrentMediaTime()
-            let relativeStart = Float(pulse.startTime - now + elapsed)
-            let duration = Float(pulse.duration)
-            
-            vertices.append(.init(initialPosition: position, size: sizeValue, type: 2.0, color: color, highlightStartTime: relativeStart, ringIndex: -1.0, highlightDuration: duration))
-        }
+        // 已移除脉冲渲染（Type 2），只保留星点高亮层
 
         // 移除每帧调试输出，避免影响渲染流畅度
 
