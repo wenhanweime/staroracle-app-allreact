@@ -266,101 +266,40 @@ final class GalaxyViewModel: ObservableObject {
         let cappedTarget = min(max(targetCount, 0), candidates.count)
         guard cappedTarget > 0 else { return [] }
 
-        // 1. 核心保障：找出最近的星星（最多3个），确保点击中心必亮
-        // 这解决了“点不亮”的问题
+        // 1) 中心密集核心：按距离排序，优先选取一部分最近的点
         let sortedByDistance = candidates.sorted { $0.distance < $1.distance }
-        let coreCount = min(3, cappedTarget)
+        let coreCount = min(max(3, Int(ceil(Double(cappedTarget) * 0.4))), cappedTarget)
         let coreStars = Array(sortedByDistance.prefix(coreCount))
-        
-        // 如果已经选够了（总数很少），直接返回
-        if coreStars.count >= cappedTarget {
-            return coreStars
-        }
-        
+        if coreStars.count >= cappedTarget { return coreStars }
+
         let coreIDs = Set(coreStars.map { $0.star.id })
-        
-        // 2. 准备剩余候选者：过滤掉已经选中的核心星星
         let remainingCandidates = candidates.filter { !coreIDs.contains($0.star.id) }
         let remainingTarget = cappedTarget - coreStars.count
 
-        // 3. 按颜色分组并随机打乱（保留原版的颜色混合逻辑）
-        // 这解决了“密集区域范围变小”的问题，因为是随机采样，会覆盖整个半径
-        let greyKey = "_grey"
-        var grouped: [String: [HighlightCandidate]] = [:]
+        // 2) 距离加权抽样（无放回）：越靠近中心，被选中概率越高
+        // 使用 Efraimidis-Spirakis 算法：为每个元素生成 key = -ln(u) / w，取 key 最小的 K 个
+        // 距离权重：w = ((R - d)/R)^gamma，gamma > 1 增强中心密度
+        let maxDistance = remainingCandidates.map { $0.distance }.max() ?? 1.0
+        let R = sqrt(max(1e-9, maxDistance))
+        let gamma: Double = 2.2
         var rng = selectionRandom
         defer { selectionRandom = rng }
 
-        for candidate in remainingCandidates {
-            let key = candidate.star.baseHex.uppercased() == "#CCCCCC" ? greyKey : candidate.star.baseHex
-            grouped[key, default: []].append(candidate)
+        struct WeightedKey { let candidate: HighlightCandidate; let key: Double }
+        var keys: [WeightedKey] = []
+        keys.reserveCapacity(remainingCandidates.count)
+        for c in remainingCandidates {
+            let d = sqrt(max(0.0, c.distance))
+            let ratio = max(0.0, min(1.0, 1.0 - d / R))
+            let w = pow(ratio, gamma)
+            let u = max(1e-9, min(0.999999, rng.next()))
+            let key = -log(u) / max(w, 1e-9) // 小 key 表示更高的选择机会
+            keys.append(WeightedKey(candidate: c, key: key))
         }
+        keys.sort { $0.key < $1.key }
+        let weightedSelected = keys.prefix(remainingTarget).map { $0.candidate }
 
-        // 随机打乱每组
-        for key in grouped.keys {
-            var array = grouped[key]!
-            if array.count > 1 {
-                for index in stride(from: array.count - 1, through: 1, by: -1) {
-                    let randomIndex = Int(rng.next() * Double(index + 1))
-                    array.swapAt(index, randomIndex)
-                }
-            }
-            grouped[key] = array
-        }
-
-        func pop(from key: String) -> HighlightCandidate? {
-            guard var bucket = grouped[key], !bucket.isEmpty else { return nil }
-            let value = bucket.removeLast()
-            grouped[key] = bucket
-            return value
-        }
-
-        func popNext(from keys: [String]) -> HighlightCandidate? {
-            for key in keys {
-                if let candidate = pop(from: key) {
-                    return candidate
-                }
-            }
-            return nil
-        }
-
-        var randomSelected: [HighlightCandidate] = []
-        let colorKeys = grouped.keys
-            .filter { $0 != greyKey }
-            .sorted()
-
-        // 4. 轮询提取（Round Robin）
-        // 优先提取彩色星星
-        for key in colorKeys {
-            if randomSelected.count >= remainingTarget { break }
-            if let pick = pop(from: key) {
-                randomSelected.append(pick)
-            }
-        }
-
-        // 继续轮询彩色星星直到填满或取完
-        while randomSelected.count < remainingTarget {
-            if let candidate = popNext(from: colorKeys) {
-                randomSelected.append(candidate)
-            } else {
-                break
-            }
-        }
-
-        // 如果还不够，提取灰色星星
-        if randomSelected.count < remainingTarget, let greyCandidate = popNext(from: [greyKey]) {
-            randomSelected.append(greyCandidate)
-        }
-
-        while randomSelected.count < remainingTarget {
-            if let next = popNext(from: colorKeys + [greyKey]) {
-                randomSelected.append(next)
-            } else {
-                break
-            }
-        }
-
-        // 5. 合并结果
-        return coreStars + randomSelected
+        return coreStars + weightedSelected
     }
 
     private func appendPulses(for candidates: [HighlightCandidate]) {
