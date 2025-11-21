@@ -4,16 +4,18 @@ import MetalKit
 @MainActor
 final class GalaxyMetalRenderer: NSObject, MTKViewDelegate {
     struct StarVertex {
-        var position: SIMD2<Float>
+        var initialPosition: SIMD2<Float>
         var size: Float
         var type: Float
         var color: SIMD4<Float>
         var progress: Float
+        var ringIndex: Float
     }
 
     struct Uniforms {
         var time: Float
         var viewportSizePixels: SIMD2<Float>
+        var scale: Float
     }
 
     private let device: MTLDevice
@@ -26,21 +28,36 @@ final class GalaxyMetalRenderer: NSObject, MTKViewDelegate {
     private var viewportScale: Float = 1.0
     private var vertexDescriptor: MTLVertexDescriptor = {
         let descriptor = MTLVertexDescriptor()
+        // Attribute 0: initialPosition (float2)
         descriptor.attributes[0].format = .float2
         descriptor.attributes[0].offset = 0
         descriptor.attributes[0].bufferIndex = 0
+        
+        // Attribute 1: size (float)
         descriptor.attributes[1].format = .float
         descriptor.attributes[1].offset = MemoryLayout<SIMD2<Float>>.stride
         descriptor.attributes[1].bufferIndex = 0
+        
+        // Attribute 2: type (float)
         descriptor.attributes[2].format = .float
         descriptor.attributes[2].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride
         descriptor.attributes[2].bufferIndex = 0
+        
+        // Attribute 3: color (float4)
         descriptor.attributes[3].format = .float4
         descriptor.attributes[3].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 2
         descriptor.attributes[3].bufferIndex = 0
+        
+        // Attribute 4: progress (float)
         descriptor.attributes[4].format = .float
         descriptor.attributes[4].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 2 + MemoryLayout<SIMD4<Float>>.stride
         descriptor.attributes[4].bufferIndex = 0
+        
+        // Attribute 5: ringIndex (float)
+        descriptor.attributes[5].format = .float
+        descriptor.attributes[5].offset = MemoryLayout<SIMD2<Float>>.stride + MemoryLayout<Float>.stride * 3 + MemoryLayout<SIMD4<Float>>.stride
+        descriptor.attributes[5].bufferIndex = 0
+        
         descriptor.layouts[0].stride = MemoryLayout<StarVertex>.stride
         descriptor.layouts[0].stepRate = 1
         descriptor.layouts[0].stepFunction = .perVertex
@@ -134,7 +151,8 @@ final class GalaxyMetalRenderer: NSObject, MTKViewDelegate {
 
         var uniforms = Uniforms(
             time: Float(CACurrentMediaTime() - startTime),
-            viewportSizePixels: viewportSizePixels
+            viewportSizePixels: viewportSizePixels,
+            scale: viewportScale
         )
         renderEncoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
         renderEncoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 0)

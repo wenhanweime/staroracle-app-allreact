@@ -136,12 +136,21 @@ final class GalaxyViewModel: ObservableObject {
         screenPositionLookup = [:]
     }
 
-    func update(elapsed: TimeInterval) {
+    func updateElapsedTimeOnly(elapsed: TimeInterval) {
         elapsedTime = max(0, elapsed)
+        // 仅更新高亮/脉冲的时间状态，不进行位置计算
         pulses.removeAll { elapsedTime - $0.startTime > $0.duration }
         purgeExpiredHighlights()
+        
+        // 仍然更新旋转缓存，以便 handleTap 时能计算正确位置（开销很小，仅10个环）
         updateRotationCache(for: elapsedTime)
-        updateScreenPositionCache()
+        
+        // ❌ 不再更新 screenPositionLookup，节省大量 CPU
+        // updateScreenPositionCache()
+    }
+
+    func update(elapsed: TimeInterval) {
+        updateElapsedTimeOnly(elapsed: elapsed)
     }
 
     func alpha(for star: GalaxyStar) -> Double {
@@ -205,6 +214,7 @@ final class GalaxyViewModel: ObservableObject {
         let radiusSquared = radius * radius
         for (index, ring) in rings.enumerated() {
             for star in ring {
+                // 这里按需计算位置，虽然比查表慢，但因为只在点击时触发，完全可接受
                 let pos = screenPosition(for: star, ringIndex: index, in: size, elapsed: elapsedTime)
                 let dx = pos.x - location.x
                 let dy = pos.y - location.y
@@ -449,31 +459,8 @@ final class GalaxyViewModel: ObservableObject {
     }
 
     private func updateScreenPositionCache() {
-        guard ringCount > 0,
-              !ringRotationCache.isEmpty,
-              lastSize.width > 0,
-              lastSize.height > 0 else {
-            screenPositionLookup = [:]
-            return
-        }
-        var map: [String: CGPoint] = [:]
-        let center = CGPoint(x: lastSize.width / 2.0, y: lastSize.height / 2.0)
-        let scale = CGFloat(params.galaxyScale)
-        for (index, ring) in rings.enumerated() {
-            guard index < ringRotationCache.count else { continue }
-            let rotation = ringRotationCache[index]
-            for star in ring {
-                let bandCenter = CGPoint(x: star.bandSize.width / 2.0, y: star.bandSize.height / 2.0)
-                let dx = Double(star.position.x - bandCenter.x)
-                let dy = Double(star.position.y - bandCenter.y)
-                let rx = dx * rotation.cos - dy * rotation.sin
-                let ry = dx * rotation.sin + dy * rotation.cos
-                let sx = center.x + CGFloat(rx) * scale
-                let sy = center.y + CGFloat(ry) * scale
-                map[star.id] = CGPoint(x: sx, y: sy)
-            }
-        }
-        screenPositionLookup = map
+        // ❌ 移除全量缓存更新，因为渲染已经移至 GPU
+        screenPositionLookup = [:]
     }
 
     private func region(for location: CGPoint, in size: CGSize) -> GalaxyRegion {
@@ -486,14 +473,20 @@ final class GalaxyViewModel: ObservableObject {
     }
 
     func screenPosition(for star: GalaxyStar, ringIndex: Int, in size: CGSize, elapsed: TimeInterval) -> CGPoint {
-        if let cached = screenPositionLookup[star.id] {
-            return cached
-        }
+        // 实时计算位置，仅用于点击检测（低频）
         let center = CGPoint(x: size.width / 2.0, y: size.height / 2.0)
         let scale = CGFloat(params.galaxyScale)
         let bandCenter = CGPoint(x: star.bandSize.width / 2.0, y: star.bandSize.height / 2.0)
         let dx = Double(star.position.x - bandCenter.x)
         let dy = Double(star.position.y - bandCenter.y)
+        
+        // 确保使用与 GPU 一致的旋转逻辑
+        // GPU: angle = 0.0087266 * uniforms.time
+        // CPU: baseDegPerMs * elapsed * 1000.0 * (.pi / 180.0)
+        // baseDegPerMs = 0.0005
+        // 0.0005 * 1000 * 0.017453 = 0.0087265
+        // 一致
+        
         let angle = baseDegPerMs * elapsed * 1000.0 * (.pi / 180.0)
         let rx = dx * cos(angle) - dy * sin(angle)
         let ry = dx * sin(angle) + dy * cos(angle)

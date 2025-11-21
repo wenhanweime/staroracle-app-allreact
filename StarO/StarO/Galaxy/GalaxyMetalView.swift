@@ -13,32 +13,17 @@ struct GalaxyMetalContainer: View {
 
     var body: some View {
         GeometryReader { _ in
-            TimelineView(.animation(minimumInterval: 1.0 / 60.0)) { timeline in
-                let elapsed = timeline.date.timeIntervalSince(referenceDate)
-                ZStack {
-                    GalaxyMetalView(viewModel: viewModel, canvasSize: size)
-                        .frame(width: size.width, height: size.height)
-                        .allowsHitTesting(false)
-                    
-                    // ❌ 已移除：脉冲动画
-                    // ❌ 已移除：萤火虫粒子
-                    
-                    GalaxyTouchOverlay { point in
-                        // ❌ 已移除：萤火虫发射
-                        print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f)", point.x, point.y))
-                        viewModel.onRegionSelected = onRegionSelected
-                        viewModel.handleTap(at: point, in: size)
-                    }
+            ZStack {
+                GalaxyMetalView(viewModel: viewModel, canvasSize: size)
                     .frame(width: size.width, height: size.height)
+                    .allowsHitTesting(false)
+                
+                GalaxyTouchOverlay { point in
+                    print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f)", point.x, point.y))
+                    viewModel.onRegionSelected = onRegionSelected
+                    viewModel.handleTap(at: point, in: size)
                 }
-                .onAppear {
-                    viewModel.update(elapsed: elapsed)
-                    // ❌ 已移除：萤火虫启动
-                }
-                .onChange(of: timeline.date) { _, newDate in
-                    let latestElapsed = newDate.timeIntervalSince(referenceDate)
-                    viewModel.update(elapsed: latestElapsed)
-                }
+                .frame(width: size.width, height: size.height)
             }
         }
         .task(id: size) {
@@ -46,6 +31,7 @@ struct GalaxyMetalContainer: View {
             await MainActor.run {
                 _ = viewModel.prepareIfNeeded(for: size)
                 viewModel.onRegionSelected = onRegionSelected
+                // Initial update only
                 viewModel.update(elapsed: 0)
             }
         }
@@ -78,8 +64,17 @@ struct GalaxyMetalView: UIViewRepresentable {
                 startTime = currentTime
             }
             currentElapsed = currentTime - (startTime ?? currentTime)
-            viewModel.update(elapsed: currentElapsed)
+            
+            // 优化：不再每帧调用 viewModel.update(elapsed:)，避免 CPU 计算开销
+            // viewModel.update(elapsed: currentElapsed)
+            viewModel.updateElapsedTimeOnly(elapsed: currentElapsed)
+            
             renderer.updateViewport(pointSize: canvasSize, scale: deviceScale)
+            
+            // 优化：不再每帧重建顶点，除非需要（例如高亮变化，或者初始化）
+            // 目前为了保持高亮动画逻辑，我们仍然每帧构建，但构建过程不再包含旋转计算
+            // 旋转计算已移至 GPU
+            
             let vertices = GalaxyMetalView.buildVertices(
                 viewModel: viewModel,
                 size: canvasSize,
@@ -175,20 +170,26 @@ struct GalaxyMetalView: UIViewRepresentable {
         var vertices: [GalaxyMetalRenderer.StarVertex] = []
         vertices.reserveCapacity(viewModel.backgroundStars.count + viewModel.rings.reduce(0) { $0 + $1.count } + viewModel.pulses.count)
 
-        let safeScale = deviceScale.isFinite && deviceScale >= 1.0 ? deviceScale : max(deviceScaleValue(), 1.0)
-        let scaleFloat = Float(safeScale)
-
+        // 注意：deviceScale 现在传递给 Shader 的 Uniforms 使用，这里不再用于预乘位置
+        // 但 size 仍然需要用于计算初始偏移（居中）
+        
         let offsetX = (viewModel.bandSize.width - size.width) * 0.5
         let offsetY = (viewModel.bandSize.height - size.height) * 0.5
 
         let backgroundColor = hexToColor("#D0D4DB", alpha: 0.55)
         for star in viewModel.backgroundStars {
-            let position = SIMD2<Float>(
-                Float(star.position.x - offsetX) * scaleFloat,
-                Float(star.position.y - offsetY) * scaleFloat
-            )
-            let sizeValue = max(0.6, Float(star.size)) * scaleFloat
-            vertices.append(.init(position: position, size: sizeValue, type: 0.0, color: backgroundColor, progress: 0.0))
+            // 背景星不旋转，ringIndex = -1
+            // 位置相对于中心点的偏移
+            // 原始逻辑：star.position 是在 bandSize 坐标系下的绝对位置
+            // 我们需要将其转换为相对于屏幕中心的偏移，以便 Shader 应用缩放
+            
+            let bandCenter = CGPoint(x: viewModel.bandSize.width / 2.0, y: viewModel.bandSize.height / 2.0)
+            let dx = Float(star.position.x - bandCenter.x)
+            let dy = Float(star.position.y - bandCenter.y)
+            
+            let position = SIMD2<Float>(dx, dy)
+            let sizeValue = max(0.6, Float(star.size))
+            vertices.append(.init(initialPosition: position, size: sizeValue, type: 0.0, color: backgroundColor, progress: 0.0, ringIndex: -1.0))
         }
 
         let now = CACurrentMediaTime()
@@ -203,8 +204,14 @@ struct GalaxyMetalView: UIViewRepresentable {
 
         for (ringIndex, ring) in viewModel.rings.enumerated() {
             for star in ring {
-                let screenPos = viewModel.screenPosition(for: star, ringIndex: ringIndex, in: size, elapsed: elapsed)
-                let baseSize = max(0.8, Float(star.size)) * scaleFloat
+                // 核心修改：不再调用 screenPosition 计算旋转后的位置
+                // 而是直接计算相对于 bandCenter 的初始偏移
+                let bandCenter = CGPoint(x: star.bandSize.width / 2.0, y: star.bandSize.height / 2.0)
+                let dx = Float(star.position.x - bandCenter.x)
+                let dy = Float(star.position.y - bandCenter.y)
+                let initialPos = SIMD2<Float>(dx, dy)
+                
+                let baseSize = max(0.8, Float(star.size))
                 // 基础颜色：如果高亮，则使用 litHex（常亮高亮色），否则使用 displayHex（暗色）
                 let isHighlighted = viewModel.isHighlighted(star)
                 // 高亮基础层颜色：对齐提交 cf1de85...，采用 litHex 与 #5AE7FF 的混合色
@@ -217,13 +224,10 @@ struct GalaxyMetalView: UIViewRepresentable {
                 } else {
                     baseColor = hexToColor(star.displayHex, alpha: baseAlpha)
                 }
-                let position = SIMD2<Float>(
-                    Float(screenPos.x) * scaleFloat,
-                    Float(screenPos.y) * scaleFloat
-                )
                 
+                let rIndex = Float(ringIndex)
                 // 基础层：区分普通与高亮，确保高亮的基础层始终绘制在最上层（避免被后续普通星覆盖）
-                let baseVertex = GalaxyMetalRenderer.StarVertex(position: position, size: baseSize, type: 0.0, color: baseColor, progress: 0.0)
+                let baseVertex = GalaxyMetalRenderer.StarVertex(initialPosition: initialPos, size: baseSize, type: 0.0, color: baseColor, progress: 0.0, ringIndex: rIndex)
                 if isHighlighted {
                     highlightedBaseVertices.append(baseVertex)
                 } else {
@@ -246,7 +250,7 @@ struct GalaxyMetalView: UIViewRepresentable {
                         let targetGreen = GalaxyMetalView.blendHex(star.litHex, with: "#5AE7FF", ratio: 0.45, alpha: litAlpha)
                         let t = Float(max(0.0, min(1.0, viewModel.highlights[star.id]?.whiteBias ?? 0.0)))
                         let litColor = GalaxyMetalView.mixColor(white, targetGreen, t: t)
-                        litVertices.append(.init(position: position, size: litSize, type: 1.0, color: litColor, progress: p))
+                        litVertices.append(.init(initialPosition: initialPos, size: litSize, type: 1.0, color: litColor, progress: p, ringIndex: rIndex))
                     }
                 }
             }
@@ -260,12 +264,17 @@ struct GalaxyMetalView: UIViewRepresentable {
             if progress < 0 || progress > 1 { continue }
             let fade = max(0.0, 1.0 - progress)
             let color = colorToSIMD(pulse.color, alpha: Float(fade * 0.9))
-            let position = SIMD2<Float>(
-                Float(pulse.position.x) * scaleFloat,
-                Float(pulse.position.y) * scaleFloat
-            )
-            let sizeValue = Float(pulse.size) * scaleFloat * (1.15 + progress * 1.7)
-            vertices.append(.init(position: position, size: sizeValue, type: 1.0, color: color, progress: progress))
+            
+            // Pulse 也是相对于中心的偏移？
+            // Pulse position 是绝对坐标，需要转换
+            let bandCenter = CGPoint(x: viewModel.bandSize.width / 2.0, y: viewModel.bandSize.height / 2.0)
+            let dx = Float(pulse.position.x - bandCenter.x)
+            let dy = Float(pulse.position.y - bandCenter.y)
+            let position = SIMD2<Float>(dx, dy)
+            
+            let sizeValue = Float(pulse.size) * (1.15 + progress * 1.7)
+            // Pulse 不旋转，ringIndex = -1
+            vertices.append(.init(initialPosition: position, size: sizeValue, type: 1.0, color: color, progress: progress, ringIndex: -1.0))
         }
 
         // 移除每帧调试输出，避免影响渲染流畅度
