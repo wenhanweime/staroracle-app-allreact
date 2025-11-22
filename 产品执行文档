@@ -581,3 +581,6 @@ position.*percent|
 
 # 任务19 <完成>
 修复在侧边栏（Menu/Collection）打开时点击背景仍能弹出星卡的问题。通过向 GalaxyBackgroundView 传递 isTapEnabled 属性（仅在 activePane == .home 时为 true），并在 GalaxyTouchOverlay 中禁用点击响应。
+
+# 任务20 <完成>
+修复在侧边栏（Menu/Collection）打开时无法通过反向滑动关闭的问题。将 DragGesture 从 GalaxyBackgroundView 移动到 RootView 的根 ZStack，确保手势在侧边栏覆盖时依然生效。

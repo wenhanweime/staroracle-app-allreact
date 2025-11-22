@@ -25,15 +25,6 @@ struct RootView: View {
         GalaxyBackgroundView(isTapEnabled: activePane == .home)
           .environmentObject(galaxyStore)
           .ignoresSafeArea()
-          .gesture(
-            DragGesture(minimumDistance: 8)
-              .onChanged { value in
-                handleDragChanged(value.translation.width, width: width)
-              }
-              .onEnded { value in
-                handleDragEnded(value.translation.width, width: width)
-              }
-          )
 
         primaryPane
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -87,6 +78,15 @@ struct RootView: View {
           .offset(x: dragOffset)
         }
       }
+      .gesture(
+        DragGesture(minimumDistance: 8)
+          .onChanged { value in
+            handleDragChanged(value.translation.width, width: width)
+          }
+          .onEnded { value in
+            handleDragEnded(value.translation.width, width: width)
+          }
+      )
       .overlay(
         ChatOverlayHostView(bridge: chatBridge)
           .allowsHitTesting(false)
