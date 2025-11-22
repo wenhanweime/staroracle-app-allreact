@@ -26,6 +26,9 @@ struct GalaxyBackgroundView: View {
           // Cancel previous task to prevent card generation from previous rapid taps
           debounceTask?.cancel()
           
+          // Lock UI during generation
+          galaxyStore.setIsGeneratingCard(true)
+          
           debounceTask = Task {
             // Wait for 600ms to allow rapid tapping (exploration)
             // Only the last tap will trigger the card generation AND the highlight
@@ -43,6 +46,9 @@ struct GalaxyBackgroundView: View {
                 _ = starStore.drawInspirationCard(region: region)
                 lastTapRegion = region
                 lastTapDate = Date()
+                
+                // Unlock UI
+                galaxyStore.setIsGeneratingCard(false)
               }
             }
           }

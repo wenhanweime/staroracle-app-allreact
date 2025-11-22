@@ -18,6 +18,9 @@ public final class GalaxyStore: ObservableObject, GalaxyStoreProtocol {
   @Published public private(set) var hoveredId: String? {
     willSet { logStateChange("hoveredId -> \(String(describing: newValue))") }
   }
+  @Published public private(set) var isGeneratingCard: Bool = false {
+    willSet { logStateChange("isGeneratingCard -> \(newValue)") }
+  }
 
   private let stateLoggingEnabled = true
   private var pendingCanvasSizeWork: DispatchWorkItem?
@@ -104,6 +107,10 @@ public final class GalaxyStore: ObservableObject, GalaxyStoreProtocol {
   public func cleanupEffects() {
     let now = Date()
     ripples.removeAll { now.timeIntervalSince($0.startAt) > $0.duration }
+  }
+
+  public func setIsGeneratingCard(_ value: Bool) {
+    isGeneratingCard = value
   }
 
   private func logStateChange(_ label: String) {

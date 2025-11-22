@@ -584,3 +584,6 @@ position.*percent|
 
 # 任务20 <完成>
 修复在侧边栏（Menu/Collection）打开时无法通过反向滑动关闭的问题。将 DragGesture 从 GalaxyBackgroundView 移动到 RootView 的根 ZStack，确保手势在侧边栏覆盖时依然生效。
+
+# 任务21 <完成>
+在星卡生成过程（闪烁等待期）中锁定 UI 交互。通过 GalaxyStore.isGeneratingCard 状态，在 RootView 中禁用侧边栏拖拽手势和菜单按钮，防止在等待卡片弹出时误操作。

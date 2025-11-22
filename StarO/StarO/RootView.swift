@@ -81,9 +81,11 @@ struct RootView: View {
       .gesture(
         DragGesture(minimumDistance: 8)
           .onChanged { value in
+            guard !galaxyStore.isGeneratingCard else { return }
             handleDragChanged(value.translation.width, width: width)
           }
           .onEnded { value in
+            guard !galaxyStore.isGeneratingCard else { return }
             handleDragEnded(value.translation.width, width: width)
           }
       )
@@ -160,6 +162,7 @@ struct RootView: View {
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
     .buttonStyle(.plain)
+    .disabled(galaxyStore.isGeneratingCard)
   }
 
   private var headerStarButton: some View {
@@ -170,6 +173,7 @@ struct RootView: View {
         .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
     .buttonStyle(.plain)
+    .disabled(galaxyStore.isGeneratingCard)
   }
 
   private var headerChatButton: some View {
