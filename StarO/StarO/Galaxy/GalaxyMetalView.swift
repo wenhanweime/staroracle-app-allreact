@@ -9,6 +9,7 @@ struct GalaxyMetalContainer: View {
     @ObservedObject var viewModel: GalaxyViewModel
     var size: CGSize
     var onRegionSelected: ((GalaxyRegion) -> Void)?
+    var onTap: ((CGPoint, CGSize, GalaxyRegion) -> Void)?
     @State private var referenceDate: Date = Date()
 
     var body: some View {
@@ -21,6 +22,7 @@ struct GalaxyMetalContainer: View {
                 GalaxyTouchOverlay { point, ts in
                     print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f) ts=%.3f", point.x, point.y, ts))
                     viewModel.onRegionSelected = onRegionSelected
+                    viewModel.onTap = onTap
                     viewModel.handleTap(at: point, in: size, tapTimestamp: ts)
                 }
                 .frame(width: size.width, height: size.height)
@@ -31,6 +33,7 @@ struct GalaxyMetalContainer: View {
             await MainActor.run {
                 _ = viewModel.prepareIfNeeded(for: size)
                 viewModel.onRegionSelected = onRegionSelected
+                viewModel.onTap = onTap
                 // Initial update only
                 viewModel.update(elapsed: 0)
             }

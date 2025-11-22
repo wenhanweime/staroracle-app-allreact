@@ -16,15 +16,20 @@ struct GalaxyBackgroundView: View {
 
   var body: some View {
     GeometryReader { proxy in
-      GalaxyMetalContainer(viewModel: viewModel, size: proxy.size) { region in
-        // Handle tap/region selection
-        _ = starStore.drawInspirationCard(region: region)
-        lastTapRegion = region
-        lastTapDate = Date()
-        
-        // Optional: Update galaxyStore state if needed for other components
-        // galaxyStore.tap(...) 
-      }
+      GalaxyMetalContainer(
+        viewModel: viewModel,
+        size: proxy.size,
+        onRegionSelected: nil,
+        onTap: { point, size, region in
+          let xPct = Double(point.x / size.width) * 100.0
+          let yPct = Double(point.y / size.height) * 100.0
+          starStore.setIsAsking(false, position: StarPosition(x: xPct, y: yPct))
+          
+          _ = starStore.drawInspirationCard(region: region)
+          lastTapRegion = region
+          lastTapDate = Date()
+        }
+      )
       .ignoresSafeArea()
       .overlay(alignment: .topLeading) {
         if let region = lastTapRegion, Date().timeIntervalSince(lastTapDate) < 2 {

@@ -82,6 +82,9 @@ struct RootView: View {
         ChatOverlayHostView(bridge: chatBridge)
           .allowsHitTesting(false)
       )
+      .overlay(
+        InspirationCardOverlay()
+      )
       // 将全屏拖拽改为仅左侧边缘响应，避免阻挡中心区域点击银河
       .overlay(alignment: .leading) {
         Color.clear

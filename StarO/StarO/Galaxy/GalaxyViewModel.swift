@@ -55,6 +55,7 @@ final class GalaxyViewModel: ObservableObject {
     var timeOrigin: CFTimeInterval = 0 // 与渲染对齐的时间原点
 
     var onRegionSelected: ((GalaxyRegion) -> Void)?
+    var onTap: ((CGPoint, CGSize, GalaxyRegion) -> Void)?
     var onHighlightsPersisted: (([GalaxyHighlightEntry]) -> Void)?
 
     init(
@@ -175,6 +176,7 @@ final class GalaxyViewModel: ObservableObject {
         // 只保留region选择功能
         let region = region(for: location, in: size)
         onRegionSelected?(region)
+        onTap?(location, size, region)
 
         // 计算搜索半径（恢复原版下限 30）
         let radiusBase = min(size.width, size.height) * glowConfig.radiusFactor
