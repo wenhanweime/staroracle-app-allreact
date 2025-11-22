@@ -13,6 +13,7 @@ struct GalaxyBackgroundView: View {
   
   @State private var lastTapRegion: GalaxyRegion?
   @State private var lastTapDate: Date = .distantPast
+  @State private var debounceTask: Task<Void, Never>?
 
   var body: some View {
     GeometryReader { proxy in
@@ -21,13 +22,26 @@ struct GalaxyBackgroundView: View {
         size: proxy.size,
         onRegionSelected: nil,
         onTap: { point, size, region in
-          let xPct = Double(point.x / size.width) * 100.0
-          let yPct = Double(point.y / size.height) * 100.0
-          starStore.setIsAsking(false, position: StarPosition(x: xPct, y: yPct))
+          // Cancel previous task to prevent card generation from previous rapid taps
+          debounceTask?.cancel()
           
-          _ = starStore.drawInspirationCard(region: region)
-          lastTapRegion = region
-          lastTapDate = Date()
+          debounceTask = Task {
+            // Wait for 600ms to allow rapid tapping (exploration)
+            // Only the last tap will trigger the card generation
+            try? await Task.sleep(nanoseconds: 600_000_000)
+            
+            if !Task.isCancelled {
+              await MainActor.run {
+                let xPct = Double(point.x / size.width) * 100.0
+                let yPct = Double(point.y / size.height) * 100.0
+                starStore.setIsAsking(false, position: StarPosition(x: xPct, y: yPct))
+                
+                _ = starStore.drawInspirationCard(region: region)
+                lastTapRegion = region
+                lastTapDate = Date()
+              }
+            }
+          }
         }
       )
       .ignoresSafeArea()
