@@ -6,6 +6,7 @@ struct GalaxyHighlight {
     let color: Color
     let activatedAt: CFTimeInterval
     let whiteBias: Double // 0.0 = 偏高亮色, 1.0 = 偏纯白
+    var isPermanent: Bool = false
 }
 
 struct GalaxyPulse: Identifiable {
@@ -55,7 +56,7 @@ final class GalaxyViewModel: ObservableObject {
     var timeOrigin: CFTimeInterval = 0 // 与渲染对齐的时间原点
 
     var onRegionSelected: ((GalaxyRegion) -> Void)?
-    var onTap: ((CGPoint, CGSize, GalaxyRegion) -> Void)?
+    var onTap: ((CGPoint, CGSize, GalaxyRegion, TimeInterval) -> Void)?
     var onHighlightsPersisted: (([GalaxyHighlightEntry]) -> Void)?
 
     init(
@@ -176,8 +177,19 @@ final class GalaxyViewModel: ObservableObject {
         // 只保留region选择功能
         let region = region(for: location, in: size)
         onRegionSelected?(region)
-        onTap?(location, size, region)
-
+        // Pass timestamp to callback
+        onTap?(location, size, region, tapTimestamp ?? elapsedTime)
+        
+        // Restore immediate highlight trigger
+        triggerHighlight(at: location, in: size, tapTimestamp: tapTimestamp)
+    }
+    
+    func triggerHighlight(at location: CGPoint, in size: CGSize, tapTimestamp: CFTimeInterval? = nil, isPermanent: Bool = false) {
+        guard ringCount > 0 else { return }
+        
+        // Remove the clear all call to allow multiple concurrent flashes
+        // highlights.removeAll()
+        
         // 计算搜索半径（恢复原版下限 30）
         let radiusBase = min(size.width, size.height) * glowConfig.radiusFactor
         let radius = max(CGFloat(30.0), CGFloat(radiusBase))
@@ -216,7 +228,7 @@ final class GalaxyViewModel: ObservableObject {
         // appendPulses(for: selected)
         
         // 应用高亮状态（用于星星变大变亮）
-        let entries = applyHighlights(from: selected)
+        let entries = applyHighlights(from: selected, isPermanent: isPermanent)
         #if DEBUG
         print("[GalaxyViewModel] highlights added: \(entries.count), total: \(highlights.count)")
         #endif
@@ -294,7 +306,7 @@ final class GalaxyViewModel: ObservableObject {
             let d = sqrt(max(0.0, c.distance))
             let ratio = max(0.0, min(1.0, 1.0 - d / R))
             let w = pow(ratio, gamma)
-            let u = max(1e-9, min(0.999999, rng.next()))
+        let u = max(1e-9, min(0.999999, rng.next()))
             let key = -log(u) / max(w, 1e-9) // 小 key 表示更高的选择机会
             keys.append(WeightedKey(candidate: c, key: key))
         }
@@ -336,7 +348,7 @@ final class GalaxyViewModel: ObservableObject {
         }
     }
 
-    private func applyHighlights(from candidates: [HighlightCandidate]) -> [GalaxyHighlightEntry] {
+    private func applyHighlights(from candidates: [HighlightCandidate], isPermanent: Bool) -> [GalaxyHighlightEntry] {
         guard !candidates.isEmpty else { return [] }
         var outputs: [GalaxyHighlightEntry] = []
         outputs.reserveCapacity(candidates.count)
@@ -348,7 +360,19 @@ final class GalaxyViewModel: ObservableObject {
             var rng = selectionRandom
             let bias = rng.next()
             selectionRandom = rng
-            highlights[candidate.star.id] = GalaxyHighlight(color: color, activatedAt: CACurrentMediaTime(), whiteBias: bias)
+            
+            // Update or create highlight
+            // If it already exists and is permanent, keep it permanent
+            let existing = highlights[candidate.star.id]
+            let shouldBePermanent = isPermanent || (existing?.isPermanent ?? false)
+            
+            highlights[candidate.star.id] = GalaxyHighlight(
+                color: color,
+                activatedAt: CACurrentMediaTime(), // Reset animation time
+                whiteBias: bias,
+                isPermanent: shouldBePermanent
+            )
+            
             if !seen.contains(candidate.star.id) {
                 seen.insert(candidate.star.id)
                 let entry = GalaxyHighlightEntry(
@@ -394,10 +418,13 @@ final class GalaxyViewModel: ObservableObject {
     }
 
     private func purgeExpiredHighlights() {
-        // 持久化高亮：不再按时间窗口移除高亮条目
-        // 闪烁层依赖 activatedAt 控制动画时间窗，但基础层常亮依赖 highlights 是否存在。
-        // 为与原版 React 行为对齐，这里不做清理，直到重新生成或显式清除。
-        return
+        // Remove highlights that have exceeded their duration, UNLESS they are permanent
+        let duration = max(0.01, glowConfig.durationMs / 1000.0)
+        let now = CACurrentMediaTime()
+        
+        highlights = highlights.filter { _, highlight in
+            highlight.isPermanent || (now - highlight.activatedAt <= duration)
+        }
     }
 
     private func highlightColor(for star: GalaxyStar) -> Color {

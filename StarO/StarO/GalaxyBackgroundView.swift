@@ -21,17 +21,20 @@ struct GalaxyBackgroundView: View {
         viewModel: viewModel,
         size: proxy.size,
         onRegionSelected: nil,
-        onTap: { point, size, region in
+        onTap: { point, size, region, timestamp in
           // Cancel previous task to prevent card generation from previous rapid taps
           debounceTask?.cancel()
           
           debounceTask = Task {
             // Wait for 600ms to allow rapid tapping (exploration)
-            // Only the last tap will trigger the card generation
+            // Only the last tap will trigger the card generation AND the highlight
             try? await Task.sleep(nanoseconds: 600_000_000)
             
             if !Task.isCancelled {
               await MainActor.run {
+                // Trigger PERMANENT highlight for the valid tap
+                viewModel.triggerHighlight(at: point, in: size, tapTimestamp: timestamp, isPermanent: true)
+                
                 let xPct = Double(point.x / size.width) * 100.0
                 let yPct = Double(point.y / size.height) * 100.0
                 starStore.setIsAsking(false, position: StarPosition(x: xPct, y: yPct))

@@ -9,7 +9,7 @@ struct GalaxyMetalContainer: View {
     @ObservedObject var viewModel: GalaxyViewModel
     var size: CGSize
     var onRegionSelected: ((GalaxyRegion) -> Void)?
-    var onTap: ((CGPoint, CGSize, GalaxyRegion) -> Void)?
+    var onTap: ((CGPoint, CGSize, GalaxyRegion, TimeInterval) -> Void)?
     @State private var referenceDate: Date = Date()
 
     var body: some View {
