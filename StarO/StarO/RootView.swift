@@ -22,9 +22,18 @@ struct RootView: View {
       let collectionWidth = min(420, width)
 
       ZStack(alignment: .leading) {
-        GalaxyBackgroundView()
+        GalaxyBackgroundView(isTapEnabled: activePane == .home)
           .environmentObject(galaxyStore)
           .ignoresSafeArea()
+          .gesture(
+            DragGesture(minimumDistance: 8)
+              .onChanged { value in
+                handleDragChanged(value.translation.width, width: width)
+              }
+              .onEnded { value in
+                handleDragEnded(value.translation.width, width: width)
+              }
+          )
 
         primaryPane
           .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -85,21 +94,7 @@ struct RootView: View {
       .overlay(
         InspirationCardOverlay()
       )
-      // 将全屏拖拽改为仅左侧边缘响应，避免阻挡中心区域点击银河
-      .overlay(alignment: .leading) {
-        Color.clear
-          .frame(width: 28)
-          .contentShape(Rectangle())
-          .gesture(
-            DragGesture(minimumDistance: 8)
-              .onChanged { value in
-                handleDragChanged(value.translation.width, width: width)
-              }
-              .onEnded { value in
-                handleDragEnded(value.translation.width, width: width)
-              }
-          )
-      }
+
       .onAppear {
         DispatchQueue.main.async {
           environment.bootstrapConversationIfNeeded()

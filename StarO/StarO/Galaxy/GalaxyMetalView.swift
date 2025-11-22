@@ -10,6 +10,7 @@ struct GalaxyMetalContainer: View {
     var size: CGSize
     var onRegionSelected: ((GalaxyRegion) -> Void)?
     var onTap: ((CGPoint, CGSize, GalaxyRegion, TimeInterval) -> Void)?
+    var isTapEnabled: Bool = true
     @State private var referenceDate: Date = Date()
 
     var body: some View {
@@ -19,12 +20,12 @@ struct GalaxyMetalContainer: View {
                     .frame(width: size.width, height: size.height)
                     .allowsHitTesting(false)
                 
-                GalaxyTouchOverlay { point, ts in
+                GalaxyTouchOverlay(onTap: { point, ts in
                     print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f) ts=%.3f", point.x, point.y, ts))
                     viewModel.onRegionSelected = onRegionSelected
                     viewModel.onTap = onTap
                     viewModel.handleTap(at: point, in: size, tapTimestamp: ts)
-                }
+                }, isTapEnabled: isTapEnabled)
                 .frame(width: size.width, height: size.height)
             }
         }

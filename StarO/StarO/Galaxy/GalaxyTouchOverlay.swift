@@ -4,6 +4,7 @@ import QuartzCore
 
 final class GalaxyTouchUIView: UIView {
     var onTap: ((CGPoint, CFTimeInterval) -> Void)?
+    var isTapEnabled: Bool = true
     private static let sparkleImage: CGImage = {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 48, height: 48))
         let image = renderer.image { context in
@@ -51,19 +52,43 @@ final class GalaxyTouchUIView: UIView {
         fatalError("init(coder:) has not been implemented")
     }
 
+    private var startLocation: CGPoint?
+
+    override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        super.touchesBegan(touches, with: event)
+        guard let touch = touches.first else { return }
+        startLocation = touch.location(in: self)
+    }
+
     override func touchesEnded(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesEnded(touches, with: event)
+        guard isTapEnabled else { return }
         guard let touch = touches.first else { return }
         let location = touch.location(in: self)
+        
+        // Check for drag/swipe
+        if let start = startLocation {
+            let dx = location.x - start.x
+            let dy = location.y - start.y
+            let distance = sqrt(dx*dx + dy*dy)
+            if distance > 10.0 {
+                print("[TouchOverlay] drag detected (distance: \(distance)), ignoring tap")
+                startLocation = nil
+                return
+            }
+        }
+        
         let timestamp = touch.timestamp
         print("[TouchOverlay] tap at (\(location.x), \(location.y)) ts=\(timestamp)")
         // ❌ 已禁用粒子爆炸
         // burst(at: location)
         onTap?(location, timestamp)
+        startLocation = nil
     }
 
     override func touchesCancelled(_ touches: Set<UITouch>, with event: UIEvent?) {
         super.touchesCancelled(touches, with: event)
+        startLocation = nil
     }
 
     private func burst(at point: CGPoint) {
@@ -116,6 +141,7 @@ struct GalaxyTouchOverlay: UIViewRepresentable {
     }
 
     var onTap: (CGPoint, CFTimeInterval) -> Void
+    var isTapEnabled: Bool = true
 
     func makeCoordinator() -> Coordinator {
         Coordinator(onTap: onTap)
@@ -123,6 +149,7 @@ struct GalaxyTouchOverlay: UIViewRepresentable {
 
     func makeUIView(context: Context) -> GalaxyTouchUIView {
         let view = GalaxyTouchUIView(frame: .zero)
+        view.isTapEnabled = isTapEnabled
         context.coordinator.onTapClosure = onTap
         view.onTap = { point, ts in
             context.coordinator.handleTap(point, ts)
@@ -131,6 +158,7 @@ struct GalaxyTouchOverlay: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: GalaxyTouchUIView, context: Context) {
+        uiView.isTapEnabled = isTapEnabled
         context.coordinator.onTapClosure = onTap
         uiView.onTap = { point, ts in
             context.coordinator.handleTap(point, ts)

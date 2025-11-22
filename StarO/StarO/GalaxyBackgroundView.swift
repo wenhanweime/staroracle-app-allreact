@@ -14,6 +14,7 @@ struct GalaxyBackgroundView: View {
   @State private var lastTapRegion: GalaxyRegion?
   @State private var lastTapDate: Date = .distantPast
   @State private var debounceTask: Task<Void, Never>?
+  var isTapEnabled: Bool = true
 
   var body: some View {
     GeometryReader { proxy in
@@ -45,7 +46,8 @@ struct GalaxyBackgroundView: View {
               }
             }
           }
-        }
+        },
+        isTapEnabled: isTapEnabled
       )
       .ignoresSafeArea()
       .overlay(alignment: .topLeading) {
