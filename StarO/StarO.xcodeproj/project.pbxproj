@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		8258DAF82ED2EA4200FFA63D /* Shaders in Resources */ = {isa = PBXBuildFile; fileRef = 8258DAF72ED2EA4200FFA63D /* Shaders */; };
 		82D3B0012ED2D5B5003A0F10 /* StarOracleCore in Frameworks */ = {isa = PBXBuildFile; productRef = 82D3B1012ED2D5B5003A0F10 /* StarOracleCore */; };
 		82D3B0022ED2D5B5003A0F10 /* StarOracleFeatures in Frameworks */ = {isa = PBXBuildFile; productRef = 82D3B1022ED2D5B5003A0F10 /* StarOracleFeatures */; };
 		82D3B0032ED2D5B5003A0F10 /* StarOracleServices in Frameworks */ = {isa = PBXBuildFile; productRef = 82D3B1032ED2D5B5003A0F10 /* StarOracleServices */; };
@@ -34,11 +35,44 @@
 		8200BF7B2EBF7919009BDD06 /* StarO.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = StarO.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		8200BF8B2EBF791B009BDD06 /* StarOTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StarOTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		8200BF952EBF791B009BDD06 /* StarOUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = StarOUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		8258DAF72ED2EA4200FFA63D /* Shaders */ = {isa = PBXFileReference; lastKnownFileType = folder; name = Shaders; path = StarO/PixelPlanets/Resources/Shaders; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		8258DAF52ED2DED600FFA63D /* Exceptions for "StarO" folder in "StarO" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				PixelPlanets/Resources/Shaders/asteroid/asteroid.frag,
+				"PixelPlanets/Resources/Shaders/black-hole/core.frag",
+				"PixelPlanets/Resources/Shaders/black-hole/ring.frag",
+				PixelPlanets/Resources/Shaders/common/clouds.frag,
+				"PixelPlanets/Resources/Shaders/dry-terran/land.frag",
+				PixelPlanets/Resources/Shaders/galaxy/galaxy.frag,
+				PixelPlanets/Resources/Shaders/galaxy/linear_twinkle.frag,
+				"PixelPlanets/Resources/Shaders/gas-planet-layers/layers.frag",
+				"PixelPlanets/Resources/Shaders/gas-planet-layers/ring.frag",
+				"PixelPlanets/Resources/Shaders/ice-world/lakes.frag",
+				PixelPlanets/Resources/Shaders/landmasses/land.frag,
+				PixelPlanets/Resources/Shaders/landmasses/water.frag,
+				"PixelPlanets/Resources/Shaders/lava-world/rivers.frag",
+				"PixelPlanets/Resources/Shaders/no-atmosphere/craters.frag",
+				"PixelPlanets/Resources/Shaders/no-atmosphere/ground.frag",
+				PixelPlanets/Resources/Shaders/rivers/land.frag,
+				PixelPlanets/Resources/Shaders/star/blobs.frag,
+				PixelPlanets/Resources/Shaders/star/flares.frag,
+				PixelPlanets/Resources/Shaders/star/star.frag,
+				PixelPlanets/Resources/Shaders/star/twinkle.frag,
+			);
+			target = 8200BF7A2EBF7919009BDD06 /* StarO */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		8200BF7D2EBF7919009BDD06 /* StarO */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				8258DAF52ED2DED600FFA63D /* Exceptions for "StarO" folder in "StarO" target */,
+			);
 			path = StarO;
 			sourceTree = "<group>";
 		};
@@ -86,6 +120,7 @@
 		8200BF722EBF7919009BDD06 = {
 			isa = PBXGroup;
 			children = (
+				8258DAF72ED2EA4200FFA63D /* Shaders */,
 				8200BF7D2EBF7919009BDD06 /* StarO */,
 				8200BF8E2EBF791B009BDD06 /* StarOTests */,
 				8200BF982EBF791B009BDD06 /* StarOUITests */,
@@ -233,6 +268,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				8258DAF82ED2EA4200FFA63D /* Shaders in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

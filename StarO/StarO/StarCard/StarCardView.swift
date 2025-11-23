@@ -76,7 +76,11 @@ private struct StarCardFrontView: View {
                         }
                         
                         // Main Celestial Body
-                        if config.style.isPlanet {
+                        if config.style.isPixelPlanet {
+                            // New pixel planet rendering
+                            PixelPlanetRenderer(config: config, star: star)
+                                .frame(width: minDim * 0.7, height: minDim * 0.7)
+                        } else if config.style.isPlanet {
                             PlanetView(config: config, star: star)
                                 .frame(width: minDim * 0.7, height: minDim * 0.7)
                         } else {
@@ -298,5 +302,125 @@ private struct DustParticle: View {
                 value: isAnimating
             )
             .onAppear { isAnimating = true }
+    }
+}
+
+// MARK: - Pixel Planet Renderer
+
+private struct PixelPlanetRenderer: View {
+    let config: StarCardConfig
+    let star: Star
+    
+    var body: some View {
+        GeometryReader { proxy in
+            let size = min(proxy.size.width, proxy.size.height)
+            
+            if let planet = createPlanet(for: config.style, seed: Int(config.seed)) {
+                PlanetCanvasView(
+                    planet: planet,
+                    pixels: Int(size),
+                    playing: true
+                )
+                .clipShape(Circle())
+            } else {
+                // Fallback
+                Circle()
+                    .fill(config.theme.inner)
+                    .overlay(
+                        Text("?")
+                            .font(.system(size: size * 0.3))
+                            .foregroundColor(config.theme.star)
+                    )
+            }
+        }
+    }
+    
+    private func createPlanet(for style: StarCardStyle, seed: Int) -> PlanetBase? {
+        do {
+            var rng = RandomStream(seed: seed)
+            
+            switch style {
+            case .pixelAsteroid:
+                let planet = try AsteroidPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelBlackHole:
+                let planet = try BlackHolePlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelGalaxy:
+                let planet = try GalaxyPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelGalaxyRound:
+                let planet = try CircularGalaxyPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelTwinkleGalaxy:
+                let planet = try TwinkleGalaxyPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelGasPlanet:
+                let planet = try GasPlanetPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelGasPlanetLayers:
+                let planet = try GasPlanetLayersPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelIceWorld:
+                let planet = try IceWorldPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelLandMasses:
+                let planet = try LandMassesPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelLavaWorld:
+                let planet = try LavaWorldPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelNoAtmosphere:
+                let planet = try NoAtmospherePlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelRivers:
+                let planet = try RiversPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelDryTerran:
+                let planet = try DryTerranPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelStar:
+                let planet = try StarPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            case .pixelTwinkleStar:
+                let planet = try TwinkleStarPlanet()
+                planet.setSeed(seed, rng: &rng)
+                planet.randomizeColors(rng: &rng)
+                return planet
+            default:
+                return nil
+            }
+        } catch {
+            print("Failed to create planet: \(error)")
+            return nil
+        }
     }
 }

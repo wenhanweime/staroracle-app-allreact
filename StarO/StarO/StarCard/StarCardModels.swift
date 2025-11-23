@@ -10,17 +10,39 @@ enum StarCardStyle: String, CaseIterable {
     case sparkle = "sparkle"
     case ringed = "ringed"
     
-    // Planet styles
+    // Legacy planet styles (Canvas-based)
     case planetSmooth = "planet_smooth"
     case planetCraters = "planet_craters"
     case planetSeas = "planet_seas"
     case planetDust = "planet_dust"
     case planetRings = "planet_rings"
     
+    // New pixel planet styles (GL-based)
+    case pixelAsteroid = "pixel_asteroid"
+    case pixelBlackHole = "pixel_black_hole"
+    case pixelGalaxy = "pixel_galaxy"
+    case pixelGalaxyRound = "pixel_galaxy_round"
+    case pixelTwinkleGalaxy = "pixel_twinkle_galaxy"
+    case pixelGasPlanet = "pixel_gas_planet"
+    case pixelGasPlanetLayers = "pixel_gas_planet_layers"
+    case pixelIceWorld = "pixel_ice_world"
+    case pixelLandMasses = "pixel_land_masses"
+    case pixelLavaWorld = "pixel_lava_world"
+    case pixelNoAtmosphere = "pixel_no_atmosphere"
+    case pixelRivers = "pixel_rivers"
+    case pixelDryTerran = "pixel_dry_terran"
+    case pixelStar = "pixel_star"
+    case pixelTwinkleStar = "pixel_twinkle_star"
+    
     var isPlanet: Bool {
         self.rawValue.starts(with: "planet_")
     }
+    
+    var isPixelPlanet: Bool {
+        self.rawValue.starts(with: "pixel_")
+    }
 }
+
 
 // MARK: - Cosmic Themes
 
