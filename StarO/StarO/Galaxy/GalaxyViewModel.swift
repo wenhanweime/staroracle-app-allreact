@@ -187,8 +187,15 @@ final class GalaxyViewModel: ObservableObject {
     func triggerHighlight(at location: CGPoint, in size: CGSize, tapTimestamp: CFTimeInterval? = nil, isPermanent: Bool = false) {
         guard ringCount > 0 else { return }
         
-        // Remove the clear all call to allow multiple concurrent flashes
-        // highlights.removeAll()
+        // Use deterministic RNG if timestamp is provided to ensure consistent selection
+        // between transient flash and permanent highlight
+        var rng: SeededRandom
+        if let ts = tapTimestamp {
+            let seed = UInt64(abs(Int64(ts * 1_000_000)))
+            rng = SeededRandom(seed: seed)
+        } else {
+            rng = selectionRandom
+        }
         
         // 计算搜索半径（恢复原版下限 30）
         let radiusBase = min(size.width, size.height) * glowConfig.radiusFactor
@@ -202,7 +209,7 @@ final class GalaxyViewModel: ObservableObject {
             return elapsedTime
         }()
         
-        // 收集点击范围内的候选星星（按点击瞬间的 elapsed 计算位置）
+        // 收集候选星星
         let candidates = collectCandidates(at: location, in: size, radius: radius, elapsed: elapsedAtTap)
         
         guard !candidates.isEmpty else {
@@ -216,9 +223,8 @@ final class GalaxyViewModel: ObservableObject {
         print("[GalaxyViewModel] candidates: \(candidates.count)")
         #endif
         
-        // 从候选中筛选要高亮的星星（恢复为30个）
-        // 关键修改：这里传入的candidates稍后会在pickHighlights中按距离排序
-        let selected = pickHighlights(from: candidates, targetCount: min(30, candidates.count))
+        // 挑选高亮星星（加权随机）
+        let selected = pickHighlights(from: candidates, targetCount: min(30, candidates.count), rng: &rng)
         
         #if DEBUG
         print("[GalaxyViewModel] selected: \(selected.count) stars for highlight")
@@ -228,10 +234,15 @@ final class GalaxyViewModel: ObservableObject {
         // appendPulses(for: selected)
         
         // 应用高亮状态（用于星星变大变亮）
-        let entries = applyHighlights(from: selected, isPermanent: isPermanent)
+        let entries = applyHighlights(from: selected, isPermanent: isPermanent, rng: &rng)
         #if DEBUG
         print("[GalaxyViewModel] highlights added: \(entries.count), total: \(highlights.count)")
         #endif
+        
+        // Update global RNG only if we didn't use a deterministic one
+        if tapTimestamp == nil {
+            selectionRandom = rng
+        }
         
         // 通知持久化（如果有回调）
         if !entries.isEmpty {
@@ -276,44 +287,45 @@ final class GalaxyViewModel: ObservableObject {
         return results
     }
 
-    private func pickHighlights(from candidates: [HighlightCandidate], targetCount: Int) -> [HighlightCandidate] {
+    private func pickHighlights(from candidates: [HighlightCandidate], targetCount: Int, rng: inout SeededRandom) -> [HighlightCandidate] {
         let cappedTarget = min(max(targetCount, 0), candidates.count)
         guard cappedTarget > 0 else { return [] }
 
         // 1) 中心密集核心：按距离排序，优先选取一部分最近的点
+        // 注意：这里的“核心”是指点击位置的中心，而不是银河的核心（band=0）
         let sortedByDistance = candidates.sorted { $0.distance < $1.distance }
         let coreCount = min(max(3, Int(ceil(Double(cappedTarget) * 0.4))), cappedTarget)
-        let coreStars = Array(sortedByDistance.prefix(coreCount))
-        if coreStars.count >= cappedTarget { return coreStars }
-
-        let coreIDs = Set(coreStars.map { $0.star.id })
-        let remainingCandidates = candidates.filter { !coreIDs.contains($0.star.id) }
-        let remainingTarget = cappedTarget - coreStars.count
-
+        let denseStars = Array(sortedByDistance.prefix(coreCount))
+        
+        if denseStars.count >= cappedTarget { return denseStars }
+        
+        let denseIDs = Set(denseStars.map { $0.star.id })
+        let remainingCandidates = candidates.filter { !denseIDs.contains($0.star.id) }
+        let remainingTarget = cappedTarget - denseStars.count
+        
         // 2) 距离加权抽样（无放回）：越靠近中心，被选中概率越高
-        // 使用 Efraimidis-Spirakis 算法：为每个元素生成 key = -ln(u) / w，取 key 最小的 K 个
-        // 距离权重：w = ((R - d)/R)^gamma，gamma > 1 增强中心密度
+        // 距离权重：w = ((R - d)/R)^gamma
         let maxDistance = remainingCandidates.map { $0.distance }.max() ?? 1.0
         let R = sqrt(max(1e-9, maxDistance))
         let gamma: Double = 2.2
-        var rng = selectionRandom
-        defer { selectionRandom = rng }
 
         struct WeightedKey { let candidate: HighlightCandidate; let key: Double }
         var keys: [WeightedKey] = []
         keys.reserveCapacity(remainingCandidates.count)
+        
         for c in remainingCandidates {
             let d = sqrt(max(0.0, c.distance))
             let ratio = max(0.0, min(1.0, 1.0 - d / R))
             let w = pow(ratio, gamma)
-        let u = max(1e-9, min(0.999999, rng.next()))
+            let u = max(1e-9, min(0.999999, rng.next()))
             let key = -log(u) / max(w, 1e-9) // 小 key 表示更高的选择机会
             keys.append(WeightedKey(candidate: c, key: key))
         }
+        
         keys.sort { $0.key < $1.key }
         let weightedSelected = keys.prefix(remainingTarget).map { $0.candidate }
 
-        return coreStars + weightedSelected
+        return denseStars + weightedSelected
     }
 
     private func appendPulses(for candidates: [HighlightCandidate]) {
@@ -348,7 +360,7 @@ final class GalaxyViewModel: ObservableObject {
         }
     }
 
-    private func applyHighlights(from candidates: [HighlightCandidate], isPermanent: Bool) -> [GalaxyHighlightEntry] {
+    private func applyHighlights(from candidates: [HighlightCandidate], isPermanent: Bool, rng: inout SeededRandom) -> [GalaxyHighlightEntry] {
         guard !candidates.isEmpty else { return [] }
         var outputs: [GalaxyHighlightEntry] = []
         outputs.reserveCapacity(candidates.count)
@@ -357,9 +369,7 @@ final class GalaxyViewModel: ObservableObject {
         for candidate in candidates {
             let color = highlightColor(for: candidate.star)
             // 为每个高亮分配一个随机的白偏移（决定偏白还是偏高亮色）
-            var rng = selectionRandom
             let bias = rng.next()
-            selectionRandom = rng
             
             // Update or create highlight
             // If it already exists and is permanent, keep it permanent
