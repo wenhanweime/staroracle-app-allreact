@@ -127,15 +127,16 @@ struct StarCollectionOverlay: View {
   private var gridContent: some View {
     ScrollView {
       LazyVGrid(columns: [
-        GridItem(.adaptive(minimum: 260), spacing: 20)
+        GridItem(.flexible(), spacing: 20),
+        GridItem(.flexible(), spacing: 20)
       ], spacing: 20) {
         ForEach(displayedStars) { star in
-          StarCollectionCard(
+          StarCardView(
             star: star,
-            flipped: flippedIds.contains(star.id)
-          ) {
-            toggleFlip(for: star.id)
-          }
+            isFlipped: flippedIds.contains(star.id),
+            onFlip: { toggleFlip(for: star.id) }
+          )
+          .aspectRatio(0.7, contentMode: .fit)
           .onAppear {
             if star.id == displayedStars.last?.id {
               loadMore()
@@ -289,15 +290,16 @@ struct StarCollectionPane: View {
   private var gridContent: some View {
     ScrollView {
       LazyVGrid(columns: [
-        GridItem(.adaptive(minimum: 280), spacing: 20)
+        GridItem(.flexible(), spacing: 20),
+        GridItem(.flexible(), spacing: 20)
       ], spacing: 20) {
         ForEach(displayedStars) { star in
-          StarCollectionCard(
+          StarCardView(
             star: star,
-            flipped: flippedIds.contains(star.id)
-          ) {
-            toggleFlip(for: star.id)
-          }
+            isFlipped: flippedIds.contains(star.id),
+            onFlip: { toggleFlip(for: star.id) }
+          )
+          .aspectRatio(0.7, contentMode: .fit)
           .onAppear {
             if star.id == displayedStars.last?.id {
               loadMore()
@@ -353,77 +355,6 @@ struct StarCollectionPane: View {
     withAnimation(.easeOut(duration: 0.35)) {
       visibleCount = next
     }
-  }
-}
-
-fileprivate struct StarCollectionCard: View {
-  let star: Star
-  let flipped: Bool
-  let onTap: () -> Void
-
-  private var gradient: LinearGradient {
-    if star.isSpecial {
-      return LinearGradient(
-        colors: [Color.purple.opacity(0.8), Color.black.opacity(0.6)],
-        startPoint: .topLeading,
-        endPoint: .bottomTrailing
-      )
-    }
-    return LinearGradient(
-      colors: [Color.blue.opacity(0.4), Color.black.opacity(0.7)],
-      startPoint: .topLeading,
-      endPoint: .bottomTrailing
-    )
-  }
-
-  var body: some View {
-    ZStack {
-      RoundedRectangle(cornerRadius: 26, style: .continuous)
-        .fill(gradient)
-        .overlay(
-          RoundedRectangle(cornerRadius: 26, style: .continuous)
-            .stroke(Color.white.opacity(0.12), lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.35), radius: 20, x: 0, y: 15)
-
-      VStack(alignment: .leading, spacing: 12) {
-        HStack {
-          if star.isSpecial {
-            Label("Special", systemImage: "star.fill")
-              .font(.caption2)
-              .padding(.horizontal, 10)
-              .padding(.vertical, 4)
-              .background(Color.yellow.opacity(0.2), in: Capsule())
-          }
-          Spacer()
-          Text(star.createdAt.formatted(date: .abbreviated, time: .shortened))
-            .font(.caption2)
-            .foregroundStyle(.white.opacity(0.7))
-        }
-
-        Text(flipped ? star.answer : star.question)
-          .font(.system(.body, design: .serif))
-          .foregroundStyle(.white)
-          .lineLimit(4)
-
-        Spacer(minLength: 0)
-
-        Button {
-          withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            onTap()
-          }
-        } label: {
-          Text(flipped ? "查看问题" : "查看回答")
-            .font(.caption.weight(.medium))
-            .padding(.horizontal, 14)
-            .padding(.vertical, 8)
-            .background(Color.white.opacity(0.15), in: Capsule())
-        }
-        .buttonStyle(.plain)
-      }
-      .padding(20)
-    }
-    .frame(minHeight: 220)
   }
 }
 
