@@ -3,14 +3,17 @@ import GLKit
 import OpenGLES
 
 final class PlanetGLRenderer: NSObject {
-    private let planet: PlanetBase
+    private var planet: PlanetBase
     private var programs: [String: ProgramInfo] = [:]
     private var vertexBuffer: GLuint = 0
-    private let quadVertices: [Float] = [
-        -1.0, -1.0,
-         1.0, -1.0,
-        -1.0,  1.0,
-         1.0,  1.0,
+    // Match original: draw two triangles (6 vertices)
+    private let quadVertices: [GLfloat] = [
+        -1, -1,
+         1, -1,
+        -1,  1,
+        -1,  1,
+         1, -1,
+         1,  1,
     ]
 
     struct ProgramInfo {
@@ -26,7 +29,7 @@ final class PlanetGLRenderer: NSObject {
         setupBuffers()
         rebuildPrograms()
     }
-    
+
     // Publicly accessible error for debugging
     private(set) var compileError: String?
 
@@ -40,40 +43,70 @@ final class PlanetGLRenderer: NSObject {
     }
 
     func setPlanet(_ newPlanet: PlanetBase) {
-        // If it's a different planet type (ID), we might need to rebuild programs.
-        // For now, we assume the renderer is recreated or the planet structure matches if reused.
-        // But to be safe, if the ID changes, we should rebuild.
-        if newPlanet.id != planet.id {
-            // This renderer is tied to a specific planet instance's configuration.
-            // Ideally, create a new renderer. But if we must update:
-            // This implementation assumes immutable renderer-planet pairing for simplicity in this context.
-            print("Warning: PlanetGLRenderer setPlanet called with different planet ID. This is not fully supported without full rebuild.")
+        if planet === newPlanet {
+            planet = newPlanet
+            return
+        }
+        planet = newPlanet
+        resetAnimationState()
+        rebuildPrograms()
+    }
+
+    private var elapsedTime: Double = 0
+    private var lastTimestamp: CFTimeInterval?
+
+    func updateAnimationTime(_ timestamp: CFTimeInterval) {
+        guard !planet.overrideTime else {
+            lastTimestamp = nil
+            return
+        }
+        if let previous = lastTimestamp {
+            let delta = max(0, timestamp - previous)
+            elapsedTime += delta
+        }
+        lastTimestamp = timestamp
+        applyTime(elapsedTime)
+    }
+
+    func pauseAnimation(at timestamp: CFTimeInterval) {
+        if let previous = lastTimestamp {
+            elapsedTime += max(0, timestamp - previous)
+        }
+        lastTimestamp = nil
+        if !planet.overrideTime {
+            applyTime(elapsedTime)
         }
     }
 
-    func updateAnimationTime(_ timestamp: CFTimeInterval) {
-        // We can use the timestamp to drive the 'time' uniform if needed.
-        // The original implementation might drive time externally or via this method.
-        // For now, we'll assume the planet's updateTime() is called elsewhere or we call it here.
-        // Let's call planet.updateTime() with a float cast of timestamp.
-        planet.updateTime(Float(timestamp))
+    private func resetAnimationState() {
+        elapsedTime = 0
+        lastTimestamp = nil
+        if !planet.overrideTime {
+            applyTime(0)
+        }
     }
-    
-    func pauseAnimation(at timestamp: CFTimeInterval) {
-        // Optional hook
+
+    private func applyTime(_ time: Double) {
+        planet.updateTime(Float(time))
     }
 
     @MainActor
     func draw(in view: GLKView) {
-        // Clear background
+        // Ensure drawable is bound, clear and setup blending (match original)
+        view.bindDrawable()
+        glDisable(GLenum(GL_DEPTH_TEST))
+        glEnable(GLenum(GL_BLEND))
+        glBlendFuncSeparate(GLenum(GL_SRC_ALPHA), GLenum(GL_ONE_MINUS_SRC_ALPHA), GLenum(GL_ONE), GLenum(GL_ONE_MINUS_SRC_ALPHA))
         glClearColor(0, 0, 0, 0)
         glClear(GLbitfield(GL_COLOR_BUFFER_BIT))
 
-        // Enable blending
-        glEnable(GLenum(GL_BLEND))
-        glBlendFunc(GLenum(GL_SRC_ALPHA), GLenum(GL_ONE_MINUS_SRC_ALPHA))
+        let drawableWidth = max(1, GLsizei(view.drawableWidth))
+        let drawableHeight = max(1, GLsizei(view.drawableHeight))
+        let square = min(drawableWidth, drawableHeight)
+        let offsetX: GLsizei = (drawableWidth - square) / 2
+        let offsetY: GLsizei = (drawableHeight - square) / 2
 
-        let canvasPixels = Int(view.drawableWidth)
+        let canvasPixels = Int(square)
         let maxPixels = computeMaxLayerPixels()
 
         for layer in planet.layers where layer.visible {
@@ -85,9 +118,10 @@ final class PlanetGLRenderer: NSObject {
             glVertexAttribPointer(programInfo.attribPosition, 2, GLenum(GL_FLOAT), GLboolean(GL_FALSE), 0, nil)
 
             applyUniforms(for: layer, using: programInfo)
-            applyViewport(for: layer, canvasPixels: canvasPixels, maxLayerPixels: maxPixels, offsetX: 0, offsetY: 0)
+            applyViewport(for: layer, canvasPixels: canvasPixels, maxLayerPixels: maxPixels, offsetX: offsetX, offsetY: offsetY)
 
-            glDrawArrays(GLenum(GL_TRIANGLE_STRIP), 0, 4)
+            glDrawArrays(GLenum(GL_TRIANGLES), 0, 6)
+            glDisableVertexAttribArray(programInfo.attribPosition)
         }
     }
 }
