@@ -374,8 +374,6 @@ private struct PixelPlanetRenderer: View {
                 planet = try GalaxyPlanet()
             case .pixelGalaxyRound:
                 planet = try CircularGalaxyPlanet()
-            case .pixelTwinkleGalaxy:
-                planet = try TwinkleGalaxyPlanet()
             case .pixelGasPlanet:
                 planet = try GasPlanetPlanet()
             case .pixelGasPlanetLayers:
@@ -394,8 +392,6 @@ private struct PixelPlanetRenderer: View {
                 planet = try DryTerranPlanet()
             case .pixelStar:
                 planet = try StarPlanet()
-            case .pixelTwinkleStar:
-                planet = try TwinkleStarPlanet()
             default:
                 return nil
             }

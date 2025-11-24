@@ -22,8 +22,6 @@ public enum PlanetLibrary {
         "Galaxy": { try GalaxyPlanet() },
         "Galaxy Round": { try CircularGalaxyPlanet() },
         "Star": { try StarPlanet() },
-        "Twinkle Star": { try TwinkleStarPlanet() },
-        "Twinkle Galaxy": { try TwinkleGalaxyPlanet() },
     ]
 
     @MainActor

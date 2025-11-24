@@ -22,7 +22,6 @@ enum StarCardStyle: String, CaseIterable {
     case pixelBlackHole = "pixel_black_hole"
     case pixelGalaxy = "pixel_galaxy"
     case pixelGalaxyRound = "pixel_galaxy_round"
-    case pixelTwinkleGalaxy = "pixel_twinkle_galaxy"
     case pixelGasPlanet = "pixel_gas_planet"
     case pixelGasPlanetLayers = "pixel_gas_planet_layers"
     case pixelIceWorld = "pixel_ice_world"
@@ -32,7 +31,6 @@ enum StarCardStyle: String, CaseIterable {
     case pixelRivers = "pixel_rivers"
     case pixelDryTerran = "pixel_dry_terran"
     case pixelStar = "pixel_star"
-    case pixelTwinkleStar = "pixel_twinkle_star"
     
     var isPlanet: Bool {
         self.rawValue.starts(with: "planet_")
