@@ -78,15 +78,10 @@ struct PlanetCanvasView: UIViewRepresentable {
             let clampedScale = min(targetScale, maximumScale)
             
             if abs(clampedScale - lastScale) > 0.01 {
+                // Match original PixelPlanets Swift behavior: only adjust view backing-store scale here.
+                // Do NOT mutate planet's `pixels` uniform from here; keep planet defaults or caller-provided value.
                 view.contentScaleFactor = clampedScale
                 lastScale = clampedScale
-                
-                // CRITICAL: Update the planet's 'pixels' uniform to match the actual render resolution
-                // The shader needs to know the exact number of fragments it's drawing to do the pixelation math
-                // Must ensure pixels >= 1 to avoid division by zero in shader
-                let actualPixels = max(1, Int(side * clampedScale))
-                currentPlanet.setPixels(actualPixels)
-                
                 view.display()
             }
         }

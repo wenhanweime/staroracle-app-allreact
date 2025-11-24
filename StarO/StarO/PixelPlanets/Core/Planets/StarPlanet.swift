@@ -124,7 +124,7 @@ public final class StarPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("Blobs", "seed", converted)
         setFloat("Star", "seed", converted)
         setFloat("StarFlares", "seed", converted)
@@ -277,7 +277,7 @@ public final class TwinkleStarPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("TwinkleCore", "seed", converted)
         setFloat("TwinkleGlow", "seed", converted)
     }

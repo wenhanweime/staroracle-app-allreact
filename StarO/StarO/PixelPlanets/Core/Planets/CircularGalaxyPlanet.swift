@@ -75,7 +75,7 @@ public final class CircularGalaxyPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("Galaxy", "seed", converted)
     }
 
@@ -195,8 +195,12 @@ public final class TwinkleGalaxyPlanet: PlanetBase, @unchecked Sendable {
         setFloat("GalaxyLinear", "pixels", Float(amount))
     }
 
+    public override func setLight(_ position: SIMD2<Float>) {
+        // Twinkle Galaxy shader ignores external light.
+    }
+
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("GalaxyLinear", "seed", converted)
     }
 

@@ -95,7 +95,7 @@ public final class NoAtmospherePlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("Ground", "seed", converted)
         setFloat("Craters", "seed", converted)
     }

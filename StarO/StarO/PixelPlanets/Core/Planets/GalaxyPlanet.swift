@@ -76,7 +76,7 @@ public final class GalaxyPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("Galaxy", "seed", converted)
     }
 

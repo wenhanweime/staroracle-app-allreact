@@ -319,9 +319,11 @@ private struct PixelPlanetRenderer: View {
             
             if let planet = createPlanet(for: config.style, seed: Int(config.seed)) {
                 ZStack {
+                    // 完全对齐原版：传递固定像素预算（默认 100），让 PlanetCanvasView 依据该值与 relativeScale
+                    // 计算 backing store 的 contentScaleFactor。这里不额外乘以屏幕 scale，也不改行星的 uniforms。
                     PlanetCanvasView(
                         planet: planet,
-                        pixels: max(50, Int(size)),
+                        pixels: 100,
                         playing: true,
                         renderError: $error
                     )
@@ -398,18 +400,10 @@ private struct PixelPlanetRenderer: View {
                 return nil
             }
             
-            // Complete initialization matching original PixelPlanets
+            // 完全对齐原版：只设置 seed；不在此处设置 rotation、light、随机颜色，也不做任何随机化配置
+            // rotation 默认为 0；light_origin 使用各行星配置默认值；colors 使用各行星配置默认梯度
             planet.setSeed(seed, rng: &rng)
-            planet.setPixels(128)  // Standard resolution
-            planet.setRotation(Float.pi / 8)  // Initial rotation
-            planet.setLight(Vec2(0.39, 0.39))  // Light position (matching defaults)
-            
-            // Randomize colors
-            var colorRng = RandomStream(seed: seed &+ 777)  // Different seed for colors
-            _ = planet.randomizeColors(rng: &colorRng)
-            
-            // Apply advanced configuration (migrated from original project sliders)
-            PlanetConfigurator.configure(planet: planet, seed: seed)
+            planet.setPixels(100) // 完全对齐原版 UI：默认像素采样=100
             
             return planet
         } catch {

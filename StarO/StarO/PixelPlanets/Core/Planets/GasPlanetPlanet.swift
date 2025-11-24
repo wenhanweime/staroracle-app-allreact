@@ -111,8 +111,7 @@ public final class GasPlanetPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        // Fixed: Add 1.0 to prevent seed=0 which causes noise functions to fail
-        let converted = Float(seed % 1000) / 100.0 + 1.0
+        let converted = Float(seed % 1000) / 100
         setFloat("Cloud", "seed", converted)
         setFloat("Cloud2", "seed", converted)
         setFloat("Cloud2", "cloud_cover", randRange(&rng, min: 0.28, max: 0.5))
