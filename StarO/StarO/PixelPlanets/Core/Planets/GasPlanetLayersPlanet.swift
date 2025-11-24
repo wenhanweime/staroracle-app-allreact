@@ -1,173 +1,191 @@
 import Foundation
 import simd
 
-private let gasPlanet2Colors: [Float] = [
-    0.211765, 0.168627, 0.262745, 1,
-    0.380392, 0.25098, 0.352941, 1,
-    0.533333, 0.352941, 0.439216, 1,
+private let gasLayersLightColors: [Float] = [
+    0.933333, 0.764706, 0.603922, 1,
+    0.85098, 0.627451, 0.4, 1,
+    0.560784, 0.337255, 0.231373, 1,
 ]
 
-private let gasPlanet2DarkColors: [Float] = [
-    0.160784, 0.129412, 0.2, 1,
-    0.286275, 0.192157, 0.270588, 1,
-    0.4, 0.270588, 0.337255, 1,
+private let gasLayersDarkColors: [Float] = [
+    0.4, 0.223529, 0.192157, 1,
+    0.270588, 0.156863, 0.235294, 1,
+    0.133333, 0.12549, 0.203922, 1,
 ]
 
-private let gasPlanet2RingColors: [Float] = [
-    0.321569, 0.27451, 0.258824, 1,
-    0.431373, 0.384314, 0.341176, 1,
-    0.572549, 0.52549, 0.45098, 1,
-    0.690196, 0.635294, 0.541176, 1,
+private let ringLightColors: [Float] = [
+    0.933333, 0.764706, 0.603922, 1,
+    0.701961, 0.478431, 0.313726, 1,
+    0.560784, 0.337255, 0.231373, 1,
 ]
 
-private func makeGasPlanet2Config() -> PlanetConfig {
+private let ringDarkColors: [Float] = [
+    0.333333, 0.188235, 0.211765, 1,
+    0.196078, 0.137255, 0.215686, 1,
+    0.133333, 0.12549, 0.203922, 1,
+]
+
+private func makeGasPlanetLayersConfig() -> PlanetConfig {
     let gasUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
-        "time_speed": .float(0.2),
-        "dither_size": .float(2),
+        "cloud_cover": .float(0.61),
+        "light_origin": .vec2(Vec2(-0.1, 0.3)),
+        "time_speed": .float(0.05),
+        "stretch": .float(2.204),
+        "cloud_curve": .float(1.376),
+        "light_border_1": .float(0.52),
+        "light_border_2": .float(0.62),
+        "bands": .float(0.892),
         "should_dither": .float(1),
-        "light_border_1": .float(0.4),
-        "light_border_2": .float(0.6),
-        "colors": .buffer(gasPlanet2Colors),
-        "dark_colors": .buffer(gasPlanet2DarkColors),
-        "size": .float(9),
-        "octaves": .float(3),
-        "seed": .float(4.123),
+        "n_colors": .float(3),
+        "colors": .buffer(gasLayersLightColors),
+        "dark_colors": .buffer(gasLayersDarkColors),
+        "size": .float(10.107),
+        "OCTAVES": .float(3),
+        "seed": .float(6.314),
         "time": .float(0),
     ]
 
     let ringUniforms: [String: UniformValue] = [
         "pixels": .float(300),
-        "rotation": .float(-0.4),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
+        "rotation": .float(0.7),
+        "light_origin": .vec2(Vec2(-0.1, 0.3)),
         "time_speed": .float(0.2),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.4),
-        "light_border_2": .float(0.6),
-        "colors": .buffer(gasPlanet2RingColors),
-        "size": .float(6),
-        "octaves": .float(3),
-        "seed": .float(8.456),
+        "light_border_1": .float(0.52),
+        "light_border_2": .float(0.62),
+        "ring_width": .float(0.127),
+        "ring_perspective": .float(6),
+        "scale_rel_to_planet": .float(6),
+        "n_colors": .float(3),
+        "colors": .buffer(ringLightColors),
+        "dark_colors": .buffer(ringDarkColors),
+        "size": .float(15),
+        "OCTAVES": .float(4),
+        "seed": .float(8.461),
         "time": .float(0),
+    ]
+
+    let controls: [UniformControl] = [
+        UniformControl(layer: "GasLayers", uniform: "cloud_cover", label: "Layers Cloud Cover", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "GasLayers", uniform: "time_speed", label: "Layers Time Speed", min: 0, max: 0.2, step: 0.005),
+        UniformControl(layer: "GasLayers", uniform: "stretch", label: "Layers Stretch", min: 1, max: 3, step: 0.05),
+        UniformControl(layer: "GasLayers", uniform: "bands", label: "Bands", min: 0, max: 2, step: 0.01),
+        UniformControl(layer: "GasLayers", uniform: "light_border_1", label: "Layers Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "GasLayers", uniform: "light_border_2", label: "Layers Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "GasLayers", uniform: "size", label: "Layers Noise Scale", min: 1, max: 15, step: 0.1),
+        UniformControl(layer: "GasLayers", uniform: "OCTAVES", label: "Layers Octaves", min: 1, max: 6, step: 1),
+        UniformControl(layer: "Ring", uniform: "time_speed", label: "Ring Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Ring", uniform: "ring_width", label: "Ring Width", min: 0.01, max: 0.3, step: 0.005),
+        UniformControl(layer: "Ring", uniform: "ring_perspective", label: "Ring Perspective", min: 1, max: 20, step: 0.1),
+        UniformControl(layer: "Ring", uniform: "scale_rel_to_planet", label: "Ring Scale", min: 1, max: 10, step: 0.1),
+        UniformControl(layer: "Ring", uniform: "light_border_1", label: "Ring Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Ring", uniform: "light_border_2", label: "Ring Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Ring", uniform: "size", label: "Ring Noise Scale", min: 1, max: 20, step: 0.1),
+        UniformControl(layer: "Ring", uniform: "OCTAVES", label: "Ring Octaves", min: 1, max: 6, step: 1),
     ]
 
     return PlanetConfig(
         id: "gas-planet-layers",
         label: "Gas giant 2",
-        relativeScale: 1,
-        guiZoom: 1,
+        relativeScale: 3,
+        guiZoom: 2.5,
         layers: [
             LayerDefinition(
-                name: "Gas",
+                name: "GasLayers",
                 shaderPath: "gas-planet-layers/layers.frag",
                 uniforms: gasUniforms,
                 colors: [
-                    ColorBinding(layer: "Gas", uniform: "colors", slots: 3),
-                    ColorBinding(layer: "Gas", uniform: "dark_colors", slots: 3)
+                    ColorBinding(layer: "GasLayers", uniform: "colors", slots: 3),
+                    ColorBinding(layer: "GasLayers", uniform: "dark_colors", slots: 3),
                 ]
             ),
             LayerDefinition(
                 name: "Ring",
                 shaderPath: "gas-planet-layers/ring.frag",
                 uniforms: ringUniforms,
-                colors: [ColorBinding(layer: "Ring", uniform: "colors", slots: 4)]
+                colors: [
+                    ColorBinding(layer: "Ring", uniform: "colors", slots: 3),
+                    ColorBinding(layer: "Ring", uniform: "dark_colors", slots: 3),
+                ]
             ),
         ],
-        uniformControls: [
-            UniformControl(layer: "Gas", uniform: "time_speed", label: "Spin Speed", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Gas", uniform: "dither_size", label: "Dither Size", min: 0, max: 6, step: 0.1),
-            UniformControl(layer: "Gas", uniform: "light_border_1", label: "Light Border 1", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Gas", uniform: "light_border_2", label: "Light Border 2", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Gas", uniform: "size", label: "Noise Scale", min: 1, max: 15, step: 0.1),
-            UniformControl(layer: "Gas", uniform: "octaves", label: "Octaves", min: 1, max: 6, step: 1),
-            UniformControl(layer: "Ring", uniform: "rotation", label: "Ring Rotation", min: -1, max: 1, step: 0.05),
-            UniformControl(layer: "Ring", uniform: "size", label: "Ring Noise Scale", min: 1, max: 15, step: 0.1),
-        ]
+        uniformControls: controls
     )
 }
 
-private let gasPlanet2Config = makeGasPlanet2Config()
+private let gasPlanetLayersConfig = makeGasPlanetLayersConfig()
 
 public final class GasPlanetLayersPlanet: PlanetBase, @unchecked Sendable {
     public init() throws {
-        try super.init(config: gasPlanet2Config)
+        try super.init(config: gasPlanetLayersConfig)
     }
 
     public override func setPixels(_ amount: Int) {
         let value = Float(amount)
-        setFloat("Gas", "pixels", value)
-        setFloat("Ring", "pixels", value * 3)
+        setFloat("GasLayers", "pixels", value)
+        setFloat("Ring", "pixels", value * relativeScale)
     }
 
     public override func setLight(_ position: SIMD2<Float>) {
-        setVec2("Gas", "light_origin", position)
+        setVec2("GasLayers", "light_origin", position)
         setVec2("Ring", "light_origin", position)
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
-        setFloat("Gas", "seed", converted)
-        setFloat("Ring", "seed", converted + 12.34)
+        let converted = Float(seed % 1000) / 100.0 + 1.0
+        setFloat("GasLayers", "seed", converted)
+        setFloat("Ring", "seed", converted)
     }
 
     public override func setRotation(_ radians: Float) {
-        setFloat("Gas", "rotation", radians)
-        setFloat("Ring", "rotation", radians - 0.4)
+        setFloat("GasLayers", "rotation", radians)
+        setFloat("Ring", "rotation", radians + 0.7)
     }
 
     public override func updateTime(_ t: Float) {
-        setFloat("Gas", "time", t * multiplier(for: "Gas") * 0.02)
-        setFloat("Ring", "time", t * multiplier(for: "Ring") * 0.02)
+        setFloat("GasLayers", "time", t * multiplier(for: "GasLayers") * 0.004)
+        setFloat("Ring", "time", t * 314.15 * 0.004)
     }
 
     public override func setCustomTime(_ t: Float) {
-        let speed = max(0.0001, getFloat("Gas", "time_speed"))
-        setFloat("Gas", "time", t * Float.pi * 2 * speed)
-        setFloat("Ring", "time", t * Float.pi * 2 * speed * 0.8)
+        setFloat("GasLayers", "time", t * multiplier(for: "GasLayers"))
+        let speed = max(0.0001, getFloat("Ring", "time_speed"))
+        setFloat("Ring", "time", t * 314.15 * speed * 0.5)
     }
 
     public override func setDither(_ enabled: Bool) {
-        let value = enabled ? 1 : 0
-        setFloat("Gas", "should_dither", Float(value))
-        setFloat("Ring", "should_dither", Float(value))
+        setFloat("GasLayers", "should_dither", enabled ? 1 : 0)
     }
 
     public override func isDitherEnabled() -> Bool {
-        getFloat("Gas", "should_dither") > 0.5
+        getFloat("GasLayers", "should_dither") > 0.5
     }
 
     public override func randomizeColors(rng: inout RandomStream) -> [PixelColor] {
         var palette = generatePalette(
             rng: &rng,
-            count: 3,
-            hueDiff: randRange(&rng, min: 0.2, max: 0.5),
-            saturation: 0.6
+            count: 6 + randInt(&rng, maxExclusive: 4),
+            hueDiff: randRange(&rng, min: 0.3, max: 0.55),
+            saturation: 1.4
         )
-        if palette.count < 3 {
-            palette += Array(repeating: PixelColor(r: 0.5, g: 0.4, b: 0.6, a: 1), count: 3 - palette.count)
+        if palette.count < 6 {
+            palette += Array(repeating: PixelColor(r: 0.7, g: 0.5, b: 0.4, a: 1), count: 6 - palette.count)
         }
 
-        var lightColors: [PixelColor] = []
-        var darkColors: [PixelColor] = []
-
-        for i in 0..<3 {
-            let base = palette[i]
-            lightColors.append(base.lightened(by: 0.1))
-            darkColors.append(base.darkened(by: 0.3))
+        var baseCols: [PixelColor] = []
+        for i in 0..<6 {
+            let base = palette[i % palette.count]
+            var shade = base.darkened(by: Float(i) / 7)
+            shade = shade.lightened(by: (1 - Float(i) / 6) * 0.3)
+            baseCols.append(shade)
         }
 
-        var ringColors: [PixelColor] = []
-        for i in 0..<4 {
-            let base = palette[i % 3]
-            ringColors.append(base.lightened(by: Float(i) * 0.1))
-        }
-
-        let allColors = lightColors + darkColors + ringColors
-        setColors(allColors)
-        return allColors
+        let lights = Array(baseCols[0..<3])
+        let darks = Array(baseCols[3..<6])
+        let combined = lights + darks + lights + darks
+        setColors(combined)
+        return combined
     }
 }
 

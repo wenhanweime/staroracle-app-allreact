@@ -6,6 +6,7 @@ struct PlanetCanvasView: UIViewRepresentable {
     var planet: PlanetBase
     var pixels: Int
     var playing: Bool
+    @Binding var renderError: String?
 
     func makeUIView(context: Context) -> GLKView {
         let glContext = EAGLContext(api: .openGLES2)!
@@ -30,9 +31,17 @@ struct PlanetCanvasView: UIViewRepresentable {
 
     func updateUIView(_ uiView: GLKView, context: Context) {
         EAGLContext.setCurrent(uiView.context)
+        context.coordinator.parent = self // Update parent reference to access binding
         context.coordinator.updatePlanet(planet)
         context.coordinator.updatePixelDensity(pixels, for: uiView)
         context.coordinator.setPlaying(playing)
+        
+        // Check for render errors
+        if let error = context.coordinator.renderer?.compileError {
+            DispatchQueue.main.async {
+                self.renderError = error
+            }
+        }
     }
 
     func makeCoordinator() -> Coordinator {
@@ -41,7 +50,7 @@ struct PlanetCanvasView: UIViewRepresentable {
 
     @MainActor
     final class Coordinator: NSObject, GLKViewDelegate {
-        let parent: PlanetCanvasView
+        var parent: PlanetCanvasView
         var renderer: PlanetGLRenderer?
         weak var view: GLKView?
         var displayLink: CADisplayLink?
@@ -58,13 +67,26 @@ struct PlanetCanvasView: UIViewRepresentable {
         func updatePixelDensity(_ pixels: Int, for view: GLKView) {
             let bounds = view.bounds
             let side = max(1, min(bounds.width, bounds.height))
+            
+            // Calculate target scale to achieve desired pixel count
+            // desired = logical pixels we want the planet to have
             let desired = CGFloat(max(pixels, 1)) * CGFloat(currentPlanet.relativeScale)
+            
+            // targetScale = how much to scale the backing store to get that many pixels
             let targetScale = max(1, desired / side)
             let maximumScale = UIScreen.main.scale * 4
             let clampedScale = min(targetScale, maximumScale)
+            
             if abs(clampedScale - lastScale) > 0.01 {
                 view.contentScaleFactor = clampedScale
                 lastScale = clampedScale
+                
+                // CRITICAL: Update the planet's 'pixels' uniform to match the actual render resolution
+                // The shader needs to know the exact number of fragments it's drawing to do the pixelation math
+                // Must ensure pixels >= 1 to avoid division by zero in shader
+                let actualPixels = max(1, Int(side * clampedScale))
+                currentPlanet.setPixels(actualPixels)
+                
                 view.display()
             }
         }

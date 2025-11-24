@@ -1,23 +1,24 @@
 import Foundation
 import simd
 
-private let landMassesWaterColors: [Float] = [
+private let waterColorsLandMasses: [Float] = [
+    0.572549, 0.909804, 0.752941, 1,
     0.309804, 0.643137, 0.721569, 1,
-    0.298039, 0.407843, 0.521569, 1,
-    0.227451, 0.247059, 0.368627, 1,
+    0.172549, 0.207843, 0.301961, 1,
 ]
 
-private let landMassesLandColors: [Float] = [
-    0.415686, 0.529412, 0.34902, 1,
-    0.266667, 0.419608, 0.258824, 1,
-    0.184314, 0.282353, 0.2, 1,
-    0.913725, 0.835294, 0.65098, 1,
+private let landColorsLandMasses: [Float] = [
+    0.784314, 0.831373, 0.364706, 1,
+    0.388235, 0.670588, 0.247059, 1,
+    0.184314, 0.341176, 0.32549, 1,
+    0.156863, 0.207843, 0.25098, 1,
 ]
 
-private let landMassesCloudColors: [Float] = [
-    0.941176, 0.964706, 0.941176, 1,
-    0.886275, 0.952941, 0.894118, 1,
-    0.745098, 0.85098, 0.784314, 1,
+private let cloudColorsLandMasses: [Float] = [
+    0.87451, 0.878431, 0.909804, 1,
+    0.639216, 0.654902, 0.760784, 1,
+    0.407843, 0.435294, 0.6, 1,
+    0.25098, 0.286275, 0.45098, 1,
 ]
 
 private func makeLandMassesConfig() -> PlanetConfig {
@@ -25,53 +26,75 @@ private func makeLandMassesConfig() -> PlanetConfig {
         "pixels": .float(100),
         "rotation": .float(0),
         "light_origin": .vec2(Vec2(0.39, 0.39)),
-        "time_speed": .float(0.2),
+        "time_speed": .float(0.1),
         "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.052),
-        "light_border_2": .float(0.082),
-        "colors": .buffer(landMassesWaterColors),
-        "size": .float(10),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "light_border_1": .float(0.4),
+        "light_border_2": .float(0.6),
+        "colors": .buffer(waterColorsLandMasses),
+        "size": .float(5.228),
+        "OCTAVES": .float(3),
+        "seed": .float(10.0),
         "time": .float(0),
+        "should_dither": .float(1),
     ]
 
     let landUniforms: [String: UniformValue] = [
         "pixels": .float(100),
-        "rotation": .float(0),
+        "rotation": .float(0.2),
         "light_origin": .vec2(Vec2(0.39, 0.39)),
         "time_speed": .float(0.2),
         "dither_size": .float(2),
-        "should_dither": .float(1),
         "light_border_1": .float(0.32),
         "light_border_2": .float(0.534),
-        "colors": .buffer(landMassesLandColors),
-        "size": .float(4),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "land_cutoff": .float(0.633),
+        "colors": .buffer(landColorsLandMasses),
+        "size": .float(4.292),
+        "OCTAVES": .float(6),
+        "seed": .float(7.947),
         "time": .float(0),
     ]
 
-    let cloudsUniforms: [String: UniformValue] = [
+    let cloudUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
+        "cloud_cover": .float(0.415),
         "light_origin": .vec2(Vec2(0.39, 0.39)),
-        "time_speed": .float(0.15),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.566),
-        "light_border_2": .float(0.785),
-        "colors": .buffer(landMassesCloudColors),
-        "size": .float(7),
-        "octaves": .float(3),
-        "seed": .float(9.876),
+        "time_speed": .float(0.47),
+        "stretch": .float(2),
+        "cloud_curve": .float(1.3),
+        "light_border_1": .float(0.52),
+        "light_border_2": .float(0.62),
+        "colors": .buffer(cloudColorsLandMasses),
+        "size": .float(7.745),
+        "OCTAVES": .float(2),
+        "seed": .float(5.939),
         "time": .float(0),
-        "cloud_cover": .float(0.47),
+    ]
+
+    let controls: [UniformControl] = [
+        UniformControl(layer: "Water", uniform: "time_speed", label: "Water Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Water", uniform: "light_border_1", label: "Water Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Water", uniform: "light_border_2", label: "Water Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Water", uniform: "size", label: "Water Noise Scale", min: 1, max: 12, step: 0.1),
+        UniformControl(layer: "Water", uniform: "OCTAVES", label: "Water Octaves", min: 1, max: 8, step: 1),
+        UniformControl(layer: "Land", uniform: "time_speed", label: "Land Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "light_border_1", label: "Land Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "light_border_2", label: "Land Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "land_cutoff", label: "Land Cutoff", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "size", label: "Land Noise Scale", min: 1, max: 12, step: 0.1),
+        UniformControl(layer: "Land", uniform: "OCTAVES", label: "Land Octaves", min: 1, max: 8, step: 1),
+        UniformControl(layer: "Cloud", uniform: "cloud_cover", label: "Cloud Cover", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Cloud", uniform: "time_speed", label: "Cloud Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Cloud", uniform: "stretch", label: "Cloud Stretch", min: 1, max: 3, step: 0.05),
+        UniformControl(layer: "Cloud", uniform: "cloud_curve", label: "Cloud Curve", min: 0.5, max: 2, step: 0.05),
+        UniformControl(layer: "Cloud", uniform: "light_border_1", label: "Cloud Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Cloud", uniform: "light_border_2", label: "Cloud Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Cloud", uniform: "size", label: "Cloud Noise Scale", min: 1, max: 12, step: 0.1),
+        UniformControl(layer: "Cloud", uniform: "OCTAVES", label: "Cloud Octaves", min: 1, max: 6, step: 1),
     ]
 
     return PlanetConfig(
-        id: "land-masses",
+        id: "landmasses",
         label: "Islands",
         relativeScale: 1,
         guiZoom: 1,
@@ -89,21 +112,13 @@ private func makeLandMassesConfig() -> PlanetConfig {
                 colors: [ColorBinding(layer: "Land", uniform: "colors", slots: 4)]
             ),
             LayerDefinition(
-                name: "Clouds",
+                name: "Cloud",
                 shaderPath: "common/clouds.frag",
-                uniforms: cloudsUniforms,
-                colors: [ColorBinding(layer: "Clouds", uniform: "colors", slots: 3)]
+                uniforms: cloudUniforms,
+                colors: [ColorBinding(layer: "Cloud", uniform: "colors", slots: 4)]
             ),
         ],
-        uniformControls: [
-            UniformControl(layer: "Water", uniform: "time_speed", label: "Spin Speed", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Water", uniform: "dither_size", label: "Dither Size", min: 0, max: 6, step: 0.1),
-            UniformControl(layer: "Water", uniform: "light_border_1", label: "Light Border 1", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Water", uniform: "light_border_2", label: "Light Border 2", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Water", uniform: "size", label: "Noise Scale", min: 1, max: 15, step: 0.1),
-            UniformControl(layer: "Water", uniform: "octaves", label: "Octaves", min: 1, max: 6, step: 1),
-            UniformControl(layer: "Clouds", uniform: "cloud_cover", label: "Cloud Cover", min: 0, max: 1, step: 0.01),
-        ]
+        uniformControls: controls
     )
 }
 
@@ -118,46 +133,43 @@ public final class LandMassesPlanet: PlanetBase, @unchecked Sendable {
         let value = Float(amount)
         setFloat("Water", "pixels", value)
         setFloat("Land", "pixels", value)
-        setFloat("Clouds", "pixels", value)
+        setFloat("Cloud", "pixels", value)
     }
 
     public override func setLight(_ position: SIMD2<Float>) {
         setVec2("Water", "light_origin", position)
         setVec2("Land", "light_origin", position)
-        setVec2("Clouds", "light_origin", position)
+        setVec2("Cloud", "light_origin", position)
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
+        let converted = Float(seed % 1000) / 100.0 + 1.0
         setFloat("Water", "seed", converted)
         setFloat("Land", "seed", converted)
-        setFloat("Clouds", "seed", converted + 1.23)
+        setFloat("Cloud", "seed", converted)
+        setFloat("Cloud", "cloud_cover", randRange(&rng, min: 0.35, max: 0.6))
     }
 
     public override func setRotation(_ radians: Float) {
         setFloat("Water", "rotation", radians)
         setFloat("Land", "rotation", radians)
-        setFloat("Clouds", "rotation", radians)
+        setFloat("Cloud", "rotation", radians)
     }
 
     public override func updateTime(_ t: Float) {
         setFloat("Water", "time", t * multiplier(for: "Water") * 0.02)
         setFloat("Land", "time", t * multiplier(for: "Land") * 0.02)
-        setFloat("Clouds", "time", t * multiplier(for: "Clouds") * 0.02)
+        setFloat("Cloud", "time", t * multiplier(for: "Cloud") * 0.01)
     }
 
     public override func setCustomTime(_ t: Float) {
-        let speed = max(0.0001, getFloat("Water", "time_speed"))
-        setFloat("Water", "time", t * Float.pi * 2 * speed)
-        setFloat("Land", "time", t * Float.pi * 2 * speed)
-        setFloat("Clouds", "time", t * Float.pi * 2 * speed * 0.8)
+        setFloat("Water", "time", t * multiplier(for: "Water"))
+        setFloat("Land", "time", t * multiplier(for: "Land"))
+        setFloat("Cloud", "time", t * multiplier(for: "Cloud"))
     }
 
     public override func setDither(_ enabled: Bool) {
-        let value = enabled ? 1 : 0
-        setFloat("Water", "should_dither", Float(value))
-        setFloat("Land", "should_dither", Float(value))
-        setFloat("Clouds", "should_dither", Float(value))
+        setFloat("Water", "should_dither", enabled ? 1 : 0)
     }
 
     public override func isDitherEnabled() -> Bool {
@@ -167,35 +179,44 @@ public final class LandMassesPlanet: PlanetBase, @unchecked Sendable {
     public override func randomizeColors(rng: inout RandomStream) -> [PixelColor] {
         var palette = generatePalette(
             rng: &rng,
-            count: 3,
-            hueDiff: randRange(&rng, min: 0.3, max: 0.6),
-            saturation: 0.8
+            count: 3 + randInt(&rng, maxExclusive: 2),
+            hueDiff: randRange(&rng, min: 0.7, max: 1.0),
+            saturation: randRange(&rng, min: 0.45, max: 0.55)
         )
-        if palette.count < 3 {
-            palette += Array(repeating: PixelColor(r: 0.3, g: 0.6, b: 0.8, a: 1), count: 3 - palette.count)
+        if palette.isEmpty {
+            palette = [PixelColor(r: 0.4, g: 0.7, b: 0.6, a: 1)]
         }
 
-        var waterColors: [PixelColor] = []
+        var water: [PixelColor] = []
+        let waterBase = palette[1 % palette.count]
         for i in 0..<3 {
-            var shade = palette[i % palette.count].lightened(by: Float(i) * 0.1)
-            waterColors.append(shade)
+            let shaded = waterBase.darkened(by: Float(i) / 5)
+            var hsv = shaded.toHSV()
+            hsv.h += 0.1 * (Float(i) / 2)
+            water.append(PixelColor.fromHSV(hsv))
         }
 
-        var landColors: [PixelColor] = []
+        var land: [PixelColor] = []
+        let landBase = palette[0]
         for i in 0..<4 {
-            let base = palette[(i + 1) % palette.count].shiftedHue(by: 0.1)
-            landColors.append(base.darkened(by: 0.2))
+            let shaded = landBase.darkened(by: Float(i) / 4)
+            var hsv = shaded.toHSV()
+            hsv.h += 0.2 * (Float(i) / 4)
+            land.append(PixelColor.fromHSV(hsv))
         }
 
-        let cloudColors = [
-            PixelColor(r: 0.95, g: 0.95, b: 0.95, a: 1),
-            PixelColor(r: 0.9, g: 0.9, b: 0.9, a: 1),
-            PixelColor(r: 0.8, g: 0.8, b: 0.8, a: 1),
-        ]
+        var clouds: [PixelColor] = []
+        let cloudBase = palette[min(2, palette.count - 1)]
+        for i in 0..<4 {
+            let lightened = cloudBase.lightened(by: (1 - Float(i) / 4) * 0.8)
+            var hsv = lightened.toHSV()
+            hsv.h += 0.2 * (Float(i) / 4)
+            clouds.append(PixelColor.fromHSV(hsv))
+        }
 
-        let allColors = waterColors + landColors + cloudColors
-        setColors(allColors)
-        return allColors
+        let combined = water + land + clouds
+        setColors(combined)
+        return combined
     }
 }
 

@@ -1,52 +1,83 @@
 import Foundation
 import simd
 
-private let lavaWorldColors: [Float] = [
-    0.596078, 0.447059, 0.384314, 1,
-    0.341176, 0.239216, 0.254902, 1,
-    0.223529, 0.156863, 0.188235, 1,
-    0.137255, 0.105882, 0.141176, 1,
+private let lavaLandColors: [Float] = [
+    0.560784, 0.301961, 0.341176, 1,
+    0.321569, 0.2, 0.247059, 1,
+    0.239216, 0.160784, 0.211765, 1,
 ]
 
-private let lavaWorldRiverColors: [Float] = [
+private let lavaCraterColors: [Float] = [
+    0.321569, 0.2, 0.247059, 1,
+    0.239216, 0.160784, 0.211765, 1,
+]
+
+private let lavaRiverColors: [Float] = [
     1, 0.537255, 0.2, 1,
     0.901961, 0.270588, 0.223529, 1,
     0.678431, 0.184314, 0.270588, 1,
 ]
 
 private func makeLavaWorldConfig() -> PlanetConfig {
-    let uniforms: [String: UniformValue] = [
+    let landUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
+        "light_origin": .vec2(Vec2(0.3, 0.3)),
         "time_speed": .float(0.2),
         "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.019),
-        "light_border_2": .float(0.036),
-        "colors": .buffer(lavaWorldColors),
-        "color_num": .float(4),
+        "light_border_1": .float(0.4),
+        "light_border_2": .float(0.6),
+        "colors": .buffer(lavaLandColors),
         "size": .float(10),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "OCTAVES": .float(3),
+        "seed": .float(1.551),
+        "time": .float(0),
+        "should_dither": .float(1),
+    ]
+
+    let craterUniforms: [String: UniformValue] = [
+        "pixels": .float(100),
+        "rotation": .float(0),
+        "light_origin": .vec2(Vec2(0.3, 0.3)),
+        "time_speed": .float(0.2),
+        "light_border": .float(0.4),
+        "colors": .buffer(lavaCraterColors),
+        "size": .float(3.5),
+        "seed": .float(1.561),
         "time": .float(0),
     ]
 
-    let riverUniforms: [String: UniformValue] = [
+    let lavaUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
+        "light_origin": .vec2(Vec2(0.3, 0.3)),
         "time_speed": .float(0.2),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
         "light_border_1": .float(0.019),
         "light_border_2": .float(0.036),
-        "colors": .buffer(lavaWorldRiverColors),
+        "river_cutoff": .float(0.579),
+        "colors": .buffer(lavaRiverColors),
         "size": .float(10),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "OCTAVES": .float(4),
+        "seed": .float(2.527),
         "time": .float(0),
-        "river_cutoff": .float(0.368),
+    ]
+
+    let controls: [UniformControl] = [
+        UniformControl(layer: "Land", uniform: "time_speed", label: "Land Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "dither_size", label: "Land Dither Size", min: 0, max: 6, step: 0.1),
+        UniformControl(layer: "Land", uniform: "light_border_1", label: "Land Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "light_border_2", label: "Land Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Land", uniform: "size", label: "Land Noise Scale", min: 1, max: 15, step: 0.1),
+        UniformControl(layer: "Land", uniform: "OCTAVES", label: "Land Octaves", min: 1, max: 6, step: 1),
+        UniformControl(layer: "Craters", uniform: "time_speed", label: "Crater Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Craters", uniform: "light_border", label: "Crater Light Border", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Craters", uniform: "size", label: "Crater Noise Scale", min: 1, max: 10, step: 0.1),
+        UniformControl(layer: "LavaRivers", uniform: "time_speed", label: "Lava Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "LavaRivers", uniform: "light_border_1", label: "Lava Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "LavaRivers", uniform: "light_border_2", label: "Lava Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "LavaRivers", uniform: "river_cutoff", label: "Lava Cutoff", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "LavaRivers", uniform: "size", label: "Lava Noise Scale", min: 1, max: 15, step: 0.1),
+        UniformControl(layer: "LavaRivers", uniform: "OCTAVES", label: "Lava Octaves", min: 1, max: 6, step: 1),
     ]
 
     return PlanetConfig(
@@ -56,27 +87,25 @@ private func makeLavaWorldConfig() -> PlanetConfig {
         guiZoom: 1,
         layers: [
             LayerDefinition(
-                name: "Planet",
-                shaderPath: "lava-world/rivers.frag",
-                uniforms: uniforms,
-                colors: [ColorBinding(layer: "Planet", uniform: "colors", slots: 4)]
+                name: "Land",
+                shaderPath: "no-atmosphere/ground.frag",
+                uniforms: landUniforms,
+                colors: [ColorBinding(layer: "Land", uniform: "colors", slots: 3)]
             ),
             LayerDefinition(
-                name: "Rivers",
+                name: "Craters",
+                shaderPath: "no-atmosphere/craters.frag",
+                uniforms: craterUniforms,
+                colors: [ColorBinding(layer: "Craters", uniform: "colors", slots: 2)]
+            ),
+            LayerDefinition(
+                name: "LavaRivers",
                 shaderPath: "lava-world/rivers.frag",
-                uniforms: riverUniforms,
-                colors: [ColorBinding(layer: "Rivers", uniform: "colors", slots: 3)]
+                uniforms: lavaUniforms,
+                colors: [ColorBinding(layer: "LavaRivers", uniform: "colors", slots: 3)]
             ),
         ],
-        uniformControls: [
-            UniformControl(layer: "Planet", uniform: "time_speed", label: "Spin Speed", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Planet", uniform: "dither_size", label: "Dither Size", min: 0, max: 6, step: 0.1),
-            UniformControl(layer: "Planet", uniform: "light_border_1", label: "Light Border 1", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Planet", uniform: "light_border_2", label: "Light Border 2", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Planet", uniform: "size", label: "Noise Scale", min: 1, max: 15, step: 0.1),
-            UniformControl(layer: "Planet", uniform: "octaves", label: "Octaves", min: 1, max: 6, step: 1),
-            UniformControl(layer: "Rivers", uniform: "river_cutoff", label: "River Cutoff", min: 0, max: 1, step: 0.01),
-        ]
+        uniformControls: controls
     )
 }
 
@@ -89,73 +118,85 @@ public final class LavaWorldPlanet: PlanetBase, @unchecked Sendable {
 
     public override func setPixels(_ amount: Int) {
         let value = Float(amount)
-        setFloat("Planet", "pixels", value)
-        setFloat("Rivers", "pixels", value)
+        setFloat("Land", "pixels", value)
+        setFloat("Craters", "pixels", value)
+        setFloat("LavaRivers", "pixels", value)
     }
 
     public override func setLight(_ position: SIMD2<Float>) {
-        setVec2("Planet", "light_origin", position)
-        setVec2("Rivers", "light_origin", position)
+        setVec2("Land", "light_origin", position)
+        setVec2("Craters", "light_origin", position)
+        setVec2("LavaRivers", "light_origin", position)
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
-        setFloat("Planet", "seed", converted)
-        setFloat("Rivers", "seed", converted)
+        let converted = Float(seed % 1000) / 100.0 + 1.0
+        setFloat("Land", "seed", converted)
+        setFloat("Craters", "seed", converted)
+        setFloat("LavaRivers", "seed", converted)
     }
 
     public override func setRotation(_ radians: Float) {
-        setFloat("Planet", "rotation", radians)
-        setFloat("Rivers", "rotation", radians)
+        setFloat("Land", "rotation", radians)
+        setFloat("Craters", "rotation", radians)
+        setFloat("LavaRivers", "rotation", radians)
     }
 
     public override func updateTime(_ t: Float) {
-        setFloat("Planet", "time", t * multiplier(for: "Planet") * 0.02)
-        setFloat("Rivers", "time", t * multiplier(for: "Rivers") * 0.02)
+        setFloat("Land", "time", t * multiplier(for: "Land") * 0.02)
+        setFloat("Craters", "time", t * multiplier(for: "Craters") * 0.02)
+        setFloat("LavaRivers", "time", t * multiplier(for: "LavaRivers") * 0.02)
     }
 
     public override func setCustomTime(_ t: Float) {
-        let speed = max(0.0001, getFloat("Planet", "time_speed"))
-        setFloat("Planet", "time", t * Float.pi * 2 * speed)
-        setFloat("Rivers", "time", t * Float.pi * 2 * speed)
+        setFloat("Land", "time", t * multiplier(for: "Land"))
+        setFloat("Craters", "time", t * multiplier(for: "Craters"))
+        setFloat("LavaRivers", "time", t * multiplier(for: "LavaRivers"))
     }
 
     public override func setDither(_ enabled: Bool) {
-        let value = enabled ? 1 : 0
-        setFloat("Planet", "should_dither", Float(value))
-        setFloat("Rivers", "should_dither", Float(value))
+        setFloat("Land", "should_dither", enabled ? 1 : 0)
     }
 
     public override func isDitherEnabled() -> Bool {
-        getFloat("Planet", "should_dither") > 0.5
+        getFloat("Land", "should_dither") > 0.5
     }
 
     public override func randomizeColors(rng: inout RandomStream) -> [PixelColor] {
         var palette = generatePalette(
             rng: &rng,
-            count: 4,
-            hueDiff: randRange(&rng, min: 0.3, max: 0.6),
-            saturation: 0.8
+            count: (rng.next() < 0.5 ? 2 : 3),
+            hueDiff: randRange(&rng, min: 0.6, max: 1.0),
+            saturation: randRange(&rng, min: 0.7, max: 0.8)
         )
-        if palette.count < 4 {
-            palette += Array(repeating: PixelColor(r: 0.3, g: 0.2, b: 0.2, a: 1), count: 4 - palette.count)
+        if palette.isEmpty {
+            palette = [PixelColor(r: 0.9, g: 0.3, b: 0.2, a: 1)]
         }
 
-        var planetColors: [PixelColor] = []
-        for i in 0..<4 {
-            var shade = palette[i % palette.count].darkened(by: Float(i) / 4)
-            planetColors.append(shade)
+        var land: [PixelColor] = []
+        let landBase = palette[0]
+        for i in 0..<3 {
+            var shade = landBase.darkened(by: Float(i) / 3)
+            var hsv = shade.toHSV()
+            hsv.h += 0.2 * (Float(i) / 4)
+            shade = PixelColor.fromHSV(hsv)
+            land.append(shade)
         }
 
-        let riverColors = [
-            PixelColor(r: 1, g: 0.5, b: 0.2, a: 1),
-            PixelColor(r: 0.9, g: 0.3, b: 0.2, a: 1),
-            PixelColor(r: 0.7, g: 0.2, b: 0.3, a: 1),
-        ]
+        var lava: [PixelColor] = []
+        let lavaBase = palette[min(1, palette.count - 1)]
+        for i in 0..<3 {
+            var shade = lavaBase.darkened(by: Float(i) / 3)
+            var hsv = shade.toHSV()
+            hsv.h += 0.2 * (Float(i) / 3)
+            shade = PixelColor.fromHSV(hsv)
+            shade = shade.lightened(by: (1 - Float(i) / 3) * 0.5)
+            lava.append(shade)
+        }
 
-        let allColors = planetColors + riverColors
-        setColors(allColors)
-        return allColors
+        let colors = land + [land[1], land[2]] + lava
+        setColors(colors)
+        return colors
     }
 }
 

@@ -26,6 +26,9 @@ final class PlanetGLRenderer: NSObject {
         setupBuffers()
         rebuildPrograms()
     }
+    
+    // Publicly accessible error for debugging
+    private(set) var compileError: String?
 
     deinit {
         if vertexBuffer != 0 {
@@ -139,26 +142,51 @@ private extension PlanetGLRenderer {
             glDeleteProgram(info.program)
         }
         programs.removeAll()
+        compileError = nil
 
         guard let vertexShader = compileShader(type: GLenum(GL_VERTEX_SHADER), source: Self.vertexShaderSource) else {
+            if compileError == nil { compileError = "Vertex shader failed to compile" }
             return
         }
         defer { glDeleteShader(vertexShader) }
 
         for layer in planet.layers {
             guard let fragmentShader = compileShader(type: GLenum(GL_FRAGMENT_SHADER), source: layer.shaderSource) else {
+                if compileError == nil { compileError = "Fragment shader for \(layer.name) failed" }
                 continue
             }
 
             guard let program = linkProgram(vertexShader: vertexShader, fragmentShader: fragmentShader) else {
                 glDeleteShader(fragmentShader)
+                if compileError == nil { compileError = "Link failed for \(layer.name)" }
                 continue
             }
             glDeleteShader(fragmentShader)
 
             let attribPosition = GLuint(glGetAttribLocation(program, "aPosition"))
             let (locations, types) = queryUniforms(program: program)
-
+            
+            // Check for missing uniforms
+            var missing: [String] = []
+            for (name, value) in layer.uniforms {
+                // Skip if found
+                if locations[name] != nil { continue }
+                
+                // Handle array uniforms (e.g. colors -> colors[0])
+                if case .buffer = value {
+                    if locations[name + "[0]"] != nil { continue }
+                }
+                
+                missing.append(name)
+            }
+            
+            if !missing.isEmpty {
+                // Note: Some uniforms may be optimized out by GL compiler if unused in shader
+                // This is expected and not necessarily an error
+                print("[PlanetGLRenderer] Warning: Unused uniforms in \(layer.name): \(missing)")
+                // Don't set compileError for unused uniforms, they're benign
+            }
+            
             programs[layer.name] = ProgramInfo(
                 program: program,
                 attribPosition: attribPosition,
@@ -185,6 +213,7 @@ private extension PlanetGLRenderer {
                 glGetShaderInfoLog(shader, logLength, &logLength, &log)
                 let message = String(cString: log)
                 print("Shader compile error: \(message)")
+                compileError = "Shader compile error: \(message)"
             }
             glDeleteShader(shader)
             return nil
@@ -208,6 +237,7 @@ private extension PlanetGLRenderer {
                 glGetProgramInfoLog(program, logLength, &logLength, &log)
                 let message = String(cString: log)
                 print("Program link error: \(message)")
+                compileError = "Program link error: \(message)"
             }
             glDeleteProgram(program)
             return nil
@@ -237,6 +267,8 @@ private extension PlanetGLRenderer {
             if location >= 0 {
                 locations[name] = location
                 types[name] = type
+            } else {
+                print("[PlanetGLRenderer] Warning: Uniform '\(name)' not found in program.")
             }
         }
         return (locations, types)

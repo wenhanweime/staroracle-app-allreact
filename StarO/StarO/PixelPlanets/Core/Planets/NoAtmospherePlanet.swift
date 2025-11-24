@@ -1,43 +1,56 @@
 import Foundation
 import simd
 
-private let noAtmosphereColors: [Float] = [
-    0.556863, 0.556863, 0.556863, 1,
-    0.411765, 0.411765, 0.411765, 1,
-    0.25098, 0.25098, 0.25098, 1,
+private let baseGroundColors: [Float] = [
+    0.639216, 0.654902, 0.760784, 1,
+    0.298039, 0.407843, 0.521569, 1,
+    0.227451, 0.247059, 0.368627, 1,
+]
+
+private let baseCraterColors: [Float] = [
+    0.298039, 0.407843, 0.521569, 1,
+    0.227451, 0.247059, 0.368627, 1,
 ]
 
 private func makeNoAtmosphereConfig() -> PlanetConfig {
-    let uniforms: [String: UniformValue] = [
+    let groundUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
-        "time_speed": .float(0.2),
+        "light_origin": .vec2(Vec2(0.25, 0.25)),
+        "time_speed": .float(0.4),
         "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.287),
-        "light_border_2": .float(0.476),
-        "colors": .buffer(noAtmosphereColors),
-        "size": .float(5),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "light_border_1": .float(0.615),
+        "light_border_2": .float(0.729),
+        "colors": .buffer(baseGroundColors),
+        "size": .float(8),
+        "OCTAVES": .float(4),
+        "seed": .float(1.012),
         "time": .float(0),
+        "should_dither": .float(1),
     ]
 
     let craterUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
-        "time_speed": .float(0.2),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.287),
-        "light_border_2": .float(0.476),
-        "colors": .buffer(noAtmosphereColors),
-        "size": .float(3.5),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "light_origin": .vec2(Vec2(0.25, 0.25)),
+        "time_speed": .float(0.001),
+        "light_border": .float(0.465),
+        "colors": .buffer(baseCraterColors),
+        "size": .float(5),
+        "seed": .float(4.517),
         "time": .float(0),
+    ]
+
+    let controls: [UniformControl] = [
+        UniformControl(layer: "Ground", uniform: "time_speed", label: "Ground Time Speed", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Ground", uniform: "dither_size", label: "Ground Dither Size", min: 0, max: 6, step: 0.1),
+        UniformControl(layer: "Ground", uniform: "light_border_1", label: "Ground Light Border 1", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Ground", uniform: "light_border_2", label: "Ground Light Border 2", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Ground", uniform: "size", label: "Ground Noise Scale", min: 1, max: 15, step: 0.1),
+        UniformControl(layer: "Ground", uniform: "OCTAVES", label: "Ground Octaves", min: 1, max: 8, step: 1),
+        UniformControl(layer: "Craters", uniform: "time_speed", label: "Crater Time Speed", min: 0, max: 0.1, step: 0.001),
+        UniformControl(layer: "Craters", uniform: "light_border", label: "Crater Light Border", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "Craters", uniform: "size", label: "Crater Noise Scale", min: 1, max: 10, step: 0.1),
     ]
 
     return PlanetConfig(
@@ -49,24 +62,17 @@ private func makeNoAtmosphereConfig() -> PlanetConfig {
             LayerDefinition(
                 name: "Ground",
                 shaderPath: "no-atmosphere/ground.frag",
-                uniforms: uniforms,
+                uniforms: groundUniforms,
                 colors: [ColorBinding(layer: "Ground", uniform: "colors", slots: 3)]
             ),
             LayerDefinition(
                 name: "Craters",
                 shaderPath: "no-atmosphere/craters.frag",
                 uniforms: craterUniforms,
-                colors: [ColorBinding(layer: "Craters", uniform: "colors", slots: 3)]
+                colors: [ColorBinding(layer: "Craters", uniform: "colors", slots: 2)]
             ),
         ],
-        uniformControls: [
-            UniformControl(layer: "Ground", uniform: "time_speed", label: "Spin Speed", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Ground", uniform: "dither_size", label: "Dither Size", min: 0, max: 6, step: 0.1),
-            UniformControl(layer: "Ground", uniform: "light_border_1", label: "Light Border 1", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Ground", uniform: "light_border_2", label: "Light Border 2", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Ground", uniform: "size", label: "Noise Scale", min: 1, max: 15, step: 0.1),
-            UniformControl(layer: "Ground", uniform: "octaves", label: "Octaves", min: 1, max: 6, step: 1),
-        ]
+        uniformControls: controls
     )
 }
 
@@ -89,7 +95,7 @@ public final class NoAtmospherePlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
+        let converted = Float(seed % 1000) / 100.0 + 1.0
         setFloat("Ground", "seed", converted)
         setFloat("Craters", "seed", converted)
     }
@@ -105,15 +111,12 @@ public final class NoAtmospherePlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setCustomTime(_ t: Float) {
-        let speed = max(0.0001, getFloat("Ground", "time_speed"))
-        setFloat("Ground", "time", t * Float.pi * 2 * speed)
-        setFloat("Craters", "time", t * Float.pi * 2 * speed)
+        setFloat("Ground", "time", t * multiplier(for: "Ground"))
+        setFloat("Craters", "time", t * multiplier(for: "Craters"))
     }
 
     public override func setDither(_ enabled: Bool) {
-        let value = enabled ? 1 : 0
-        setFloat("Ground", "should_dither", Float(value))
-        setFloat("Craters", "should_dither", Float(value))
+        setFloat("Ground", "should_dither", enabled ? 1 : 0)
     }
 
     public override func isDitherEnabled() -> Bool {
@@ -123,24 +126,25 @@ public final class NoAtmospherePlanet: PlanetBase, @unchecked Sendable {
     public override func randomizeColors(rng: inout RandomStream) -> [PixelColor] {
         var palette = generatePalette(
             rng: &rng,
-            count: 3,
+            count: 3 + randInt(&rng, maxExclusive: 2),
             hueDiff: randRange(&rng, min: 0.3, max: 0.6),
-            saturation: 0.5
+            saturation: 0.7
         )
         if palette.count < 3 {
-            palette += Array(repeating: PixelColor(r: 0.5, g: 0.5, b: 0.5, a: 1), count: 3 - palette.count)
+            palette += Array(repeating: PixelColor(r: 0.5, g: 0.5, b: 0.6, a: 1), count: 3 - palette.count)
         }
 
-        var colors: [PixelColor] = []
+        var ground: [PixelColor] = []
         for i in 0..<3 {
-            var shade = palette[i % palette.count].darkened(by: Float(i) / 3)
-            colors.append(shade)
+            let base = palette[i % palette.count]
+            let darkened = base.darkened(by: Float(i) / 3)
+            ground.append(darkened.lightened(by: (1 - Float(i) / 3) * 0.2))
         }
 
-        // Both layers share the same colors
-        let allColors = colors + colors
-        setColors(allColors)
-        return allColors
+        let craters: [PixelColor] = [ground[1], ground[2]]
+        let combined = ground + craters
+        setColors(combined)
+        return combined
     }
 }
 

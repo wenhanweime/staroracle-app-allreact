@@ -115,10 +115,30 @@ public enum ShaderLibrary {
         } else {
             directory = subdirectory
         }
-        // MODIFIED: Use Bundle.main instead of Bundle.module
-        if let url = Bundle.main.url(forResource: String(base), withExtension: ext, subdirectory: directory) {
+        // Try multiple possible locations for shaders
+        // directory contains the full relative path including subfolders (e.g. "Shaders/gas-planet-layers")
+        let searchPaths = [
+            directory,
+            "PixelPlanets/Resources/\(directory ?? "")",
+            "StarO/PixelPlanets/Resources/\(directory ?? "")"
+        ]
+        
+        for searchPath in searchPaths {
+            // print("Searching for shader \(base).\(ext) in \(searchPath)")
+            if let url = Bundle.main.url(forResource: String(base), withExtension: ext, subdirectory: searchPath) {
+                // print("Found shader at \(url)")
+                return url
+            }
+        }
+        
+        print("[ShaderLibrary] Failed to locate shader: \(path). Searched in: \(searchPaths)")
+        
+        // Fallback: try searching recursively in the bundle (slower but safer)
+        // Note: This is a last resort.
+        if let url = Bundle.main.url(forResource: String(base), withExtension: ext) {
             return url
         }
+        
         throw ShaderLibraryError.resourceNotFound(path)
     }
 }

@@ -1,88 +1,107 @@
 import Foundation
 import simd
+private let blobColors: [Float] = [1, 1, 0.894118, 1]
 
-private let starColors: [Float] = [
-    1, 1, 0.921569, 1,
-    1, 0.960784, 0.25098, 1,
-    1, 0.721569, 0.290196, 1,
-    0.929412, 0.482353, 0.223529, 1,
-    0.741176, 0.25098, 0.207843, 1,
-    0.321569, 0.2, 0.247059, 1,
+private let starGradientColors: [Float] = [
+    0.960784, 1, 0.909804, 1,
+    0.466667, 0.839216, 0.756863, 1,
+    0.109804, 0.572549, 0.654902, 1,
+    0.0117647, 0.243137, 0.368627, 1,
+]
+
+private let flareGradientColors: [Float] = [
+    0.466667, 0.839216, 0.756863, 1,
+    1, 1, 0.894118, 1,
 ]
 
 private func makeStarConfig() -> PlanetConfig {
-    let starUniforms: [String: UniformValue] = [
-        "pixels": .float(100),
-        "rotation": .float(0),
-        "time_speed": .float(0.1),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
-        "colors": .buffer(starColors),
-        "size": .float(5),
-        "octaves": .float(3),
-        "seed": .float(1.234),
-        "time": .float(0),
-    ]
+    let blobs = LayerDefinition(
+        name: "Blobs",
+        shaderPath: "star/blobs.frag",
+        uniforms: [
+            "pixels": .float(200),
+            "colors": .buffer(blobColors),
+            "time_speed": .float(0.05),
+            "time": .float(0),
+            "rotation": .float(0),
+            "seed": .float(3.078),
+            "circle_amount": .float(2),
+            "circle_size": .float(1),
+            "size": .float(4.93),
+            "OCTAVES": .float(4),
+        ],
+        colors: [ColorBinding(layer: "Blobs", uniform: "colors", slots: 1)]
+    )
 
-    let blobsUniforms: [String: UniformValue] = [
-        "pixels": .float(100),
-        "rotation": .float(0),
-        "time_speed": .float(0.2),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
-        "colors": .buffer(starColors),
-        "size": .float(5),
-        "octaves": .float(3),
-        "seed": .float(1.234),
-        "time": .float(0),
-    ]
+    let starCore = LayerDefinition(
+        name: "Star",
+        shaderPath: "star/star.frag",
+        uniforms: [
+            "pixels": .float(100),
+            "time_speed": .float(0.05),
+            "time": .float(0),
+            "rotation": .float(0),
+            "colors": .buffer(starGradientColors),
+            "n_colors": .float(4),
+            "should_dither": .float(1),
+            "seed": .float(4.837),
+            "size": .float(4.463),
+            "OCTAVES": .float(4),
+            "TILES": .float(1),
+        ],
+        colors: [ColorBinding(layer: "Star", uniform: "colors", slots: 4)]
+    )
 
-    let flaresUniforms: [String: UniformValue] = [
-        "pixels": .float(100),
-        "rotation": .float(0),
-        "time_speed": .float(0.1),
-        "dither_size": .float(2),
-        "should_dither": .float(1),
-        "colors": .buffer(starColors),
-        "size": .float(5),
-        "octaves": .float(3),
-        "seed": .float(1.234),
-        "time": .float(0),
-        "storm_width": .float(0.3),
-        "storm_dither_width": .float(0.07),
+    let flares = LayerDefinition(
+        name: "StarFlares",
+        shaderPath: "star/flares.frag",
+        uniforms: [
+            "pixels": .float(200),
+            "colors": .buffer(flareGradientColors),
+            "time_speed": .float(0.05),
+            "time": .float(0),
+            "rotation": .float(0),
+            "should_dither": .float(1),
+            "storm_width": .float(0.3),
+            "storm_dither_width": .float(0),
+            "scale": .float(1),
+            "seed": .float(3.078),
+            "circle_amount": .float(2),
+            "circle_scale": .float(1),
+            "size": .float(1.6),
+            "OCTAVES": .float(4),
+        ],
+        colors: [ColorBinding(layer: "StarFlares", uniform: "colors", slots: 2)]
+    )
+
+    let controls: [UniformControl] = [
+        UniformControl(layer: "Blobs", uniform: "time_speed", label: "Blobs Time Speed", min: 0, max: 0.3, step: 0.005),
+        UniformControl(layer: "Blobs", uniform: "circle_amount", label: "Blobs Circle Amount", min: 1, max: 6, step: 1),
+        UniformControl(layer: "Blobs", uniform: "circle_size", label: "Blobs Circle Size", min: 0.5, max: 2, step: 0.05),
+        UniformControl(layer: "Blobs", uniform: "size", label: "Blobs Noise Scale", min: 1, max: 10, step: 0.1),
+        UniformControl(layer: "Blobs", uniform: "OCTAVES", label: "Blobs Octaves", min: 1, max: 6, step: 1),
+        UniformControl(layer: "Star", uniform: "time_speed", label: "Star Time Speed", min: 0, max: 0.2, step: 0.005),
+        UniformControl(layer: "Star", uniform: "n_colors", label: "Star Colors", min: 2, max: 6, step: 1),
+        UniformControl(layer: "Star", uniform: "size", label: "Star Noise Scale", min: 1, max: 10, step: 0.1),
+        UniformControl(layer: "Star", uniform: "OCTAVES", label: "Star Octaves", min: 1, max: 6, step: 1),
+        UniformControl(layer: "Star", uniform: "TILES", label: "Star Tiles", min: 1, max: 4, step: 1),
+        UniformControl(layer: "StarFlares", uniform: "time_speed", label: "Flares Time Speed", min: 0, max: 0.3, step: 0.005),
+        UniformControl(layer: "StarFlares", uniform: "storm_width", label: "Storm Width", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "StarFlares", uniform: "storm_dither_width", label: "Storm Dither Width", min: 0, max: 1, step: 0.01),
+        UniformControl(layer: "StarFlares", uniform: "scale", label: "Flares Scale", min: 0.5, max: 3, step: 0.05),
+        UniformControl(layer: "StarFlares", uniform: "circle_amount", label: "Flares Circle Amount", min: 1, max: 6, step: 1),
+        UniformControl(layer: "StarFlares", uniform: "circle_scale", label: "Flares Circle Scale", min: 0.5, max: 3, step: 0.05),
+        UniformControl(layer: "StarFlares", uniform: "size", label: "Flares Noise Scale", min: 0.5, max: 6, step: 0.1),
+        UniformControl(layer: "StarFlares", uniform: "OCTAVES", label: "Flares Octaves", min: 1, max: 6, step: 1),
     ]
 
     return PlanetConfig(
         id: "star",
         label: "Star",
-        relativeScale: 1,
-        guiZoom: 1,
-        layers: [
-            LayerDefinition(
-                name: "Star",
-                shaderPath: "star/star.frag",
-                uniforms: starUniforms,
-                colors: [ColorBinding(layer: "Star", uniform: "colors", slots: 6)]
-            ),
-            LayerDefinition(
-                name: "Blobs",
-                shaderPath: "star/blobs.frag",
-                uniforms: blobsUniforms,
-                colors: [ColorBinding(layer: "Blobs", uniform: "colors", slots: 6)]
-            ),
-            LayerDefinition(
-                name: "StarFlares",
-                shaderPath: "star/flares.frag",
-                uniforms: flaresUniforms,
-                colors: [ColorBinding(layer: "StarFlares", uniform: "colors", slots: 6)]
-            ),
-        ],
-        uniformControls: [
-            UniformControl(layer: "Star", uniform: "time_speed", label: "Spin Speed", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Star", uniform: "dither_size", label: "Dither Size", min: 0, max: 6, step: 0.1),
-            UniformControl(layer: "Star", uniform: "size", label: "Noise Scale", min: 1, max: 15, step: 0.1),
-            UniformControl(layer: "Star", uniform: "octaves", label: "Octaves", min: 1, max: 6, step: 1),
-        ]
+        relativeScale: 2,
+        guiZoom: 2,
+        layers: [blobs, starCore, flares],
+        uniformControls: controls
     )
 }
 
@@ -94,10 +113,10 @@ public final class StarPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setPixels(_ amount: Int) {
-        let value = Float(amount)
-        setFloat("Star", "pixels", value)
-        setFloat("Blobs", "pixels", value)
-        setFloat("StarFlares", "pixels", value)
+        let scaled = Float(amount) * relativeScale
+        setFloat("Blobs", "pixels", scaled)
+        setFloat("Star", "pixels", Float(amount))
+        setFloat("StarFlares", "pixels", scaled)
     }
 
     public override func setLight(_ position: SIMD2<Float>) {
@@ -105,7 +124,7 @@ public final class StarPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
+        let converted = Float(seed % 1000) / 100.0 + 1.0
         setFloat("Blobs", "seed", converted)
         setFloat("Star", "seed", converted)
         setFloat("StarFlares", "seed", converted)
@@ -164,7 +183,6 @@ public final class StarPlanet: PlanetBase, @unchecked Sendable {
         return final
     }
 }
-
 @MainActor
 func registerStarPlanet(into factories: inout [String: PlanetFactory]) {
     factories["Star"] = { try StarPlanet() }
@@ -204,7 +222,7 @@ private func makeTwinkleStarConfig() -> PlanetConfig {
         colors: [ColorBinding(layer: "TwinkleCore", uniform: "colors", slots: 4)]
     )
 
-    let twinkleLayer = LayerDefinition(
+let twinkleLayer = LayerDefinition(
         name: "TwinkleGlow",
         shaderPath: "star/twinkle.frag",
         uniforms: [
@@ -259,7 +277,7 @@ public final class TwinkleStarPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
+        let converted = Float(seed % 1000) / 100.0 + 1.0
         setFloat("TwinkleCore", "seed", converted)
         setFloat("TwinkleGlow", "seed", converted)
     }

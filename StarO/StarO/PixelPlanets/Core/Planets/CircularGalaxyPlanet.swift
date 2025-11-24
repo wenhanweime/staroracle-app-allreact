@@ -1,28 +1,28 @@
 import Foundation
 import simd
 
-private let circularGalaxyConfig = makeCircularGalaxyConfig()
+private let circularGalaxyColors: [Float] = [
+    0.992157, 0.937255, 0.843137, 1,
+    0.968627, 0.756863, 0.505882, 1,
+    0.741176, 0.603922, 0.870588, 1,
+    0.45098, 0.435294, 0.752941, 1,
+    0.278431, 0.400784, 0.635294, 1,
+    0.184314, 0.239216, 0.417647, 1,
+    0.12549, 0.152941, 0.270588, 1,
+]
 
 private func makeCircularGalaxyConfig() -> PlanetConfig {
     let uniforms: [String: UniformValue] = [
         "pixels": .float(200),
-        "rotation": .float(0.674),
-        "time_speed": .float(1),
+        "rotation": .float(0.512),
+        "time_speed": .float(1.1),
         "dither_size": .float(2),
         "should_dither": .float(1),
-        "colors": .buffer([
-            1, 1, 0.921569, 1,
-            1, 0.913725, 0.552941, 1,
-            0.709804, 0.878431, 0.4, 1,
-            0.396078, 0.647059, 0.4, 1,
-            0.223529, 0.364706, 0.392157, 1,
-            0.196078, 0.223529, 0.301961, 1,
-            0.196078, 0.160784, 0.278431, 1,
-        ]),
+        "colors": .buffer(circularGalaxyColors),
         "n_colors": .float(6),
-        "size": .float(7),
+        "size": .float(8.5),
         "OCTAVES": .float(1),
-        "seed": .float(5.881),
+        "seed": .float(6.781),
         "time": .float(0),
         "tilt": .float(1),
         "n_layers": .float(6),
@@ -59,6 +59,8 @@ private func makeCircularGalaxyConfig() -> PlanetConfig {
     )
 }
 
+private let circularGalaxyConfig = makeCircularGalaxyConfig()
+
 public final class CircularGalaxyPlanet: PlanetBase, @unchecked Sendable {
     public init() throws {
         try super.init(config: circularGalaxyConfig)
@@ -73,7 +75,7 @@ public final class CircularGalaxyPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
+        let converted = Float(seed % 1000) / 100.0 + 1.0
         setFloat("Galaxy", "seed", converted)
     }
 
@@ -194,7 +196,7 @@ public final class TwinkleGalaxyPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
+        let converted = Float(seed % 1000) / 100.0 + 1.0
         setFloat("GalaxyLinear", "seed", converted)
     }
 

@@ -1,28 +1,36 @@
 import Foundation
 import simd
 
-private let dryTerranLandColors: [Float] = [
-    1, 0.913725, 0.737255, 1,
-    0.980392, 0.705882, 0.329412, 1,
-    0.839216, 0.356863, 0.266667, 1,
-    0.501961, 0.231373, 0.219608, 1,
+private let dryLandColors: [Float] = [
+    1, 0.537255, 0.2, 1,
+    0.901961, 0.270588, 0.223529, 1,
+    0.678431, 0.184314, 0.270588, 1,
+    0.321569, 0.2, 0.247059, 1,
+    0.239216, 0.160784, 0.211765, 1,
 ]
 
+private func normalizedSeed(_ seed: Int) -> Float {
+    let remainder = ((seed % 1000) + 1000) % 1000
+    let value = Float(remainder) / 100
+    return max(value, 0.01)
+}
+
 private func makeDryTerranConfig() -> PlanetConfig {
-    let uniforms: [String: UniformValue] = [
+    let landUniforms: [String: UniformValue] = [
         "pixels": .float(100),
         "rotation": .float(0),
-        "light_origin": .vec2(Vec2(0.39, 0.39)),
-        "time_speed": .float(0.2),
+        "light_origin": .vec2(Vec2(0.4, 0.3)),
+        "light_distance1": .float(0.362),
+        "light_distance2": .float(0.525),
+        "time_speed": .float(0.1),
         "dither_size": .float(2),
-        "should_dither": .float(1),
-        "light_border_1": .float(0.4),
-        "light_border_2": .float(0.5),
-        "colors": .buffer(dryTerranLandColors),
+        "colors": .buffer(dryLandColors),
+        "n_colors": .float(5),
         "size": .float(8),
-        "octaves": .float(3),
-        "seed": .float(1.234),
+        "OCTAVES": .float(3),
+        "seed": .float(1.175),
         "time": .float(0),
+        "should_dither": .float(1),
     ]
 
     return PlanetConfig(
@@ -34,17 +42,17 @@ private func makeDryTerranConfig() -> PlanetConfig {
             LayerDefinition(
                 name: "Land",
                 shaderPath: "dry-terran/land.frag",
-                uniforms: uniforms,
-                colors: [ColorBinding(layer: "Land", uniform: "colors", slots: 4)]
+                uniforms: landUniforms,
+                colors: [ColorBinding(layer: "Land", uniform: "colors", slots: 5)]
             ),
         ],
         uniformControls: [
-            UniformControl(layer: "Land", uniform: "time_speed", label: "Spin Speed", min: 0, max: 1, step: 0.01),
+            UniformControl(layer: "Land", uniform: "light_distance1", label: "Light Distance 1", min: 0, max: 1, step: 0.01),
+            UniformControl(layer: "Land", uniform: "light_distance2", label: "Light Distance 2", min: 0, max: 1, step: 0.01),
+            UniformControl(layer: "Land", uniform: "time_speed", label: "Time Speed", min: 0, max: 1, step: 0.01),
             UniformControl(layer: "Land", uniform: "dither_size", label: "Dither Size", min: 0, max: 6, step: 0.1),
-            UniformControl(layer: "Land", uniform: "light_border_1", label: "Light Border 1", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Land", uniform: "light_border_2", label: "Light Border 2", min: 0, max: 1, step: 0.01),
-            UniformControl(layer: "Land", uniform: "size", label: "Noise Scale", min: 1, max: 15, step: 0.1),
-            UniformControl(layer: "Land", uniform: "octaves", label: "Octaves", min: 1, max: 6, step: 1),
+            UniformControl(layer: "Land", uniform: "size", label: "Noise Scale", min: 1, max: 20, step: 0.1),
+            UniformControl(layer: "Land", uniform: "OCTAVES", label: "Octaves", min: 1, max: 12, step: 1),
         ]
     )
 }
@@ -65,8 +73,7 @@ public final class DryTerranPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setSeed(_ seed: Int, rng: inout RandomStream) {
-        let converted = Float(seed % 1000) / 100
-        setFloat("Land", "seed", converted)
+        setFloat("Land", "seed", normalizedSeed(seed))
     }
 
     public override func setRotation(_ radians: Float) {
@@ -78,8 +85,7 @@ public final class DryTerranPlanet: PlanetBase, @unchecked Sendable {
     }
 
     public override func setCustomTime(_ t: Float) {
-        let speed = max(0.0001, getFloat("Land", "time_speed"))
-        setFloat("Land", "time", t * Float.pi * 2 * speed)
+        setFloat("Land", "time", t * multiplier(for: "Land"))
     }
 
     public override func setDither(_ enabled: Bool) {
@@ -93,19 +99,21 @@ public final class DryTerranPlanet: PlanetBase, @unchecked Sendable {
     public override func randomizeColors(rng: inout RandomStream) -> [PixelColor] {
         var palette = generatePalette(
             rng: &rng,
-            count: 4,
-            hueDiff: randRange(&rng, min: 0.3, max: 0.6),
-            saturation: 0.8
+            count: 5 + randInt(&rng, maxExclusive: 3),
+            hueDiff: randRange(&rng, min: 0.3, max: 0.65),
+            saturation: 1.0
         )
-        if palette.count < 4 {
-            palette += Array(repeating: PixelColor(r: 0.8, g: 0.5, b: 0.3, a: 1), count: 4 - palette.count)
+        if palette.count < 5 {
+            palette += Array(repeating: PixelColor(r: 0.8, g: 0.6, b: 0.3, a: 1), count: 5 - palette.count)
         }
 
+        let count = 5
         var colors: [PixelColor] = []
-        for i in 0..<4 {
-            var shade = palette[i % palette.count].darkened(by: Float(i) / 4)
-            shade = shade.lightened(by: (1 - Float(i) / 4) * 0.2)
-            colors.append(shade)
+        for i in 0..<count {
+            let base = palette[i % palette.count]
+            let shaded = base.darkened(by: Float(i) / Float(count))
+            let lightened = shaded.lightened(by: (1 - Float(i) / Float(count)) * 0.2)
+            colors.append(lightened)
         }
 
         setColors(colors)
