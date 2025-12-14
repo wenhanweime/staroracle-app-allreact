@@ -36,6 +36,10 @@ final class GalaxyViewModel: ObservableObject {
     @Published private(set) var pulses: [GalaxyPulse] = []
     @Published private(set) var highlights: [String: GalaxyHighlight] = [:]
 
+    // Canonical reference: iPhone 15 Pro Max portrait points + @3x.
+    // We generate the galaxy only against this reference to make the star list stable (fixed order/id).
+    var galaxySeed: UInt64 = 0xA17C9E3
+
     let params: GalaxyParams
     let palette: GalaxyPalette
     let litPalette: GalaxyPalette
@@ -54,6 +58,11 @@ final class GalaxyViewModel: ObservableObject {
     private var screenPositionLookup: [String: CGPoint] = [:]
     private let highlightTintHex: String
     var timeOrigin: CFTimeInterval = 0 // 与渲染对齐的时间原点
+
+    private let canonicalSize = CGSize(width: 430.0, height: 932.0)
+    private let canonicalDpr = 3.0
+    private var cachedCanonicalSeed: UInt64?
+    private var cachedCanonicalField: GalaxyFieldData?
 
     var onRegionSelected: ((GalaxyRegion) -> Void)?
     var onTap: ((CGPoint, CGSize, GalaxyRegion, TimeInterval) -> Void)?
@@ -110,27 +119,65 @@ final class GalaxyViewModel: ObservableObject {
     }
 
     func regenerate(for size: CGSize) {
-        #if os(iOS)
-        let dpr = Double(UIScreen.main.scale)
-        let reduceMotion = UIAccessibility.isReduceMotionEnabled
-        #else
-        let dpr = 2.0
+        // Cross-device consistency: always generate against canonical reference.
+        // Other devices only scale/fit the canonical field (do not regenerate).
         let reduceMotion = false
-        #endif
 
-        let field = GalaxyGenerator.generateField(
-            size: size,
-            params: params,
-            palette: palette,
-            litPalette: litPalette,
-            structureColoring: true,
-            scale: params.galaxyScale,
-            deviceScale: dpr,
-            reduceMotion: reduceMotion
+        let seed = galaxySeed
+        let canonicalField: GalaxyFieldData = {
+            if let cached = cachedCanonicalField, cachedCanonicalSeed == seed {
+                return cached
+            }
+            let generated = GalaxyGenerator.generateField(
+                size: canonicalSize,
+                seed: seed,
+                params: params,
+                palette: palette,
+                litPalette: litPalette,
+                structureColoring: true,
+                scale: params.galaxyScale,
+                deviceScale: canonicalDpr,
+                reduceMotion: reduceMotion
+            )
+            cachedCanonicalSeed = seed
+            cachedCanonicalField = generated
+            return generated
+        }()
+
+        // Scale canonical field into the current canvas while preserving aspect coverage.
+        let sx = size.width / canonicalSize.width
+        let sy = size.height / canonicalSize.height
+        let fit = max(0.01, max(sx, sy))
+        let scaledBandSize = CGSize(
+            width: canonicalField.bandSize.width * fit,
+            height: canonicalField.bandSize.height * fit
         )
-        rings = field.rings
-        backgroundStars = field.background
-        bandSize = field.bandSize
+
+        rings = canonicalField.rings.map { ring in
+            ring.map { star in
+                GalaxyStar(
+                    id: star.id,
+                    band: star.band,
+                    position: CGPoint(x: star.position.x * fit, y: star.position.y * fit),
+                    size: star.size * fit,
+                    baseColor: star.baseColor,
+                    litColor: star.litColor,
+                    baseHex: star.baseHex,
+                    displayHex: star.displayHex,
+                    litHex: star.litHex,
+                    bandSize: scaledBandSize
+                )
+            }
+        }
+        backgroundStars = canonicalField.background.map { bg in
+            GalaxyBackgroundStar(
+                id: bg.id,
+                position: CGPoint(x: bg.position.x * fit, y: bg.position.y * fit),
+                size: bg.size * fit
+            )
+        }
+        bandSize = scaledBandSize
+
         highlights.removeAll()
         pulses.removeAll()
         elapsedTime = 0

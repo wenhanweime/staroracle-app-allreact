@@ -51,6 +51,7 @@ private struct ArmDensityProfile {
 enum GalaxyGenerator {
     static func generateField(
         size: CGSize,
+        seed: UInt64,
         params: GalaxyParams,
         palette: GalaxyPalette,
         litPalette: GalaxyPalette,
@@ -84,7 +85,7 @@ enum GalaxyGenerator {
         let rings = max(3, min(16, 10))
         let step = 1.0
 
-        let rng = seeded(0xA17C9E3)
+        let rng = seeded(seed)
         var stars: [GalaxyStar] = []
         stars.reserveCapacity(1800)
 
@@ -229,7 +230,7 @@ enum GalaxyGenerator {
             }
         }
 
-        let backgroundSeed: UInt64 = 0x0BADC0DE
+        let backgroundSeed: UInt64 = seed ^ 0x0BADC0DE
         let backgroundRng = seeded(backgroundSeed)
         let reducedMotionLocal = reduceMotion
         let backgroundCount = Int((width * height) * params.backgroundDensity * (reducedMotionLocal ? 0.6 : 1.0))

@@ -130,9 +130,6 @@ struct GalaxyMetalView: UIViewRepresentable {
         context.coordinator.canvasSize = canvasSize
         context.coordinator.ensureDisplayLink()
         context.coordinator.forceUpdate()
-        #if DEBUG
-        print("[Metal] makeUIView canvasSize:\(canvasSize) bounds:\(mtkView.bounds.size)")
-        #endif
         return mtkView
     }
 
@@ -149,9 +146,6 @@ struct GalaxyMetalView: UIViewRepresentable {
         context.coordinator.deviceScale = scale
         updateDrawableSize(for: uiView, canvasSize: canvasSize, scale: scale)
         context.coordinator.renderer?.updateViewport(pointSize: canvasSize, scale: scale)
-        #if DEBUG
-        print("[Metal] updateUIView canvasSize:\(canvasSize) bounds:\(uiView.bounds.size) drawable:\(uiView.drawableSize)")
-        #endif
         context.coordinator.forceUpdate()
     }
     
