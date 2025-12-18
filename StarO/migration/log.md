@@ -55,3 +55,6 @@
 - 性能（Galaxy 点击）：将 Galaxy 点击防抖等待从 600ms 调整为 120ms，并避免 `GalaxyViewModel.handleTap` 在外部已提供 onTap 回调时重复触发默认高亮计算（减少一次全量候选扫描），降低点击卡顿与延迟感。
 - 性能（Galaxy 灵感卡）：有 Supabase 配置时不再等待云端 `star-pluck` 返回才弹出灵感卡；改为先弹出本地灵感卡，再异步回填云端内容（保持卡片 id 不变，避免关闭/提交时错位），从而不让网络阻塞“弹出星卡/翻牌”交互（`GalaxyBackgroundView` / `StarStore.replaceCurrentInspirationCard`）。
 - 修复编译（StarOracleDebug 可见性）：部分环境下 SwiftPM/Xcode 未及时识别新增源文件导致 `StarOracleFeatures` 内引用 `StarOracleDebug` 编译失败；已将 `StarOracleDebug` 定义移动到 `StarOracleCore` 既有源文件 `Models/Inspiration.swift` 并删除独立文件，避免增量构建遗漏。
+- Auth 启动体验：新增 `AuthService.hasRestoredSession`，在会话异步恢复完成前不展示登录页，避免已登录用户启动时闪现 `LoginView`（`RootView.shouldShowLogin`）。
+- 星卡入口：点击对话内“查看星卡”提示仅弹出星卡详情 Sheet，不再自动切换右侧 `StarCollection` 面板（移除 `RootView` 内 `snapTo(.collection)`）。
+- 对话底部间距：展开态 `ChatOverlay` 的 `contentInset.bottom` 改为使用输入框实际高度（`InputDrawerState.latestHeight`）计算遮挡重叠；并将无重叠时默认 bottom inset 从固定 `120px` 改为 `safeAreaBottom + 12px`，修复“提示与输入框间距过大”的视觉问题。

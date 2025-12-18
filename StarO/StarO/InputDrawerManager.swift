@@ -711,6 +711,7 @@ class InputViewController: UIViewController {
         
         // 记录最新的实际位置，供 ChatOverlay 初次出现时立即读取
         InputDrawerState.shared.latestActualBottomSpace = actualBottomSpaceFromScreen
+        InputDrawerState.shared.latestHeight = containerFrame.height
 
         // 去通知化：不再通过全局通知广播，改由协议回调（InputDrawerPositionObservable）
         NSLog("🎯 InputDrawer: 已更新实际位置 actualBottomSpace=\(actualBottomSpaceFromScreen)")
@@ -738,6 +739,9 @@ final class InputDrawerState: InputDrawerPositionObservable {
     var latestBottomSpace: CGFloat = 70 {
         didSet { onBottomSpaceChanged?(latestBottomSpace) }
     }
+
+    // 输入框容器的实际高度（px）
+    var latestHeight: CGFloat = 56
 }
 
 // MARK: - PassthroughView - 处理触摸事件透传的自定义View

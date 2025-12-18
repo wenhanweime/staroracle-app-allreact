@@ -835,9 +835,10 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         
         let screenHeight = UIScreen.main.bounds.height
         let safeAreaBottom = view.safeAreaInsets.bottom
+        let inputDrawerHeight = InputDrawerState.shared.latestHeight
         
-        // 计算输入框顶部的 Y 坐标
-        let inputDrawerTopY = screenHeight - inputDrawerBottomSpace
+        // 计算输入框顶部的 Y 坐标（使用输入框实际高度，避免底部留白过大/被遮挡）
+        let inputDrawerTopY = screenHeight - inputDrawerBottomSpace - inputDrawerHeight
         
         // 计算浮窗容器底部的 Y 坐标
         let containerBottomY = containerView.frame.maxY
@@ -845,7 +846,7 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         // 如果输入框在浮窗底部之上（重叠），需要调整内边距
         if inputDrawerTopY < containerBottomY {
             // 计算重叠高度，并额外加上间隙确保视觉清晰
-            let overlap = containerBottomY - inputDrawerTopY + 16  // 加上 16px 间隙
+            let overlap = containerBottomY - inputDrawerTopY + 12  // 加上 12px 间隙
             
             var currentInsets = messagesList.contentInset
             let oldBottom = currentInsets.bottom
@@ -867,9 +868,9 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
                 }
             }
         } else {
-            // 输入框在浮窗底部之下或齐平，恢复默认内边距（120px 为输入框预留空间）
+            // 输入框在浮窗底部之下或齐平：只保留安全区+少量呼吸空间，避免“底部留白过大”
             var currentInsets = messagesList.contentInset
-            let defaultBottomInset: CGFloat = 120
+            let defaultBottomInset: CGFloat = max(16, safeAreaBottom + 12)
             
             if abs(currentInsets.bottom - defaultBottomInset) > 1 {
                 let oldBottom = currentInsets.bottom

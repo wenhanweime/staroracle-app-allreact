@@ -28,7 +28,9 @@ struct RootView: View {
   }
 
   private var shouldShowLogin: Bool {
-    SupabaseRuntime.loadProjectConfig() != nil && authService.isAuthenticated != true
+    SupabaseRuntime.loadProjectConfig() != nil
+      && authService.hasRestoredSession
+      && authService.isAuthenticated != true
   }
 
   private var mainContent: some View {
@@ -133,7 +135,6 @@ struct RootView: View {
            conversationStore.session(id: conversationStore.currentSessionId)?.hasSupabaseConversationStarted == true {
           conversationStore.beginReviewSession(forChatId: conversationStore.currentSessionId)
         }
-        snapTo(.collection)
         if let star = findStar(by: starId) {
           selectedStar = star
         }

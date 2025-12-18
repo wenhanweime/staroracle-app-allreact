@@ -30,6 +30,7 @@ final class AuthService: ObservableObject {
   }
 
   @Published private(set) var isAuthenticated: Bool = false
+  @Published private(set) var hasRestoredSession: Bool = false
   @Published private(set) var userEmail: String?
   @Published private(set) var isLoading: Bool = false
   @Published var errorMessage: String?
@@ -43,6 +44,7 @@ final class AuthService: ObservableObject {
     guard !didRestore else { return }
     didRestore = true
     await restoreSession()
+    hasRestoredSession = true
   }
 
   func restoreSession() async {
