@@ -61,6 +61,9 @@ enum AuthSessionStore {
       addQuery[kSecValueData as String] = data
       addQuery[kSecAttrAccessible as String] = kSecAttrAccessibleAfterFirstUnlock
       let status = SecItemAdd(addQuery as CFDictionary, nil)
+      if status != errSecSuccess {
+        NSLog("❌ AuthSessionStore.save | status=%d service=%@", status, service)
+      }
       return status == errSecSuccess
     } catch {
       return false
@@ -76,4 +79,3 @@ enum AuthSessionStore {
     SecItemDelete(query as CFDictionary)
   }
 }
-

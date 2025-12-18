@@ -57,9 +57,7 @@ enum ChatSendService {
     AsyncThrowingStream { continuation in
       let task = Task {
         do {
-          guard let config = SupabaseRuntime.loadConfig() else {
-            throw ChatSendError.missingConfig
-          }
+          let config = try await SupabaseRuntime.loadConfigRefreshingIfNeeded()
 
           let url = config.url
             .appendingPathComponent("functions")
@@ -251,7 +249,7 @@ enum ChatCreateService {
   static func ensureChatExists(chatId: String, title: String?) async throws {
     let trimmedId = chatId.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedId.isEmpty else { throw ChatCreateError.invalidResponse }
-    guard let config = SupabaseRuntime.loadConfig() else { throw ChatCreateError.missingConfig }
+    let config = try await SupabaseRuntime.loadConfigRefreshingIfNeeded()
 
     let userId =
       AuthSessionStore.load()?.userId ??

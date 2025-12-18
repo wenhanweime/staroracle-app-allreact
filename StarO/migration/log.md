@@ -40,3 +40,4 @@
 - 对话联通修复：在调用 `chat-send` 前先通过 PostgREST upsert 创建 `public.chats` 记录（使用本地 sessionId 作为 chat_id），避免 `CH08 chat not found` 导致“未能获取星语回应”。
 - 对话卡住修复：`chat-send` SSE 收到 `event: done` 后立即主动结束流并取消底层请求，避免服务端 keep-alive/连接未及时关闭导致客户端一直 loading 转圈。
 - 对话 SSE 解析修复：弃用 `URLSession.AsyncBytes.lines`（在部分系统上会出现“lines 为空但实际有 body 数据”），改为按字节手动切行解析 SSE，恢复 `delta/done` 正常接收。
+- Auth 稳定性：对 Supabase access token 过期做自动刷新（`SupabaseRuntime.loadConfigRefreshingIfNeeded()`），并在 chat-send / chat-create 前统一刷新再发请求，修复“已登录但请求 401/表无新增记录”的问题；同时登录时若 Keychain 写入失败则不再误判为已登录。

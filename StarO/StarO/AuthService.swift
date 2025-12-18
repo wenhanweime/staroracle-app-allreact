@@ -177,7 +177,13 @@ final class AuthService: ObservableObject {
   }
 
   private func applySession(_ session: AuthSession) {
-    _ = AuthSessionStore.save(session)
+    let saved = AuthSessionStore.save(session)
+    guard saved else {
+      isAuthenticated = false
+      userEmail = nil
+      errorMessage = "登录态写入系统 Keychain 失败，请重启 App 或重装后重试。"
+      return
+    }
     isAuthenticated = true
     userEmail = session.email
   }
