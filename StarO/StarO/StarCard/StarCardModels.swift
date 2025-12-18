@@ -39,6 +39,10 @@ enum StarCardStyle: String, CaseIterable {
     var isPixelPlanet: Bool {
         self.rawValue.starts(with: "pixel_")
     }
+
+    static let starStyles: [StarCardStyle] = allCases.filter { !$0.isPlanet && !$0.isPixelPlanet }
+    static let planetStyles: [StarCardStyle] = allCases.filter(\.isPlanet)
+    static let pixelStyles: [StarCardStyle] = allCases.filter(\.isPixelPlanet)
 }
 
 
@@ -98,19 +102,29 @@ struct StarCardConfig {
         let seed = UInt64(galaxyDeterministicSeed(from: seedString))
         var rng = SeededRandom(seed: seed)
 
-        func pickIndex(_ count: Int) -> Int {
+        func pickIndex(_ count: Int, unit: Double) -> Int {
             guard count > 0 else { return 0 }
-            let value = min(0.999999999999, max(0.0, rng.next()))
+            let value = min(0.999999999999, max(0.0, unit))
             return Int(floor(value * Double(count)))
         }
         
         // Select Style
-        // 回归：恢复原版多样性（含 planet_ 经典行星），但不启用 pixel_ 实验行星。
-        let styles: [StarCardStyle] = [
-            .standard, .cross, .burst, .sparkle, .ringed,
-            .planetSmooth, .planetCraters, .planetSeas, .planetDust, .planetRings
-        ]
-        let style = styles[pickIndex(styles.count)]
+        // 视觉类型并列：star / planet_ / pixel_ 三类均启用；三类各占 1/3，类内均匀抽样。
+        // 注意：保持只消耗 1 次 rng.next()，避免影响后续 hasRing/dustCount 的确定性结果。
+        let value = min(0.999999999999, max(0.0, rng.next()))
+        let bucket = value * 3.0
+        let group = Int(floor(bucket))
+        let within = bucket - Double(group)
+
+        let style: StarCardStyle
+        switch group {
+        case 0:
+            style = StarCardStyle.starStyles[pickIndex(StarCardStyle.starStyles.count, unit: within)]
+        case 1:
+            style = StarCardStyle.planetStyles[pickIndex(StarCardStyle.planetStyles.count, unit: within)]
+        default:
+            style = StarCardStyle.pixelStyles[pickIndex(StarCardStyle.pixelStyles.count, unit: within)]
+        }
         
         // Select Theme
         // 回归：固定使用紫色主题（Nebula Purple），避免因云端 UUID 变化导致主题漂移。
