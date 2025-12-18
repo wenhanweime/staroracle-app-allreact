@@ -1982,6 +1982,12 @@ class MessageTableViewCell: UITableViewCell {
     private let timeLabel = UILabel()
     private let activity = StarRayActivityView()
     private let retryButton = UIButton(type: .system)
+
+    private static let markdownCache: NSCache<NSString, NSAttributedString> = {
+        let cache = NSCache<NSString, NSAttributedString>()
+        cache.countLimit = 200
+        return cache
+    }()
     
     private var leadingConstraint: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
@@ -1998,6 +2004,52 @@ class MessageTableViewCell: UITableViewCell {
     private var timeLabelHeightConstraint: NSLayoutConstraint?
 
     var onRetryTapped: (() -> Void)?
+
+    private func renderMarkdown(_ text: String, baseFont: UIFont) -> NSAttributedString? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        guard #available(iOS 15.0, *) else { return nil }
+
+        let cacheKey = "\(Int(baseFont.pointSize))|\(text)" as NSString
+        if let cached = Self.markdownCache.object(forKey: cacheKey) { return cached }
+
+        do {
+            let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+            let attributed = try NSAttributedString(markdown: text, options: options)
+            let mutable = NSMutableAttributedString(attributedString: attributed)
+            let fullRange = NSRange(location: 0, length: mutable.length)
+            let inlineKey = NSAttributedString.Key("NSInlinePresentationIntent")
+
+            mutable.enumerateAttribute(inlineKey, in: fullRange, options: []) { value, range, _ in
+                guard let number = value as? NSNumber else { return }
+                let intent = InlinePresentationIntent(rawValue: number.uintValue)
+
+                if intent.contains(.code) {
+                    let font = UIFont.monospacedSystemFont(ofSize: baseFont.pointSize, weight: .regular)
+                    mutable.addAttribute(.font, value: font, range: range)
+                    mutable.addAttribute(.backgroundColor, value: UIColor.systemGray5.withAlphaComponent(0.35), range: range)
+                } else {
+                    var traits = UIFontDescriptor.SymbolicTraits()
+                    if intent.contains(.stronglyEmphasized) { traits.insert(.traitBold) }
+                    if intent.contains(.emphasized) { traits.insert(.traitItalic) }
+                    if !traits.isEmpty,
+                       let descriptor = baseFont.fontDescriptor.withSymbolicTraits(traits) {
+                        let font = UIFont(descriptor: descriptor, size: baseFont.pointSize)
+                        mutable.addAttribute(.font, value: font, range: range)
+                    }
+                }
+
+                if intent.contains(.strikethrough) {
+                    mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+                }
+            }
+
+            Self.markdownCache.setObject(mutable, forKey: cacheKey)
+            return mutable
+        } catch {
+            return nil
+        }
+    }
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -2188,7 +2240,11 @@ class MessageTableViewCell: UITableViewCell {
         messageContainerView.layer.cornerRadius = 16
         messageLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
         messageLabel.textAlignment = .natural
-        messageLabel.text = message.text
+        if !isLoadingAI, let attributed = renderMarkdown(message.text, baseFont: messageLabel.font) {
+            messageLabel.attributedText = attributed
+        } else {
+            messageLabel.text = message.text
+        }
         if isLoadingAI {
             // 仅显示Star加载，不显示橄榄球样式的气泡/时间
             activity.isHidden = false

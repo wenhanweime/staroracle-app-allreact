@@ -6,21 +6,29 @@ struct StarCardView: View {
     let star: Star
     let isFlipped: Bool
     let onFlip: () -> Void
+    let isTapToFlipEnabled: Bool
     var isLoading: Bool = false
     
     // Resolved config
     private let config: StarCardConfig
     
-    init(star: Star, isFlipped: Bool, onFlip: @escaping () -> Void, isLoading: Bool = false) {
+    init(
+        star: Star,
+        isFlipped: Bool,
+        onFlip: @escaping () -> Void,
+        isTapToFlipEnabled: Bool = true,
+        isLoading: Bool = false
+    ) {
         self.star = star
         self.isFlipped = isFlipped
         self.onFlip = onFlip
+        self.isTapToFlipEnabled = isTapToFlipEnabled
         self.isLoading = isLoading
         self.config = StarCardConfig.resolve(for: star)
     }
     
     var body: some View {
-        ZStack {
+        let content = ZStack {
             // Front Face
             StarCardFrontView(star: star, config: config, isLoading: isLoading)
                 .opacity(isFlipped ? 0 : 1)
@@ -31,13 +39,17 @@ struct StarCardView: View {
                 .opacity(isFlipped ? 1 : 0)
                 .rotation3DEffect(.degrees(isFlipped ? 0 : -180), axis: (x: 0, y: 1, z: 0))
         }
-        // .frame(width: 300, height: 420) // Removed hardcoded frame
-        .onTapGesture {
-            if !isLoading {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                    onFlip()
+        if isTapToFlipEnabled {
+            content
+                .onTapGesture {
+                    if !isLoading {
+                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                            onFlip()
+                        }
+                    }
                 }
-            }
+        } else {
+            content
         }
     }
 }

@@ -17,10 +17,10 @@ struct StarCollectionOverlay: View {
   @Binding var isPresented: Bool
   let constellationStars: [Star]
   let inspirationStars: [Star]
+  var onOpenStar: ((Star) -> Void)?
 
   @State private var searchText = ""
   @State private var filter: StarCollectionFilter = .all
-  @State private var flippedIds = Set<String>()
   @State private var visibleCount = 18
 
   private let batchSize = 12
@@ -59,7 +59,6 @@ struct StarCollectionOverlay: View {
         visibleCount = 18
         searchText = ""
         filter = .all
-        flippedIds = []
       }
     }
   }
@@ -133,10 +132,14 @@ struct StarCollectionOverlay: View {
         ForEach(displayedStars) { star in
           StarCardView(
             star: star,
-            isFlipped: flippedIds.contains(star.id),
-            onFlip: { toggleFlip(for: star.id) }
+            isFlipped: false,
+            onFlip: {},
+            isTapToFlipEnabled: false
           )
           .aspectRatio(0.7, contentMode: .fit)
+          .onTapGesture {
+            onOpenStar?(star)
+          }
           .onAppear {
             if star.id == displayedStars.last?.id {
               loadMore()
@@ -178,14 +181,6 @@ struct StarCollectionOverlay: View {
     Array(filteredStars.prefix(visibleCount))
   }
 
-  private func toggleFlip(for id: String) {
-    if flippedIds.contains(id) {
-      flippedIds.remove(id)
-    } else {
-      flippedIds.insert(id)
-    }
-  }
-
   private func loadMore() {
     guard visibleCount < filteredStars.count else { return }
     let next = min(filteredStars.count, visibleCount + batchSize)
@@ -199,10 +194,10 @@ struct StarCollectionPane: View {
   let constellationStars: [Star]
   let inspirationStars: [Star]
   var onBack: () -> Void
+  var onOpenStar: (Star) -> Void
 
   @State private var searchText = ""
   @State private var filter: StarCollectionFilter = .all
-  @State private var flippedIds = Set<String>()
   @State private var visibleCount = 18
 
   private let batchSize = 18
@@ -296,10 +291,14 @@ struct StarCollectionPane: View {
         ForEach(displayedStars) { star in
           StarCardView(
             star: star,
-            isFlipped: flippedIds.contains(star.id),
-            onFlip: { toggleFlip(for: star.id) }
+            isFlipped: false,
+            onFlip: {},
+            isTapToFlipEnabled: false
           )
           .aspectRatio(0.7, contentMode: .fit)
+          .onTapGesture {
+            onOpenStar(star)
+          }
           .onAppear {
             if star.id == displayedStars.last?.id {
               loadMore()
@@ -339,14 +338,6 @@ struct StarCollectionPane: View {
 
   private var displayedStars: [Star] {
     Array(filteredStars.prefix(visibleCount))
-  }
-
-  private func toggleFlip(for id: String) {
-    if flippedIds.contains(id) {
-      flippedIds.remove(id)
-    } else {
-      flippedIds.insert(id)
-    }
   }
 
   private func loadMore() {
