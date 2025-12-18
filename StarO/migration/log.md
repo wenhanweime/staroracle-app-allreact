@@ -54,3 +54,4 @@
 - 性能（日志）：新增 `StarOracleDebug.verboseLogs` 开关（默认关闭），并将 `ChatOverlayManager/InputDrawerManager/NativeChatBridge` 的 `NSLog` 输出改为受该开关控制；同时将 `ChatStore/StarStore/GalaxyStore/GalaxyGridStore/ConversationStore/KeyboardObserver` 的 callStack 日志改为默认关闭；个人主页（Account）“调试”中新增“详细日志”开关便于需要时再打开。
 - 性能（Galaxy 点击）：将 Galaxy 点击防抖等待从 600ms 调整为 120ms，并避免 `GalaxyViewModel.handleTap` 在外部已提供 onTap 回调时重复触发默认高亮计算（减少一次全量候选扫描），降低点击卡顿与延迟感。
 - 性能（Galaxy 灵感卡）：有 Supabase 配置时不再等待云端 `star-pluck` 返回才弹出灵感卡；改为先弹出本地灵感卡，再异步回填云端内容（保持卡片 id 不变，避免关闭/提交时错位），从而不让网络阻塞“弹出星卡/翻牌”交互（`GalaxyBackgroundView` / `StarStore.replaceCurrentInspirationCard`）。
+- 修复编译（StarOracleDebug 可见性）：部分环境下 SwiftPM/Xcode 未及时识别新增源文件导致 `StarOracleFeatures` 内引用 `StarOracleDebug` 编译失败；已将 `StarOracleDebug` 定义移动到 `StarOracleCore` 既有源文件 `Models/Inspiration.swift` 并删除独立文件，避免增量构建遗漏。
