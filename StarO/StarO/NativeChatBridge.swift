@@ -297,6 +297,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
       let streamingMessageId = chatStore.beginStreamingAIMessage(initial: "")
       var buffer = ""
       var doneChatId: String?
+      var requestStartedAt = Date()
 
       do {
         if conversationStore.session(id: effectiveChatId)?.hasSupabaseConversationStarted != true {
@@ -304,6 +305,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
           try await ChatCreateService.ensureChatExists(chatId: effectiveChatId, title: title)
         }
 
+        requestStartedAt = Date()
         for try await event in ChatSendService.streamMessage(
           chatId: effectiveChatId,
           message: question,
@@ -341,6 +343,16 @@ final class NativeChatBridge: NSObject, ObservableObject {
           startStarsPolling(afterDoneChatId: doneChatId)
         }
       } catch {
+        if await tryRecoverFromCloudIfPossible(
+          error: error,
+          chatId: effectiveChatId,
+          requestStartedAt: requestStartedAt,
+          streamingMessageId: streamingMessageId,
+          didSendGalaxyStarIndices: didSendGalaxyStarIndices,
+          didSendReviewSessionId: didSendReviewSessionId
+        ) {
+          return
+        }
         NSLog("❌ NativeChatBridge.performStreaming(chat-send) | error=%@", error.localizedDescription)
         chatStore.updateStreamingMessage(id: streamingMessageId, text: "未能获取星语回应，请稍后再试。")
         chatStore.finalizeStreamingMessage(id: streamingMessageId)
@@ -398,6 +410,71 @@ final class NativeChatBridge: NSObject, ObservableObject {
       overlayManager.setLoading(false)
       setLastErrorMessage("发送失败：\(error.localizedDescription)")
     }
+  }
+
+  private func tryRecoverFromCloudIfPossible(
+    error: Error,
+    chatId: String,
+    requestStartedAt: Date,
+    streamingMessageId: String,
+    didSendGalaxyStarIndices: Bool,
+    didSendReviewSessionId: Bool
+  ) async -> Bool {
+    guard SupabaseRuntime.loadProjectConfig() != nil else { return false }
+
+    let shouldRecover: Bool = {
+      if let urlError = error as? URLError {
+        switch urlError.code {
+        case .timedOut,
+             .networkConnectionLost,
+             .cannotFindHost,
+             .cannotConnectToHost,
+             .dnsLookupFailed,
+             .notConnectedToInternet:
+          return true
+        default:
+          return false
+        }
+      }
+      return false
+    }()
+
+    guard shouldRecover else { return false }
+
+    NSLog("🛟 NativeChatBridge | 网络异常，尝试从云端恢复本次回复 chat_id=%@", chatId)
+    let deadline = Date().addingTimeInterval(25)
+
+    while Date() < deadline {
+      if Task.isCancelled { return false }
+      if let latest = await ChatMessagesService.fetchLatestAssistantMessage(chatId: chatId) {
+        let okTime = latest.timestamp >= requestStartedAt.addingTimeInterval(-2)
+        if okTime {
+          let text = latest.text.trimmingCharacters(in: .whitespacesAndNewlines)
+          if !text.isEmpty {
+            NSLog("🛟 NativeChatBridge | 云端恢复成功 message_id=%@", latest.id)
+            chatStore.updateStreamingMessage(id: streamingMessageId, text: text)
+            chatStore.finalizeStreamingMessage(id: streamingMessageId)
+            chatStore.setLoading(false)
+            overlayManager.setLoading(false)
+            try? await chatStore.generateConversationTitle()
+            setLastErrorMessage(nil)
+            conversationStore.markSseDone(sessionId: chatId)
+            if didSendGalaxyStarIndices {
+              conversationStore.clearPendingGalaxyStarIndices()
+            }
+            if didSendReviewSessionId {
+              conversationStore.clearReviewSession(forChatId: chatId)
+            }
+            startStarsPolling(afterDoneChatId: chatId)
+            return true
+          }
+        }
+      }
+      try? await Task.sleep(nanoseconds: 900_000_000)
+    }
+
+    NSLog("🛟 NativeChatBridge | 云端恢复失败，超时 chat_id=%@", chatId)
+    return false
   }
 
   private func observeChatStore() {
