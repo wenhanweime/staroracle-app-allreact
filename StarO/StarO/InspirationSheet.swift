@@ -11,7 +11,22 @@ struct InspirationSheet: View {
       List {
         Section {
           Button {
-            _ = starStore.drawInspirationCard(region: nil)
+            Task {
+              let remoteCard: InspirationCard?
+              if SupabaseRuntime.loadConfig() != nil {
+                remoteCard = await StarService.pluckInspiration()
+              } else {
+                remoteCard = nil
+              }
+
+              await MainActor.run {
+                if let remoteCard {
+                  starStore.presentInspirationCard(remoteCard)
+                } else {
+                  _ = starStore.drawInspirationCard(region: nil)
+                }
+              }
+            }
           } label: {
             Label("抽取灵感卡", systemImage: "moon.stars")
           }

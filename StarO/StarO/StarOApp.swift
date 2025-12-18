@@ -15,12 +15,16 @@ struct StarOApp: App {
     WindowGroup {
       RootView()
         .environmentObject(environment)
+        .environmentObject(environment.authService)
         .environmentObject(environment.starStore)
         .environmentObject(environment.chatStore)
         .environmentObject(environment.galaxyStore)
         .environmentObject(environment.galaxyGridStore)
         .environmentObject(environment.conversationStore)
         .environmentObject(environment.chatBridge)
+        .task {
+          await environment.authService.restoreSessionIfNeeded()
+        }
     }
   }
 }

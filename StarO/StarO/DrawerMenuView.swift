@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import StarOracleCore
 import StarOracleFeatures
@@ -12,6 +13,7 @@ struct DrawerMenuView: View {
   var onOpenCollection: () -> Void
   var onOpenAIConfig: () -> Void
   var onOpenInspiration: () -> Void
+  var onOpenServerChat: (ChatListService.Chat) -> Void
   var onSwitchSession: (String) -> Void
   var onCreateSession: (String?) -> Void
   var onRenameSession: (String, String) -> Void
@@ -21,6 +23,8 @@ struct DrawerMenuView: View {
   @State private var sessionToRename: ConversationStore.Session?
   @State private var renameText: String = ""
   @State private var sessionToDelete: ConversationStore.Session?
+  @State private var serverChats: [ChatListService.Chat] = []
+  @State private var isLoadingServerChats: Bool = false
 
   private var filteredSessions: [ConversationStore.Session] {
     let sessions = conversationStore.listSessions()
@@ -28,6 +32,17 @@ struct DrawerMenuView: View {
     return sessions.filter { session in
       session.displayTitle.localizedCaseInsensitiveContains(query) ||
       session.systemPrompt.localizedCaseInsensitiveContains(query)
+    }
+  }
+
+  private var hasSupabaseConfig: Bool {
+    SupabaseRuntime.loadConfig() != nil
+  }
+
+  private var filteredServerChats: [ChatListService.Chat] {
+    guard !query.isEmpty else { return serverChats }
+    return serverChats.filter { chat in
+      (chat.title ?? "").localizedCaseInsensitiveContains(query)
     }
   }
 
@@ -91,6 +106,9 @@ struct DrawerMenuView: View {
         Text("历史记录将被移除：\(target.displayTitle)")
       }
     }
+    .task {
+      await refreshServerChats()
+    }
   }
 
   private var header: some View {
@@ -147,6 +165,61 @@ struct DrawerMenuView: View {
       Text("历史会话")
         .font(.caption)
         .foregroundStyle(.white.opacity(0.6))
+      serverSessionList
+      Divider().overlay(Color.white.opacity(0.05))
+      localSessionList
+    }
+  }
+
+  private var serverSessionList: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      HStack(spacing: 8) {
+        Text("云端（可打开）")
+          .font(.footnote.weight(.medium))
+          .foregroundStyle(.white.opacity(0.8))
+        Spacer()
+        if isLoadingServerChats {
+          ProgressView()
+            .progressViewStyle(.circular)
+            .tint(.white.opacity(0.7))
+            .scaleEffect(0.7)
+        }
+        Button {
+          Task { await refreshServerChats() }
+        } label: {
+          Image(systemName: "arrow.clockwise")
+            .font(.caption)
+            .foregroundStyle(.white.opacity(0.8))
+            .padding(6)
+            .background(Color.white.opacity(0.08), in: Circle())
+        }
+        .buttonStyle(.plain)
+        .disabled(!hasSupabaseConfig || isLoadingServerChats)
+      }
+
+      if !hasSupabaseConfig {
+        Text("未配置 SUPABASE_URL + TOKEN/SUPABASE_JWT")
+          .font(.footnote)
+          .foregroundStyle(.white.opacity(0.4))
+          .frame(maxWidth: .infinity, alignment: .leading)
+      } else if filteredServerChats.isEmpty {
+        Text("暂无记录")
+          .font(.footnote)
+          .foregroundStyle(.white.opacity(0.4))
+          .frame(maxWidth: .infinity, alignment: .leading)
+      } else {
+        ForEach(filteredServerChats) { chat in
+          serverChatRow(chat)
+        }
+      }
+    }
+  }
+
+  private var localSessionList: some View {
+    VStack(alignment: .leading, spacing: 10) {
+      Text("本地（旧链路）")
+        .font(.footnote.weight(.medium))
+        .foregroundStyle(.white.opacity(0.8))
       if filteredSessions.isEmpty {
         Text("暂无记录")
           .font(.footnote)
@@ -158,6 +231,35 @@ struct DrawerMenuView: View {
         }
       }
     }
+  }
+
+  private func serverChatRow(_ chat: ChatListService.Chat) -> some View {
+    Button {
+      onOpenServerChat(chat)
+      onClose()
+    } label: {
+      VStack(alignment: .leading, spacing: 4) {
+        Text((chat.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "未命名会话" : (chat.title ?? "未命名会话"))
+          .font(.headline)
+          .foregroundStyle(.white)
+        if let kind = chat.kind {
+          Text(kind == "free" ? "自由对话" : (kind == "star" ? "星卡内对话" : kind))
+            .font(.caption2)
+            .foregroundStyle(.white.opacity(0.6))
+        }
+      }
+      .padding()
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: 18, style: .continuous)
+          .fill(Color.white.opacity(0.04))
+          .overlay(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+              .stroke(Color.white.opacity(0.08), lineWidth: 1)
+          )
+      )
+    }
+    .buttonStyle(.plain)
   }
 
   private func sessionRow(_ session: ConversationStore.Session) -> some View {
@@ -203,6 +305,17 @@ struct DrawerMenuView: View {
       )
     }
     .buttonStyle(.plain)
+  }
+
+  private func refreshServerChats() async {
+    guard hasSupabaseConfig else {
+      serverChats = []
+      return
+    }
+    guard !isLoadingServerChats else { return }
+    isLoadingServerChats = true
+    defer { isLoadingServerChats = false }
+    serverChats = await ChatListService.fetchChats(kind: "free", limit: 30)
   }
 
   private var menuSection: some View {

@@ -26,24 +26,30 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private let overlayManager = ChatOverlayManager()
   private let inputManager = InputDrawerManager()
   private let chatStore: ChatStore
+  private let starStore: StarStore
   private let conversationStore: ConversationStore
   private let aiService: AIServiceProtocol
   private let preferenceService: PreferenceServiceProtocol
   private var cancellables = Set<AnyCancellable>()
   private var streamingTask: Task<Void, Never>?
+  private var starsPollingTask: Task<Void, Never>?
   private var didActivate = false
   private weak var windowScene: UIWindowScene?
   private weak var registeredBackgroundView: UIView?
   private var pendingEnsureWorkItem: DispatchWorkItem?
   private var pendingPresentationStateWorkItem: DispatchWorkItem?
+  private var overlayHintIdsByChatId: [String: Set<String>] = [:]
+  private var overlayHintsByChatId: [String: [OverlayChatMessage]] = [:]
 
   init(
     chatStore: ChatStore,
+    starStore: StarStore,
     conversationStore: ConversationStore,
     aiService: AIServiceProtocol,
     preferenceService: PreferenceServiceProtocol
   ) {
     self.chatStore = chatStore
+    self.starStore = starStore
     self.conversationStore = conversationStore
     self.aiService = aiService
     self.preferenceService = preferenceService
@@ -56,6 +62,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
   deinit {
     streamingTask?.cancel()
+    starsPollingTask?.cancel()
   }
 
   func activateIfNeeded() {
@@ -68,7 +75,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     configureBackgroundViewIfNeeded()
     ensureInputDrawerVisible()
     overlayManager.setConversationTitle(chatStore.conversationTitle)
-    overlayManager.updateMessages(chatStore.messages.map(makeOverlayMessage))
+    refreshOverlayMessages()
   }
 
   private var pendingInputVisibleWork: DispatchWorkItem?
@@ -174,23 +181,172 @@ final class NativeChatBridge: NSObject, ObservableObject {
     if presentationState == .hidden {
       openOverlay(expanded: true)
     }
+    rotateSessionIfNeededForFreeChat()
     chatStore.addUserMessage(trimmed)
     inputManager.setText("")
     setLastErrorMessage(nil)
     startStreaming(for: trimmed)
   }
 
+  private func rotateSessionIfNeededForFreeChat() {
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+    let chatId = conversationStore.currentSessionId
+    if conversationStore.pendingReviewSessionId(forChatId: chatId) != nil {
+      NSLog("🧾 NativeChatBridge | 检测到 review_session_id，跳过10分钟分段 chat_id=%@", chatId)
+      return
+    }
+    guard conversationStore.shouldStartNewSessionDueToInactivity() else { return }
+    NSLog("🕒 NativeChatBridge | 超过10分钟无活动，自动新建 chat_id 分段")
+    let session = conversationStore.createSession(title: nil)
+    chatStore.loadMessages([], title: session.displayTitle)
+  }
+
   private func startStreaming(for question: String) {
     streamingTask?.cancel()
+    starsPollingTask?.cancel()
     streamingTask = Task { [weak self] in
       guard let self else { return }
       await self.performStreaming(for: question)
     }
   }
 
+  private func refreshOverlayMessages(sourceMessages: [StarOracleCore.ChatMessage]? = nil) {
+    let base = (sourceMessages ?? chatStore.messages).map(makeOverlayMessage)
+    let hints = overlayHintsByChatId[conversationStore.currentSessionId] ?? []
+    overlayManager.updateMessages(base + hints)
+  }
+
+  private func appendStarHint(chatId: String, kind: String, starId: String, text: String) {
+    let trimmed = starId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return }
+    let hintId = "hint-star:\(trimmed):\(kind)"
+
+    var ids = overlayHintIdsByChatId[chatId] ?? []
+    if ids.contains(hintId) { return }
+    ids.insert(hintId)
+    overlayHintIdsByChatId[chatId] = ids
+
+    let message = OverlayChatMessage(
+      id: hintId,
+      text: text,
+      isUser: false,
+      timestamp: Date().timeIntervalSince1970 * 1000
+    )
+    var list = overlayHintsByChatId[chatId] ?? []
+    list.append(message)
+    overlayHintsByChatId[chatId] = list
+
+    if chatId == conversationStore.currentSessionId {
+      refreshOverlayMessages()
+    }
+  }
+
+  private func startStarsPolling(afterDoneChatId chatId: String) {
+    starsPollingTask?.cancel()
+    let previous = conversationStore.knownStar(forChatId: chatId)
+
+    starsPollingTask = Task.detached { [weak self] in
+      guard let self else { return }
+      let deadline = Date().addingTimeInterval(20)
+      var lastStarId = previous?.id
+      var lastInsightLevel = previous?.insightLevel
+      var intervalNs: UInt64 = 1_000_000_000
+
+      while Date() < deadline {
+        if Task.isCancelled { return }
+        if let row = await StarsService.fetchStarByChatId(chatId) {
+          let star = StarsService.toCoreStar(row: row)
+          let starId = star.id
+          let level = star.insightLevel?.value ?? max(1, min(5, row.insightLevel ?? 1))
+
+          await MainActor.run {
+            self.starStore.upsertConstellationStar(star)
+            self.conversationStore.updateKnownStar(forChatId: chatId, starId: starId, insightLevel: level)
+
+            if lastStarId == nil || lastStarId != starId {
+              self.appendStarHint(chatId: chatId, kind: "created", starId: starId, text: "已生成一颗星星，点击查看星卡")
+            } else if let lastInsightLevel, level > lastInsightLevel {
+              self.appendStarHint(chatId: chatId, kind: "upgraded-\(level)", starId: starId, text: "星卡已升级，点击查看")
+            }
+          }
+
+          lastStarId = starId
+          lastInsightLevel = max(lastInsightLevel ?? 0, level)
+        }
+
+        try? await Task.sleep(nanoseconds: intervalNs)
+        if intervalNs < 2_000_000_000 {
+          intervalNs = min(2_000_000_000, UInt64(Double(intervalNs) * 1.15))
+        }
+      }
+    }
+  }
+
   private func performStreaming(for question: String) async {
     chatStore.setLoading(true)
     overlayManager.setLoading(true)
+    if SupabaseRuntime.loadConfig() != nil {
+      let effectiveChatId = conversationStore.currentSessionId
+      NSLog("🌐 NativeChatBridge.performStreaming | 使用后端 chat-send chat_id=%@", effectiveChatId)
+      let requestTraceId = SupabaseRuntime.makeTraceId()
+      let requestIdempotencyKey = chatStore.messages.last(where: { $0.isUser })?.id ?? SupabaseRuntime.makeIdempotencyKey()
+      let galaxyStarIndices = conversationStore.galaxyStarIndicesForFirstChatSend(sessionId: effectiveChatId)
+      let reviewSessionId = conversationStore.pendingReviewSessionId(forChatId: effectiveChatId)
+      let didSendGalaxyStarIndices = galaxyStarIndices != nil
+      let didSendReviewSessionId = reviewSessionId != nil
+      let streamingMessageId = chatStore.beginStreamingAIMessage(initial: "")
+      var buffer = ""
+      var doneChatId: String?
+
+      do {
+        for try await event in ChatSendService.streamMessage(
+          chatId: effectiveChatId,
+          message: question,
+          traceId: requestTraceId,
+          idempotencyKey: requestIdempotencyKey,
+          galaxyStarIndices: galaxyStarIndices,
+          reviewSessionId: reviewSessionId
+        ) {
+          switch event {
+          case let .delta(chunk):
+            buffer.append(chunk)
+            chatStore.updateStreamingMessage(id: streamingMessageId, text: buffer)
+          case let .done(_, chatId, _):
+            doneChatId = chatId
+            conversationStore.markSseDone(sessionId: chatId)
+            if didSendGalaxyStarIndices {
+              conversationStore.clearPendingGalaxyStarIndices()
+            }
+            if didSendReviewSessionId {
+              conversationStore.clearReviewSession(forChatId: chatId)
+            }
+          }
+        }
+
+        chatStore.finalizeStreamingMessage(id: streamingMessageId)
+        chatStore.setLoading(false)
+        overlayManager.setLoading(false)
+        try? await chatStore.generateConversationTitle()
+        setLastErrorMessage(nil)
+
+        if let doneChatId, doneChatId != effectiveChatId {
+          NSLog("⚠️ NativeChatBridge | done.chat_id 与请求 chat_id 不一致 request=%@ done=%@", effectiveChatId, doneChatId)
+        }
+        if let doneChatId {
+          startStarsPolling(afterDoneChatId: doneChatId)
+        }
+      } catch {
+        NSLog("❌ NativeChatBridge.performStreaming(chat-send) | error=%@", error.localizedDescription)
+        chatStore.updateStreamingMessage(id: streamingMessageId, text: "未能获取星语回应，请稍后再试。")
+        chatStore.finalizeStreamingMessage(id: streamingMessageId)
+        chatStore.setLoading(false)
+        overlayManager.setLoading(false)
+        setLastErrorMessage("发送失败：\(error.localizedDescription)")
+      }
+      return
+    }
+
+    NSLog("🧩 NativeChatBridge.performStreaming | 使用旧链路 OpenAI（未配置 SUPABASE_URL + TOKEN/SUPABASE_JWT）")
     let history = chatStore.messages
     let systemPrompt = conversationStore.currentSession()?.systemPrompt ?? ""
     if systemPrompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
@@ -245,8 +401,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
       .receive(on: DispatchQueue.main)
       .sink { [weak self] messages in
         guard let self else { return }
-        let overlayMessages = messages.map(self.makeOverlayMessage)
-        self.overlayManager.updateMessages(overlayMessages)
+        self.refreshOverlayMessages(sourceMessages: messages)
       }
       .store(in: &cancellables)
 

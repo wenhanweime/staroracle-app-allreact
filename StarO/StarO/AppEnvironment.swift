@@ -5,6 +5,7 @@ import StarOracleServices
 
 @MainActor
 final class AppEnvironment: ObservableObject {
+  let authService: AuthService
   let aiService: AIServiceProtocol
   let preferenceService: PreferenceServiceProtocol
   let templateService: TemplateServiceProtocol
@@ -16,8 +17,18 @@ final class AppEnvironment: ObservableObject {
   let conversationStore: ConversationStore
   let chatBridge: NativeChatBridge
   private var didBootstrapConversation = false
+  private var didSyncSupabaseStars = false
+
+  private static let iso: ISO8601DateFormatter = {
+    let formatter = ISO8601DateFormatter()
+    formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+    return formatter
+  }()
+
+  private static let isoNoFraction = ISO8601DateFormatter()
 
   init(conversationStore: ConversationStore = .shared) {
+    authService = AuthService()
     let aiService = LiveAIService()
     let inspirationService = MockInspirationService()
     let templateService = MockTemplateService()
@@ -49,6 +60,7 @@ final class AppEnvironment: ObservableObject {
     self.conversationStore = conversationStore
     chatBridge = NativeChatBridge(
       chatStore: chatStore,
+      starStore: starStore,
       conversationStore: conversationStore,
       aiService: aiService,
       preferenceService: preferenceService
@@ -57,6 +69,9 @@ final class AppEnvironment: ObservableObject {
 
   func switchSession(to sessionId: String) {
     guard let session = conversationStore.switchSession(to: sessionId) else { return }
+    if SupabaseRuntime.loadConfig() != nil, session.hasSupabaseConversationStarted == true {
+      conversationStore.beginReviewSession(forChatId: sessionId)
+    }
     let messages = conversationStore.messages(forSession: sessionId)
     chatStore.loadMessages(messages, title: session.displayTitle)
   }
@@ -84,6 +99,46 @@ final class AppEnvironment: ObservableObject {
     if !initialMessages.isEmpty {
       chatStore.loadMessages(initialMessages, title: conversationStore.currentSession()?.displayTitle)
     }
+  }
+
+  func syncSupabaseStarsIfNeeded(limit: Int = 200) async {
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+    guard !didSyncSupabaseStars else { return }
+    didSyncSupabaseStars = true
+    let rows = await StarsService.fetchStars(limit: limit)
+    let stars = rows.map { StarsService.toCoreStar(row: $0) }
+    starStore.upsertConstellationStars(stars)
+  }
+
+  func openServerChat(_ chat: ChatListService.Chat) {
+    Task { await openServerChatAsync(chat) }
+  }
+
+  private func openServerChatAsync(_ chat: ChatListService.Chat) async {
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+    guard !chat.id.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
+    await syncSupabaseStarsIfNeeded()
+
+    let title = (chat.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedTitle = title.isEmpty ? "未命名会话" : title
+    let messages = await ChatMessagesService.fetchMessages(chatId: chat.id, limit: 400)
+    conversationStore.upsertSupabaseSession(
+      id: chat.id,
+      title: resolvedTitle,
+      messages: messages,
+      createdAt: Self.parseISODate(chat.created_at),
+      updatedAt: Self.parseISODate(chat.updated_at)
+    )
+    conversationStore.beginReviewSession(forChatId: chat.id)
+    chatStore.loadMessages(messages, title: resolvedTitle)
+  }
+
+  private static func parseISODate(_ raw: String?) -> Date? {
+    guard let raw = raw?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else { return nil }
+    if let parsed = iso.date(from: raw) { return parsed }
+    return isoNoFraction.date(from: raw)
   }
 }
 

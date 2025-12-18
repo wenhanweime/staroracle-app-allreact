@@ -99,13 +99,14 @@ struct StarCardConfig {
         var rng = SeededRandom(seed: seed)
         
         // Select Style
-        let styles = StarCardStyle.allCases
+        // 回归：仅保留原版“可翻转/紫色带动画”的星卡风格（不再随机行星/像素行星）。
+        let styles: [StarCardStyle] = [.standard, .cross, .burst, .sparkle, .ringed]
         let styleIndex = Int(rng.next(in: 0...Double(styles.count - 1)))
-        let style = styles[styleIndex]
+        let style = styles[max(0, min(styles.count - 1, styleIndex))]
         
         // Select Theme
-        let themeIndex = Int(rng.next(in: 0...3))
-        let theme = StarCardTheme.all[themeIndex]
+        // 回归：固定使用紫色主题（Nebula Purple），避免因云端 UUID 变化导致主题漂移。
+        let theme = StarCardTheme.all.first(where: { $0.name == "Nebula Purple" }) ?? StarCardTheme.all.first!
         
         // Attributes
         let hasRing = star.isSpecial ? (rng.next() > 0.6) : false

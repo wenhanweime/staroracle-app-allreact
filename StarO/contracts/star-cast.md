@@ -16,7 +16,8 @@
   "chat_id": "<uuid>",
   "x": 12.34,      // 可选：点击坐标 X（存在则不重算）
   "y": -56.78,     // 可选：点击坐标 Y（存在则不重算）
-  "region": "emotion|relation|growth" // 可选：星臂分配提示
+  "region": "emotion|relation|growth", // 可选：星臂分配提示
+  "galaxy_star_indices": [12, 98, 431] // 可选：点亮的底图星点索引集合（通常由前端在点击时生成并上报）
 }
 ```
 
@@ -27,6 +28,7 @@
   "coord_x": 12.34,
   "coord_y": -56.78,
   "coord_z": 0.0,
+  "galaxy_star_indices": [12, 98, 431],
   "trace_id": "3f6e..."
 }
 ```
@@ -50,6 +52,15 @@
 - 最小结构（工程侧保证）：`question`、`summary`、`primary_color_hex?`、`tags?`
 - 视觉/感官：`coord_x/coord_y/coord_z`、`haptic_pattern_id`
 - 其它字段：`answer/primary_emotion/star_arm_assignment/evolution_*` 等为可选扩展
+
+等级字段（影响星卡样式；与 Galaxy 底图呈现暂不绑定）
+- **唯一等级字段（SoT）**：`stars.insight_level`（int2，范围 `1..5`）
+  - 1 = 星辰
+  - 2 = 新星
+  - 3 = 恒星
+  - 4 = 超新星（`has_nebula=true` 可作为“永久星云”特效开关）
+  - 5 = 白矮星
+- `stars.evolution_status`：**Deprecated**。与 `insight_level` 同义的派生/兼容字段（后端按映射同步写入：`celestial/nova/star/supernova/white_dwarf`）。端侧不应依赖该字段做业务判断；后续可能移除。
 
 cURL 示例
 ```

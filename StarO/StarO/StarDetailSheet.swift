@@ -1,39 +1,68 @@
 import SwiftUI
 import StarOracleCore
+import StarOracleFeatures
 
 struct StarDetailSheet: View {
   let star: Star
   var onDismiss: () -> Void
 
+  @EnvironmentObject private var starStore: StarStore
+
+  @State private var didLoadEnergy = false
+  @State private var isLoadingEnergy = false
+  @State private var energyDay: String?
+  @State private var energyRemaining: Int?
+
+  @State private var isUpgrading = false
+  @State private var alertMessage: String?
+  @State private var isCardFlipped: Bool = false
+
   var body: some View {
     NavigationStack {
       ScrollView {
         VStack(alignment: .leading, spacing: 16) {
-          Text(star.question)
+          StarCardView(
+            star: displayStar,
+            isFlipped: isCardFlipped,
+            onFlip: { isCardFlipped.toggle() }
+          )
+          .aspectRatio(0.7, contentMode: .fit)
+          .frame(maxWidth: 360)
+          .frame(maxWidth: .infinity, alignment: .center)
+
+          if canShowEvolveControls {
+            HStack(spacing: 12) {
+              energyBadge
+              Spacer()
+              upgradeButton
+            }
+          }
+
+          Text(displayStar.question)
             .font(.title3.weight(.semibold))
           VStack(alignment: .leading, spacing: 10) {
             section(title: "星语回应", icon: "sparkles") {
-              Text(star.answer.isEmpty ? "星语正在收集回应…" : star.answer)
+              Text(displayStar.answer.isEmpty ? "星语正在收集回应…" : displayStar.answer)
             }
-            if let summary = star.cardSummary, !summary.isEmpty {
+            if let summary = displayStar.cardSummary, !summary.isEmpty {
               section(title: "摘要", icon: "note.text") {
                 Text(summary)
               }
             }
-            if !star.tags.isEmpty {
+            if !displayStar.tags.isEmpty {
               section(title: "标签", icon: "tag") {
-                TagGrid(tags: star.tags)
+                TagGrid(tags: displayStar.tags)
               }
             }
             section(title: "洞察", icon: "chart.bar") {
               VStack(alignment: .leading, spacing: 6) {
-                if let insight = star.insightLevel {
+                if let insight = displayStar.insightLevel {
                   Text("洞察等级：\(insight.description) — \(insight.value)")
                 }
-                if let category = readableCategory(star.primaryCategory) {
+                if let category = readableCategory(displayStar.primaryCategory) {
                   Text("主题类别：\(category)")
                 }
-                if let follow = star.suggestedFollowUp, !follow.isEmpty {
+                if let follow = displayStar.suggestedFollowUp, !follow.isEmpty {
                   Text("建议追问：\(follow)")
                 }
               }
@@ -51,6 +80,163 @@ struct StarDetailSheet: View {
           Button("完成") { onDismiss() }
         }
       }
+      .task { await loadEnergyIfNeeded() }
+      .alert("提示", isPresented: alertPresented) {
+        Button("好的", role: .cancel) { alertMessage = nil }
+      } message: {
+        Text(alertMessage ?? "")
+      }
+    }
+  }
+
+  private var displayStar: Star {
+    if let matched = starStore.constellation.stars.first(where: { $0.id == star.id }) {
+      return matched
+    }
+    if let matched = starStore.inspirationStars.first(where: { $0.id == star.id }) {
+      return matched
+    }
+    return star
+  }
+
+  private var canShowEvolveControls: Bool {
+    guard SupabaseRuntime.loadConfig() != nil else { return false }
+    guard UUID(uuidString: displayStar.id) != nil else { return false }
+    guard !displayStar.isTransient, !displayStar.isTemplate else { return false }
+    return true
+  }
+
+  private var currentInsightLevel: Int {
+    max(1, min(5, displayStar.insightLevel?.value ?? 1))
+  }
+
+  private var isAtMaxLevel: Bool {
+    currentInsightLevel >= 5
+  }
+
+  private var resolvedEnergyRemaining: Int? {
+    guard let energyRemaining else { return nil }
+    return max(0, energyRemaining)
+  }
+
+  private var upgradeDisabled: Bool {
+    if isUpgrading { return true }
+    if isAtMaxLevel { return true }
+    if let remaining = resolvedEnergyRemaining, remaining <= 0 { return true }
+    return false
+  }
+
+  private var alertPresented: Binding<Bool> {
+    Binding(
+      get: { alertMessage != nil },
+      set: { newValue in
+        if !newValue { alertMessage = nil }
+      }
+    )
+  }
+
+  private var energyBadge: some View {
+    HStack(spacing: 6) {
+      Image(systemName: "bolt.fill")
+      if isLoadingEnergy {
+        ProgressView()
+          .controlSize(.mini)
+      } else if let remaining = resolvedEnergyRemaining {
+        Text("\(remaining)")
+      } else {
+        Text("--")
+      }
+    }
+    .font(.footnote.weight(.semibold))
+    .foregroundStyle(.primary)
+    .padding(.horizontal, 12)
+    .padding(.vertical, 8)
+    .background(.ultraThinMaterial, in: Capsule())
+    .accessibilityLabel("能量余额")
+    .accessibilityValue("\(resolvedEnergyRemaining ?? 0)")
+  }
+
+  private var upgradeButton: some View {
+    Button {
+      Task { await upgradeStarIfPossible() }
+    } label: {
+      HStack(spacing: 8) {
+        if isUpgrading {
+          ProgressView()
+            .controlSize(.small)
+        } else {
+          Image(systemName: "arrow.up.circle.fill")
+        }
+        Text(isAtMaxLevel ? "已满级" : "升级")
+      }
+      .font(.footnote.weight(.semibold))
+    }
+    .buttonStyle(.borderedProminent)
+    .disabled(upgradeDisabled)
+    .accessibilityHint("消耗 1 点能量提升星卡等级")
+  }
+
+  private func loadEnergyIfNeeded() async {
+    guard canShowEvolveControls else { return }
+    guard !didLoadEnergy else { return }
+    didLoadEnergy = true
+    isLoadingEnergy = true
+    defer { isLoadingEnergy = false }
+
+    do {
+      let energy = try await EnergyService.getEnergy()
+      energyDay = energy.day
+      energyRemaining = energy.remaining
+    } catch {
+      NSLog("⚠️ StarDetailSheet.get-energy | error=%@", error.localizedDescription)
+    }
+  }
+
+  private func upgradeStarIfPossible() async {
+    guard canShowEvolveControls else { return }
+    guard !isUpgrading else { return }
+    if isAtMaxLevel {
+      alertMessage = "已是最高等级，无需升级。"
+      return
+    }
+
+    isUpgrading = true
+    defer { isUpgrading = false }
+
+    do {
+      let response = try await StarEvolveService.upgradeByButton(starId: displayStar.id)
+      if let energy = response.energy {
+        energyDay = energy.day
+        energyRemaining = energy.remaining
+      }
+
+      if let changed = response.changed, !changed {
+        alertMessage = "星卡等级未变化。"
+      }
+
+      if let row = await StarsService.fetchStarById(displayStar.id) {
+        let updated = StarsService.toCoreStar(row: row)
+        await MainActor.run {
+          starStore.upsertConstellationStar(updated)
+        }
+      }
+    } catch let error as StarEvolveService.EvolveError {
+      if case let .http(_, code, message, energy) = error {
+        if let energy {
+          energyDay = energy.day
+          energyRemaining = energy.remaining
+        }
+        if code == "EV07" {
+          let day = (energyDay?.isEmpty == false ? energyDay : nil)
+          alertMessage = day == nil ? "能量不足，明天登录可领取 +5。" : "能量不足（\(day!)）。明天登录可领取 +5。"
+          return
+        }
+        alertMessage = "\(code)：\(message)"
+        return
+      }
+      alertMessage = error.localizedDescription
+    } catch {
+      alertMessage = error.localizedDescription
     }
   }
 

@@ -7,6 +7,7 @@ struct GalaxyHighlight {
     let activatedAt: CFTimeInterval
     let whiteBias: Double // 0.0 = 偏高亮色, 1.0 = 偏纯白
     var isPermanent: Bool = false
+    var expiresAt: Date? = nil
 }
 
 struct GalaxyPulse: Identifiable {
@@ -231,7 +232,14 @@ final class GalaxyViewModel: ObservableObject {
         triggerHighlight(at: location, in: size, tapTimestamp: tapTimestamp)
     }
     
-    func triggerHighlight(at location: CGPoint, in size: CGSize, tapTimestamp: CFTimeInterval? = nil, isPermanent: Bool = false) {
+    func triggerHighlight(
+        at location: CGPoint,
+        in size: CGSize,
+        tapTimestamp: CFTimeInterval? = nil,
+        isPermanent: Bool = false,
+        expiresAt: Date? = nil,
+        shouldPersist: Bool = false
+    ) {
         guard ringCount > 0 else { return }
         
         // Use deterministic RNG if timestamp is provided to ensure consistent selection
@@ -281,7 +289,7 @@ final class GalaxyViewModel: ObservableObject {
         // appendPulses(for: selected)
         
         // 应用高亮状态（用于星星变大变亮）
-        let entries = applyHighlights(from: selected, isPermanent: isPermanent, rng: &rng)
+        let entries = applyHighlights(from: selected, isPermanent: isPermanent, expiresAt: expiresAt, rng: &rng)
         #if DEBUG
         print("[GalaxyViewModel] highlights added: \(entries.count), total: \(highlights.count)")
         #endif
@@ -292,7 +300,7 @@ final class GalaxyViewModel: ObservableObject {
         }
         
         // 通知持久化（如果有回调）
-        if !entries.isEmpty {
+        if shouldPersist, !entries.isEmpty {
             onHighlightsPersisted?(entries)
         }
     }
@@ -407,7 +415,7 @@ final class GalaxyViewModel: ObservableObject {
         }
     }
 
-    private func applyHighlights(from candidates: [HighlightCandidate], isPermanent: Bool, rng: inout SeededRandom) -> [GalaxyHighlightEntry] {
+    private func applyHighlights(from candidates: [HighlightCandidate], isPermanent: Bool, expiresAt: Date?, rng: inout SeededRandom) -> [GalaxyHighlightEntry] {
         guard !candidates.isEmpty else { return [] }
         var outputs: [GalaxyHighlightEntry] = []
         outputs.reserveCapacity(candidates.count)
@@ -422,12 +430,19 @@ final class GalaxyViewModel: ObservableObject {
             // If it already exists and is permanent, keep it permanent
             let existing = highlights[candidate.star.id]
             let shouldBePermanent = isPermanent || (existing?.isPermanent ?? false)
-            
+
+            let shouldKeepExpires: Date? = {
+                if shouldBePermanent { return nil }
+                if let a = existing?.expiresAt, let b = expiresAt { return max(a, b) }
+                return expiresAt ?? existing?.expiresAt
+            }()
+
             highlights[candidate.star.id] = GalaxyHighlight(
                 color: color,
                 activatedAt: CACurrentMediaTime(), // Reset animation time
                 whiteBias: bias,
-                isPermanent: shouldBePermanent
+                isPermanent: shouldBePermanent,
+                expiresAt: shouldKeepExpires
             )
             
             if !seen.contains(candidate.star.id) {
@@ -475,13 +490,112 @@ final class GalaxyViewModel: ObservableObject {
     }
 
     private func purgeExpiredHighlights() {
-        // Remove highlights that have exceeded their duration, UNLESS they are permanent
+        // Remove highlights that have exceeded their duration, UNLESS they are permanent or have an active TTL.
         let duration = max(0.01, glowConfig.durationMs / 1000.0)
-        let now = CACurrentMediaTime()
+        let nowMono = CACurrentMediaTime()
+        let nowDate = Date()
         
         highlights = highlights.filter { _, highlight in
-            highlight.isPermanent || (now - highlight.activatedAt <= duration)
+            if highlight.isPermanent { return true }
+            if let exp = highlight.expiresAt {
+                return exp > nowDate
+            }
+            return (nowMono - highlight.activatedAt <= duration)
         }
+    }
+
+    func mergeTemporaryHighlights(indices: [Int], expiresAt: Date) {
+        guard !indices.isEmpty else { return }
+        let now = CACurrentMediaTime()
+        let activatedAt = now - 10_000 // restore without flash
+        for idx in indices {
+            let starId = "s-\(idx)"
+            guard let star = starLookup[starId] else { continue }
+            let color = highlightColor(for: star)
+            let existing = highlights[starId]
+            if existing?.isPermanent == true { continue }
+            let mergedExpiresAt = {
+                if let old = existing?.expiresAt { return max(old, expiresAt) }
+                return expiresAt
+            }()
+            highlights[starId] = GalaxyHighlight(
+                color: color,
+                activatedAt: activatedAt,
+                whiteBias: 0.0,
+                isPermanent: false,
+                expiresAt: mergedExpiresAt
+            )
+        }
+    }
+
+    func setPermanentHighlights(indices: [Int]) {
+        let targetIds = Set(indices.map { "s-\($0)" })
+        if targetIds.isEmpty {
+            highlights = highlights.filter { _, highlight in
+                !highlight.isPermanent
+            }
+            return
+        }
+
+        highlights = highlights.filter { key, highlight in
+            if !highlight.isPermanent { return true }
+            return targetIds.contains(key)
+        }
+
+        let now = CACurrentMediaTime()
+        let activatedAt = now - 10_000 // restore without flash
+        for starId in targetIds {
+            guard let star = starLookup[starId] else { continue }
+            let color = highlightColor(for: star)
+            let existing = highlights[starId]
+            if existing?.isPermanent == true { continue }
+            highlights[starId] = GalaxyHighlight(
+                color: color,
+                activatedAt: activatedAt,
+                whiteBias: 0.0,
+                isPermanent: true,
+                expiresAt: nil
+            )
+        }
+    }
+
+    func nearestPermanentHighlightIndex(
+        at location: CGPoint,
+        in size: CGSize,
+        tapTimestamp: CFTimeInterval?,
+        threshold: CGFloat = 36.0
+    ) -> Int? {
+        guard threshold > 0 else { return nil }
+        guard ringCount > 0 else { return nil }
+        guard !highlights.isEmpty else { return nil }
+
+        let elapsedAtTap: TimeInterval = {
+            if let ts = tapTimestamp, timeOrigin > 0 {
+                return max(0, ts - timeOrigin)
+            }
+            return elapsedTime
+        }()
+
+        let thresholdSquared = threshold * threshold
+        var best: (id: String, distanceSquared: CGFloat)?
+
+        for (id, highlight) in highlights {
+            guard highlight.isPermanent else { continue }
+            guard id.hasPrefix("s-") else { continue }
+            guard let star = starLookup[id] else { continue }
+
+            let pos = screenPosition(for: star, ringIndex: star.band, in: size, elapsed: elapsedAtTap)
+            let dx = pos.x - location.x
+            let dy = pos.y - location.y
+            let d2 = dx * dx + dy * dy
+            if d2 > thresholdSquared { continue }
+            if let best, d2 >= best.distanceSquared { continue }
+            best = (id: id, distanceSquared: d2)
+        }
+
+        guard let best else { return nil }
+        let suffix = best.id.dropFirst(2)
+        return Int(suffix)
     }
 
     private func highlightColor(for star: GalaxyStar) -> Color {

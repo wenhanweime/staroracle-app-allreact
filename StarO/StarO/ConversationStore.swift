@@ -13,6 +13,11 @@ final class ConversationStore: ObservableObject {
   static let shared = ConversationStore()
   var __updateSignature: String = ""
 
+  struct KnownStar: Equatable {
+    let id: String
+    let insightLevel: Int
+  }
+
   struct Session: Identifiable, Codable, Equatable {
     let id: String
     var title: String
@@ -21,6 +26,9 @@ final class ConversationStore: ObservableObject {
     var createdAt: Date
     var updatedAt: Date
     var hasCustomTitle: Bool
+    var lastSseDoneAt: Date?
+    // 兼容旧持久化文件：该字段可能缺失（decode 为 nil），按 false 处理。
+    var hasSupabaseConversationStarted: Bool?
 
     var displayTitle: String {
       let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -68,6 +76,10 @@ final class ConversationStore: ObservableObject {
   private var isPublishingEnabled = false
   private var isBootstrapped = false
   private var isPublishScheduled = false
+  private var pendingGalaxyStarIndicesStorage: [Int]?
+  private var pendingGalaxyStarIndicesExpiresAt: Date?
+  private var pendingReviewSessionIdByChatId: [String: String] = [:]
+  private var knownStarsByChatId: [String: KnownStar] = [:]
 
   init(fileURL: URL = ConversationStore.defaultURL()) {
     self.fileURL = fileURL
@@ -96,6 +108,58 @@ final class ConversationStore: ObservableObject {
     }
     scheduleSave()
     return session
+  }
+
+  @discardableResult
+  func upsertSupabaseSession(
+    id: String,
+    title: String?,
+    messages: [CoreChatMessage],
+    createdAt: Date? = nil,
+    updatedAt: Date? = nil
+  ) -> Session {
+    let now = Date()
+    let trimmedTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let resolvedTitle = trimmedTitle.isEmpty ? "未命名会话" : trimmedTitle
+    let persistedMessages = messages.map { message in
+      PersistMessage(
+        id: message.id,
+        text: message.text,
+        isUser: message.isUser,
+        timestamp: message.timestamp
+      )
+    }
+
+    mutateState {
+      if let index = self.sessionsStorage.firstIndex(where: { $0.id == id }) {
+        var session = self.sessionsStorage.remove(at: index)
+        session.title = resolvedTitle
+        session.messages = persistedMessages
+        if let createdAt {
+          session.createdAt = createdAt
+        }
+        session.updatedAt = updatedAt ?? now
+        session.hasCustomTitle = !trimmedTitle.isEmpty
+        session.hasSupabaseConversationStarted = true
+        self.sessionsStorage.insert(session, at: 0)
+      } else {
+        let session = Session(
+          id: id,
+          title: resolvedTitle,
+          systemPrompt: "",
+          messages: persistedMessages,
+          createdAt: createdAt ?? now,
+          updatedAt: updatedAt ?? now,
+          hasCustomTitle: !trimmedTitle.isEmpty,
+          lastSseDoneAt: nil,
+          hasSupabaseConversationStarted: true
+        )
+        self.sessionsStorage.insert(session, at: 0)
+      }
+      self.currentSessionIdStorage = id
+    }
+    scheduleSave()
+    return session(id: id) ?? makeSession(title: resolvedTitle)
   }
 
   @discardableResult
@@ -134,6 +198,75 @@ final class ConversationStore: ObservableObject {
       }
     }
     scheduleSave()
+  }
+
+  // MARK: - Chat segmentation (10-minute rule)
+
+  func shouldStartNewSessionDueToInactivity(limitSeconds: TimeInterval = 10 * 60) -> Bool {
+    guard let session = currentSession(), let doneAt = session.lastSseDoneAt else { return false }
+    return Date().timeIntervalSince(doneAt) > limitSeconds
+  }
+
+  func markSseDone(at date: Date = Date(), sessionId: String? = nil) {
+    guard let index = sessions.firstIndex(where: { $0.id == (sessionId ?? currentSessionId) }) else { return }
+    mutateState {
+      self.sessionsStorage[index].lastSseDoneAt = date
+      self.sessionsStorage[index].updatedAt = date
+      self.sessionsStorage[index].hasSupabaseConversationStarted = true
+    }
+    scheduleSave()
+  }
+
+  // MARK: - Pending chat-send context (Tap/Review)
+
+  func setPendingGalaxyStarIndices(_ indices: [Int], ttlSeconds: TimeInterval = 120) {
+    let cleaned = Array(Set(indices)).sorted()
+    guard !cleaned.isEmpty else { return }
+    pendingGalaxyStarIndicesStorage = cleaned
+    pendingGalaxyStarIndicesExpiresAt = Date().addingTimeInterval(max(1, ttlSeconds))
+    NSLog("🌟 ConversationStore | setPendingGalaxyStarIndices count=%d ttl=%.0fs", cleaned.count, ttlSeconds)
+  }
+
+  func clearPendingGalaxyStarIndices() {
+    pendingGalaxyStarIndicesStorage = nil
+    pendingGalaxyStarIndicesExpiresAt = nil
+  }
+
+  func galaxyStarIndicesForFirstChatSend(sessionId: String) -> [Int]? {
+    guard let exp = pendingGalaxyStarIndicesExpiresAt else { return nil }
+    if exp <= Date() {
+      clearPendingGalaxyStarIndices()
+      return nil
+    }
+    guard let indices = pendingGalaxyStarIndicesStorage, !indices.isEmpty else { return nil }
+    guard let session = session(id: sessionId) else { return nil }
+    guard session.hasSupabaseConversationStarted != true else { return nil }
+    return indices
+  }
+
+  func beginReviewSession(forChatId chatId: String) -> String {
+    let sessionId = UUID().uuidString.lowercased()
+    pendingReviewSessionIdByChatId[chatId] = sessionId
+    NSLog("🧾 ConversationStore | beginReviewSession chat_id=%@ review_session_id=%@", chatId, sessionId)
+    return sessionId
+  }
+
+  func pendingReviewSessionId(forChatId chatId: String) -> String? {
+    pendingReviewSessionIdByChatId[chatId]
+  }
+
+  func clearReviewSession(forChatId chatId: String) {
+    pendingReviewSessionIdByChatId.removeValue(forKey: chatId)
+  }
+
+  func knownStar(forChatId chatId: String) -> KnownStar? {
+    knownStarsByChatId[chatId]
+  }
+
+  func updateKnownStar(forChatId chatId: String, starId: String, insightLevel: Int) {
+    let trimmedStarId = starId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedStarId.isEmpty else { return }
+    knownStarsByChatId[chatId] = KnownStar(id: trimmedStarId, insightLevel: max(0, insightLevel))
   }
 
   // MARK: - Messages
@@ -330,7 +463,9 @@ final class ConversationStore: ObservableObject {
       messages: [],
       createdAt: now,
       updatedAt: now,
-      hasCustomTitle: !cleanTitle.isEmpty
+      hasCustomTitle: !cleanTitle.isEmpty,
+      lastSseDoneAt: nil,
+      hasSupabaseConversationStarted: false
     )
   }
 

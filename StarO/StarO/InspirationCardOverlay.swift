@@ -3,7 +3,9 @@ import StarOracleCore
 import StarOracleFeatures
 
 struct InspirationCardOverlay: View {
+    @EnvironmentObject private var environment: AppEnvironment
     @EnvironmentObject var starStore: StarStore
+    @EnvironmentObject private var chatBridge: NativeChatBridge
     @State private var isFlipped = false
     @State private var isAppearing = false
     @State private var dragOffset: CGSize = .zero
@@ -117,6 +119,18 @@ struct InspirationCardOverlay: View {
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+            if SupabaseRuntime.loadConfig() != nil {
+                environment.createSession(title: nil)
+                chatBridge.sendMessage(finalQuestion)
+                starStore.dismissInspirationCard(id: card.id)
+                // Reset
+                isFlipped = false
+                isAppearing = false
+                isClosing = false
+                dragOffset = .zero
+                return
+            }
+
             Task {
                 try? await starStore.addStar(question: finalQuestion, at: nil)
                 starStore.dismissInspirationCard(id: card.id)

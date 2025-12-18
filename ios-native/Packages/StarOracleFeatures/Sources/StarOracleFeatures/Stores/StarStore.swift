@@ -234,6 +234,11 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
 
   public func drawInspirationCard(region: GalaxyRegion?) -> InspirationCard {
     let card = inspirationService.drawCard(for: region)
+    presentInspirationCard(card)
+    return card
+  }
+
+  public func presentInspirationCard(_ card: InspirationCard) {
     currentInspirationCard = card
     inspirationStars.append(
       Star(
@@ -263,7 +268,40 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
       inspirationStars = Array(inspirationStars.suffix(60))
     }
     soundService?.play(.starClick)
-    return card
+  }
+
+  public func upsertConstellationStar(_ star: Star) {
+    var stars = constellation.stars
+    if let index = stars.firstIndex(where: { $0.id == star.id }) {
+      stars[index] = star
+    } else {
+      stars.append(star)
+    }
+    let connections = generateConnections(for: stars, baseConnections: constellation.connections)
+    constellation = Constellation(stars: stars, connections: connections)
+  }
+
+  public func upsertConstellationStars(_ list: [Star]) {
+    guard !list.isEmpty else { return }
+    var stars = constellation.stars
+    var updatedById: [String: Star] = [:]
+    updatedById.reserveCapacity(list.count)
+    for star in list {
+      updatedById[star.id] = star
+    }
+
+    for index in stars.indices {
+      let existing = stars[index]
+      if let replacement = updatedById.removeValue(forKey: existing.id) {
+        stars[index] = replacement
+      }
+    }
+    if !updatedById.isEmpty {
+      stars.append(contentsOf: updatedById.values)
+    }
+
+    let connections = generateConnections(for: stars, baseConnections: constellation.connections)
+    constellation = Constellation(stars: stars, connections: connections)
   }
 
   public func useCurrentInspirationCard() {

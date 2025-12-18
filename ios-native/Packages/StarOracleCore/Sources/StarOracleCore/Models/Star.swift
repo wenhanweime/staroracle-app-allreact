@@ -12,6 +12,7 @@ public struct Star: Identifiable, Codable, Equatable, Sendable {
   }
 
   public let id: String
+  public var galaxyStarIndices: [Int]?
   public var x: Double
   public var y: Double
   public var size: Double
@@ -38,6 +39,7 @@ public struct Star: Identifiable, Codable, Equatable, Sendable {
 
   public init(
     id: String,
+    galaxyStarIndices: [Int]? = nil,
     x: Double,
     y: Double,
     size: Double,
@@ -63,6 +65,7 @@ public struct Star: Identifiable, Codable, Equatable, Sendable {
     isTransient: Bool = false
   ) {
     self.id = id
+    self.galaxyStarIndices = galaxyStarIndices
     self.x = x
     self.y = y
     self.size = size

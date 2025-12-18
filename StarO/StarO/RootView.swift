@@ -10,12 +10,27 @@ struct RootView: View {
   @EnvironmentObject private var galaxyStore: GalaxyStore
   @EnvironmentObject private var conversationStore: ConversationStore
   @EnvironmentObject private var chatBridge: NativeChatBridge
+  @EnvironmentObject private var authService: AuthService
 
   @State private var activePane: ActivePane = .home
   @State private var selectedStar: Star?
   @State private var dragOffset: CGFloat = 0
 
   var body: some View {
+    Group {
+      if shouldShowLogin {
+        LoginView()
+      } else {
+        mainContent
+      }
+    }
+  }
+
+  private var shouldShowLogin: Bool {
+    SupabaseRuntime.loadProjectConfig() != nil && authService.isAuthenticated != true
+  }
+
+  private var mainContent: some View {
     GeometryReader { geometry in
       let width = geometry.size.width
       let menuWidth = min(360, width * 0.8)
@@ -41,6 +56,7 @@ struct RootView: View {
               onOpenCollection: { snapTo(.collection) },
               onOpenAIConfig: {},
               onOpenInspiration: {},
+              onOpenServerChat: { chat in environment.openServerChat(chat) },
               onSwitchSession: { id in environment.switchSession(to: id) },
               onCreateSession: { title in environment.createSession(title: title) },
               onRenameSession: { id, title in environment.renameSession(id: id, title: title) },
@@ -105,11 +121,32 @@ struct RootView: View {
           chatBridge.setHorizontalOffset(offset, animated: false)
         }
       }
+      .task {
+        await environment.syncSupabaseStarsIfNeeded()
+      }
       .onChange(of: activePane) { _, newValue in
         DispatchQueue.main.async {
           let offset = newValue == .menu ? menuWidth + 24 : 0
           chatBridge.setHorizontalOffset(offset, animated: true)
         }
+      }
+      .onReceive(NotificationCenter.default.publisher(for: .chatOverlayOpenStar)) { notification in
+        guard let starId = notification.userInfo?["starId"] as? String else { return }
+        let source = notification.userInfo?["source"] as? String
+        let shouldStayOnGalaxy = source == "galaxy"
+        if SupabaseRuntime.loadConfig() != nil,
+           conversationStore.session(id: conversationStore.currentSessionId)?.hasSupabaseConversationStarted == true {
+          conversationStore.beginReviewSession(forChatId: conversationStore.currentSessionId)
+        }
+        if !shouldStayOnGalaxy {
+          snapTo(.collection)
+        }
+        if let star = findStar(by: starId) {
+          selectedStar = star
+        }
+      }
+      .sheet(item: $selectedStar) { star in
+        StarDetailSheet(star: star) { selectedStar = nil }
       }
     }
   }
@@ -223,6 +260,12 @@ struct RootView: View {
     } else {
       snapTo(pane)
     }
+  }
+
+  private func findStar(by id: String) -> Star? {
+    if let star = starStore.constellation.stars.first(where: { $0.id == id }) { return star }
+    if let star = starStore.inspirationStars.first(where: { $0.id == id }) { return star }
+    return nil
   }
 
   private func handleDragChanged(_ translation: CGFloat, width: CGFloat) {

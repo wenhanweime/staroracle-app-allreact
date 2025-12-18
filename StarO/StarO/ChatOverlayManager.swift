@@ -60,6 +60,7 @@ extension Notification.Name {
     static let chatOverlayStateChanged = Notification.Name("chatOverlayStateChanged")
     // 🔧 已移除chatOverlayVisibilityChanged，统一使用chatOverlayStateChanged
     static let inputDrawerPositionChanged = Notification.Name("inputDrawerPositionChanged")  // 新增：输入框位置变化通知
+    static let chatOverlayOpenStar = Notification.Name("chatOverlayOpenStar")
 }
 
 // MARK: - ChatOverlayManager业务逻辑类
@@ -1853,6 +1854,17 @@ extension OverlayViewController: UITableViewDataSource, UITableViewDelegate {
         return cell
     }
 
+    func tableView(_ tableView: UITableView, didSelectRowAt indexPath: IndexPath) {
+        tableView.deselectRow(at: indexPath, animated: true)
+        guard indexPath.row < visibleMessages.count else { return }
+        let message = visibleMessages[indexPath.row]
+        guard message.id.hasPrefix("hint-star:") else { return }
+        let parts = message.id.split(separator: ":", omittingEmptySubsequences: true)
+        guard parts.count >= 2 else { return }
+        let starId = String(parts[1])
+        NotificationCenter.default.post(name: .chatOverlayOpenStar, object: nil, userInfo: ["starId": starId])
+    }
+
     // willDisplay 未做特殊处理
     
     // MARK: - 滚动监听：简化的下滑收起功能
@@ -1969,9 +1981,58 @@ class MessageTableViewCell: UITableViewCell {
     func configure(with message: ChatMessage) {
         // 回退：使用普通文本渲染，避免富文本带来的替换/渲染问题
         messageLabel.attributedText = nil
-        messageLabel.text = message.text
+        messageLabel.text = nil
         // AI空文本 -> 显示loading指示器
         let isLoadingAI = (!message.isUser && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        let isStarHint = message.id.hasPrefix("hint-star:")
+        
+        // 星卡提示（非气泡）：灰色文本 + 蓝色“点击查看…”
+        if isStarHint {
+            selectionStyle = .default
+            activity.stop()
+            activity.isHidden = true
+            timeLabel.isHidden = true
+            timeLabel.text = ""
+            
+            messageContainerView.layer.cornerRadius = 0
+            messageContainerView.backgroundColor = .clear
+            messageLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+            messageLabel.textAlignment = .center
+            messageLabel.textColor = .systemGray
+            
+            let fullText = message.text
+            let attributed = NSMutableAttributedString(string: fullText)
+            attributed.addAttribute(.foregroundColor, value: UIColor.systemGray, range: NSRange(location: 0, length: attributed.length))
+            let candidates = ["点击查看星卡", "点击查看", "查看星卡"]
+            if let keyword = candidates.first(where: { fullText.contains($0) }) {
+                let ns = fullText as NSString
+                let range = ns.range(of: keyword)
+                if range.location != NSNotFound, range.length > 0 {
+                    attributed.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: range)
+                }
+            }
+            messageLabel.attributedText = attributed
+            
+            // 重置之前的约束
+            leadingConstraint?.isActive = false
+            trailingConstraint?.isActive = false
+            timeLabelConstraint?.isActive = false
+            
+            leadingConstraint = messageContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+            trailingConstraint = messageContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
+            timeLabelConstraint = timeLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+            
+            leadingConstraint?.isActive = true
+            trailingConstraint?.isActive = true
+            timeLabelConstraint?.isActive = true
+            return
+        }
+        
+        selectionStyle = .none
+        messageContainerView.layer.cornerRadius = 16
+        messageLabel.font = UIFont.systemFont(ofSize: 16, weight: .regular)
+        messageLabel.textAlignment = .natural
+        messageLabel.text = message.text
         if isLoadingAI {
             // 仅显示Star加载，不显示橄榄球样式的气泡/时间
             activity.isHidden = false
