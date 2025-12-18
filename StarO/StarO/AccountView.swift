@@ -2,10 +2,12 @@ import SwiftUI
 import UIKit
 import StarOracleCore
 import StarOracleFeatures
+import StarOracleServices
 
 @MainActor
 struct AccountView: View {
   @Environment(\.dismiss) private var dismiss
+  @EnvironmentObject private var environment: AppEnvironment
   @EnvironmentObject private var authService: AuthService
   @EnvironmentObject private var starStore: StarStore
   @EnvironmentObject private var conversationStore: ConversationStore
@@ -17,6 +19,7 @@ struct AccountView: View {
   @State private var isLoading = false
   @State private var isEditing = false
   @State private var isSaving = false
+  @State private var isShowingAIConfig = false
   @State private var errorMessage: String?
 
   @State private var draftDisplayName: String = ""
@@ -30,6 +33,8 @@ struct AccountView: View {
         profileHeaderSection
         statsSection
         accountInfoSection
+        settingsSection
+        debugSection
 
         if isEditing {
           editSection
@@ -66,6 +71,10 @@ struct AccountView: View {
       .task {
         await reload()
       }
+    }
+    .sheet(isPresented: $isShowingAIConfig) {
+      AIConfigSheet()
+        .environmentObject(environment)
     }
   }
 
@@ -167,6 +176,27 @@ struct AccountView: View {
       }
       .disabled(isSaving)
     }
+  }
+
+  private var settingsSection: some View {
+    Section("设置") {
+      Button {
+        isShowingAIConfig = true
+      } label: {
+        Text("AI 配置")
+      }
+      .disabled(isSaving || isLoading)
+    }
+  }
+
+  private var debugSection: some View {
+    Section("调试") {
+      labeledValueRow(title: "云端会话", value: hasSupabaseConfig ? "可打开" : "未启用")
+    }
+  }
+
+  private var hasSupabaseConfig: Bool {
+    SupabaseRuntime.loadConfig() != nil
   }
 
   private func labeledValueRow(title: String, value: String) -> some View {

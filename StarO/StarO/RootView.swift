@@ -53,14 +53,9 @@ struct RootView: View {
           Group {
             DrawerMenuView(
               onClose: { snapTo(.home) },
-              onOpenTemplate: {},
-              onOpenCollection: { snapTo(.collection) },
-              onOpenAIConfig: {},
-              onOpenInspiration: {},
               onOpenAccount: { openAccount() },
               onOpenServerChat: { chat in environment.openServerChat(chat) },
               onSwitchSession: { id in environment.switchSession(to: id) },
-              onCreateSession: { title in environment.createSession(title: title) },
               onRenameSession: { id, title in environment.renameSession(id: id, title: title) },
               onDeleteSession: { id in environment.deleteSession(id: id) }
             )

@@ -4,19 +4,13 @@ import StarOracleCore
 import StarOracleFeatures
 
 struct DrawerMenuView: View {
-  @EnvironmentObject private var starStore: StarStore
   @EnvironmentObject private var conversationStore: ConversationStore
   @EnvironmentObject private var authService: AuthService
 
   var onClose: () -> Void
-  var onOpenTemplate: () -> Void
-  var onOpenCollection: () -> Void
-  var onOpenAIConfig: () -> Void
-  var onOpenInspiration: () -> Void
   var onOpenAccount: () -> Void
   var onOpenServerChat: (ChatListService.Chat) -> Void
   var onSwitchSession: (String) -> Void
-  var onCreateSession: (String?) -> Void
   var onRenameSession: (String, String) -> Void
   var onDeleteSession: (String) -> Void
 
@@ -64,13 +58,6 @@ struct DrawerMenuView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 12)
       }
-
-      Divider().overlay(Color.white.opacity(0.05))
-      VStack(alignment: .leading, spacing: 18) {
-        menuSection
-      }
-      .padding(.horizontal, 24)
-      .padding(.vertical, 12)
 
       Divider().overlay(Color.white.opacity(0.05))
       accountSection
@@ -138,96 +125,61 @@ struct DrawerMenuView: View {
         RoundedRectangle(cornerRadius: 16)
           .stroke(Color.white.opacity(0.12), lineWidth: 1)
       )
-
-      Button {
-        onCreateSession(nil)
-      } label: {
-        Label("新建会话", systemImage: "sparkles")
-          .font(.footnote.weight(.medium))
-          .frame(maxWidth: .infinity)
-          .padding(.vertical, 12)
-          .background(
-            LinearGradient(
-              colors: [Color.purple.opacity(0.8), Color.blue.opacity(0.6)],
-              startPoint: .leading,
-              endPoint: .trailing
-            ),
-            in: RoundedRectangle(cornerRadius: 16, style: .continuous)
-          )
-      }
-      .buttonStyle(.plain)
     }
   }
 
   private var sessionList: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("历史会话")
-        .font(.caption)
-        .foregroundStyle(.white.opacity(0.6))
-      serverSessionList
-      Divider().overlay(Color.white.opacity(0.05))
-      localSessionList
-    }
-  }
-
-  private var serverSessionList: some View {
     VStack(alignment: .leading, spacing: 10) {
       HStack(spacing: 8) {
-        Text("云端（可打开）")
-          .font(.footnote.weight(.medium))
-          .foregroundStyle(.white.opacity(0.8))
+        Text("历史会话")
+          .font(.caption)
+          .foregroundStyle(.white.opacity(0.6))
         Spacer()
-        if isLoadingServerChats {
-          ProgressView()
-            .progressViewStyle(.circular)
-            .tint(.white.opacity(0.7))
-            .scaleEffect(0.7)
+        if hasSupabaseConfig {
+          if isLoadingServerChats {
+            ProgressView()
+              .progressViewStyle(.circular)
+              .tint(.white.opacity(0.7))
+              .scaleEffect(0.7)
+          }
+          Button {
+            Task { await refreshServerChats() }
+          } label: {
+            Image(systemName: "arrow.clockwise")
+              .font(.caption)
+              .foregroundStyle(.white.opacity(0.8))
+              .padding(6)
+              .background(Color.white.opacity(0.08), in: Circle())
+          }
+          .buttonStyle(.plain)
+          .disabled(isLoadingServerChats)
         }
-        Button {
-          Task { await refreshServerChats() }
-        } label: {
-          Image(systemName: "arrow.clockwise")
-            .font(.caption)
-            .foregroundStyle(.white.opacity(0.8))
-            .padding(6)
-            .background(Color.white.opacity(0.08), in: Circle())
-        }
-        .buttonStyle(.plain)
-        .disabled(!hasSupabaseConfig || isLoadingServerChats)
       }
 
-      if !hasSupabaseConfig {
-        Text("未配置 SUPABASE_URL + TOKEN/SUPABASE_JWT")
-          .font(.footnote)
-          .foregroundStyle(.white.opacity(0.4))
-          .frame(maxWidth: .infinity, alignment: .leading)
-      } else if filteredServerChats.isEmpty {
-        Text("暂无记录")
-          .font(.footnote)
-          .foregroundStyle(.white.opacity(0.4))
-          .frame(maxWidth: .infinity, alignment: .leading)
-      } else {
+      let hasAnyServer = hasSupabaseConfig && !filteredServerChats.isEmpty
+      let hasAnyLocal = !filteredSessions.isEmpty
+
+      if hasAnyServer {
         ForEach(filteredServerChats) { chat in
           serverChatRow(chat)
         }
       }
-    }
-  }
 
-  private var localSessionList: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("本地（旧链路）")
-        .font(.footnote.weight(.medium))
-        .foregroundStyle(.white.opacity(0.8))
-      if filteredSessions.isEmpty {
+      if hasAnyServer && hasAnyLocal {
+        Divider().overlay(Color.white.opacity(0.05))
+      }
+
+      if hasAnyLocal {
+        ForEach(filteredSessions) { session in
+          sessionRow(session)
+        }
+      }
+
+      if !hasAnyServer && !hasAnyLocal {
         Text("暂无记录")
           .font(.footnote)
           .foregroundStyle(.white.opacity(0.4))
           .frame(maxWidth: .infinity, alignment: .leading)
-      } else {
-        ForEach(filteredSessions) { session in
-          sessionRow(session)
-        }
       }
     }
   }
@@ -378,63 +330,6 @@ struct DrawerMenuView: View {
     return "?"
   }
 
-  private var menuSection: some View {
-    VStack(alignment: .leading, spacing: 12) {
-      Text("操作")
-        .font(.caption)
-        .foregroundStyle(.white.opacity(0.6))
-      VStack(spacing: 10) {
-        DrawerMenuButton(title: "所有项目", icon: "square.grid.2x2", badge: "\(starStore.constellation.stars.count)") { }
-        DrawerMenuButton(title: "选择星座", icon: "sparkles") {
-          onOpenTemplate()
-          onClose()
-        }
-        DrawerMenuButton(title: "灵感卡", icon: "wand.and.stars") {
-          onOpenInspiration()
-          onClose()
-        }
-        DrawerMenuButton(title: "星卡收藏", icon: "bookmark") {
-          onOpenCollection()
-          onClose()
-        }
-        DrawerMenuButton(title: "AI 配置", icon: "slider.horizontal.3") {
-          onOpenAIConfig()
-          onClose()
-        }
-      }
-    }
-  }
-}
-
-private struct DrawerMenuButton: View {
-  let title: String
-  let icon: String
-  var badge: String?
-  let action: () -> Void
-
-  var body: some View {
-    Button(action: action) {
-      HStack {
-        Label(title, systemImage: icon)
-          .foregroundStyle(.white)
-        Spacer()
-        if let badge {
-          Text(badge)
-            .font(.caption2)
-            .padding(.horizontal, 10)
-            .padding(.vertical, 4)
-            .background(Color.white.opacity(0.12), in: Capsule())
-        }
-        Image(systemName: "chevron.right")
-          .font(.caption2)
-          .foregroundStyle(.white.opacity(0.6))
-      }
-      .padding(.vertical, 10)
-      .padding(.horizontal, 12)
-      .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14))
-    }
-    .buttonStyle(.plain)
-  }
 }
 
 private struct RenameSessionSheet: View {
