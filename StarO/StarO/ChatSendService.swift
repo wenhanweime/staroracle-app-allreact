@@ -162,28 +162,52 @@ enum ChatSendService {
             }
           }
 
-          for try await rawLine in bytes.lines {
-            try Task.checkCancellation()
-            let line = rawLine.trimmingCharacters(in: .newlines)
+          // NOTE: 不使用 `bytes.lines`：在部分系统版本上会出现“lines 序列为空但 bytes 实际有数据”的情况，
+          // 导致 SSE 永远收不到 delta/done。这里改为按字节手动切行解析。
+          var lineBytes: [UInt8] = []
+          lineBytes.reserveCapacity(256)
+          var shouldStop = false
+
+          func flushLine() throws {
+            let data = Data(lineBytes)
+            lineBytes.removeAll(keepingCapacity: true)
+            let raw = String(data: data, encoding: .utf8) ?? ""
+            let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+
             if line.isEmpty {
               try dispatchEventIfNeeded()
               if didReceiveDone {
-                bytes.task.cancel()
-                break
+                shouldStop = true
               }
-              continue
+              return
             }
-            if line.hasPrefix(":") { continue }
+            if line.hasPrefix(":") { return }
             if line.hasPrefix("event:") {
               currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
-              continue
+              return
             }
             if line.hasPrefix("data:") {
               var value = String(line.dropFirst(5))
               if value.hasPrefix(" ") { value.removeFirst() }
               dataLines.append(value)
-              continue
+              return
             }
+          }
+
+          for try await byte in bytes {
+            try Task.checkCancellation()
+            if byte == 0x0A { // \n
+              try flushLine()
+              if shouldStop {
+                bytes.task.cancel()
+                break
+              }
+            } else {
+              lineBytes.append(byte)
+            }
+          }
+          if !lineBytes.isEmpty {
+            try flushLine()
           }
 
           try dispatchEventIfNeeded()
