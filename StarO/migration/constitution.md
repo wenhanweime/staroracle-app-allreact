@@ -28,9 +28,14 @@
   - `fix(staro): ...`
   - `chore(migration): ...`
 
+### 3) 用户输入记录必须标注已读/完成
+
+- 用户输入会写入 `StarO/migration/userpromptrecord.md`，并以 `# <序号>` 分段（如 `# 2`）。
+- 每次开始处理某条输入时，必须在对应标题上补充 `（已读 YYYY-MM-DD HH:MM）`。
+- 若该条输入包含子任务列表，必须改为任务清单 `- [ ]`，并在对应改动完成且已提交后将该子任务标记为 `- [x]`，保持“输入 → 实现 → 提交 → 日志”可追溯。
+
 ## 禁止入库（强制）
 
 - 本地 Supabase 配置：`StarO/StarO/SupabaseConfig.plist`（由脚本生成，必须忽略）
 - 本地备份：`trash/`
 - Xcode/工具临时目录：如 `.derivedData/`、`.tmp/` 等
-

@@ -1,8 +1,19 @@
 
-# 1
+# 1（已读 2025-12-19 01:51）
 /Users/pot/Documents/staroracle-app_allreact/StarO/migration这个是当前
   迁移过程的记录  /Users/pot/Documents/staroracle-backend/docs/swift-
   migration 这是迁移需要遵循的最重要的文档  /Users/pot/Documents/
   staroracle-backend/docs/contracts 这是后端文档,可以拿来参考对照 这里是
   prd /Users/pot/Documents/staroracle-backend/spec-fundation  参考这些文
   档,评估当前我们的swift改动以连接后端进展到哪个步骤了,然后继续进行
+
+# 2（已读 2025-12-19 02:02）
+现在有几个问题，
+- [ ] 1 swift前端，在浮窗出现之后的某个时机，主页的星谕 菜单 starcollection三个按钮的位置会上移，几乎被灵动岛覆盖了，这需要解决，看看是什么导致了这个位置变化。
+- [ ] 2 历史对话并没有主题总结，标题全是新会话，需要打通调用大模型总结的链路
+- [ ] 3 菜单panel是一个圆角矩形，而star collection则是上下贯穿的侧拉抽屉，我们需要把菜单panel也改成完全从侧面拉出的上下贯穿的样式
+- [ ] 4 左侧菜单panel拉出时候会把浮窗和对话框顶到右侧，但是右侧starcollection的抽屉往左拉出来的时候，则没有将对话框顶到左侧，这是不对的，需要对齐菜单panel，把对话框/浮窗顶到左侧
+- [ ] 5 点击galaxy弹出的灵感星卡，现在内容过少，只有一个尼采的，展示格式还有问题，让我们首先引入 答案之书的所有答案，这个在当前目录中有，然后就是多策略一些内容类型，名人名言之类的，或者mbti相关的，统一灌倒灵感库
+- [ ] 6 接入apple语音，点击对话框语音的时候，可以吊起apple 键盘的语音功能
+- [ ] 7 修改starcollection 中卡片的点击交互，点击应该不是反转，而是放大，放大之后变成跟灵感卡一样的大小，浮在屏幕中央，然后可以点击翻转
+- [ ] 8 对话中出现的点击查看星卡，点击之后出现的样式也不应该是现在的详情样式，让我们也改成灵感卡片那样的单卡样式
