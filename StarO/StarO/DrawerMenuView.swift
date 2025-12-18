@@ -5,7 +5,6 @@ import StarOracleFeatures
 
 struct DrawerMenuView: View {
   @EnvironmentObject private var starStore: StarStore
-  @EnvironmentObject private var chatStore: ChatStore
   @EnvironmentObject private var conversationStore: ConversationStore
   @EnvironmentObject private var authService: AuthService
 
@@ -50,14 +49,13 @@ struct DrawerMenuView: View {
 
   var body: some View {
     VStack(spacing: 0) {
-      header
-      Divider().overlay(Color.white.opacity(0.1))
       VStack(alignment: .leading, spacing: 16) {
         searchBar
       }
       .padding(.horizontal, 24)
-      .padding(.top, 20)
+      .padding(.top, 16)
       .padding(.bottom, 12)
+      Divider().overlay(Color.white.opacity(0.1))
 
       ScrollView(showsIndicators: false) {
         VStack(alignment: .leading, spacing: 18) {
@@ -70,18 +68,14 @@ struct DrawerMenuView: View {
       Divider().overlay(Color.white.opacity(0.05))
       VStack(alignment: .leading, spacing: 18) {
         menuSection
-        Divider().overlay(Color.white.opacity(0.05))
-        statsSection
       }
       .padding(.horizontal, 24)
-      .padding(.vertical, 16)
+      .padding(.vertical, 12)
 
       Divider().overlay(Color.white.opacity(0.05))
       accountSection
         .padding(.horizontal, 24)
-        .padding(.vertical, 14)
-
-      closeButton
+        .padding(.vertical, 10)
     }
     .frame(width: 340)
     .frame(maxHeight: .infinity, alignment: .top)
@@ -129,21 +123,6 @@ struct DrawerMenuView: View {
     .task {
       await refreshServerChats()
     }
-  }
-
-  private var header: some View {
-    VStack(alignment: .leading, spacing: 6) {
-      Text("星谕")
-        .font(.system(size: 22, weight: .semibold, design: .serif))
-        .foregroundStyle(.white)
-      Text("StarOracle Atlas")
-        .font(.footnote)
-        .foregroundStyle(.white.opacity(0.6))
-    }
-    .frame(maxWidth: .infinity, alignment: .leading)
-    .padding(.horizontal, 24)
-    .padding(.top, 48)
-    .padding(.bottom, 20)
   }
 
   private var searchBar: some View {
@@ -357,8 +336,7 @@ struct DrawerMenuView: View {
             .font(.system(size: 16, weight: .semibold))
             .foregroundStyle(.white.opacity(0.9))
         }
-        .frame(width: 38, height: 38)
-        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+        .frame(width: 34, height: 34)
 
         VStack(alignment: .leading, spacing: 2) {
           Text(accountTitle)
@@ -377,13 +355,9 @@ struct DrawerMenuView: View {
           .font(.caption2)
           .foregroundStyle(.white.opacity(0.6))
       }
-      .padding(.vertical, 10)
-      .padding(.horizontal, 12)
-      .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-      .overlay(
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(Color.white.opacity(0.08), lineWidth: 1)
-      )
+      .padding(.vertical, 8)
+      .padding(.horizontal, 10)
+      .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
     }
     .buttonStyle(.plain)
   }
@@ -429,43 +403,6 @@ struct DrawerMenuView: View {
         }
       }
     }
-  }
-
-  private var statsSection: some View {
-    VStack(alignment: .leading, spacing: 10) {
-      Text("宇宙计数")
-        .font(.caption)
-        .foregroundStyle(.white.opacity(0.6))
-      statRow(title: "星卡", value: "\(starStore.constellation.stars.count)")
-      statRow(title: "灵感", value: "\(starStore.inspirationStars.count)")
-      statRow(title: "对话", value: "\(chatStore.messages.count)")
-    }
-  }
-
-  private func statRow(title: String, value: String) -> some View {
-    HStack {
-      Text(title)
-        .font(.footnote)
-        .foregroundStyle(.white.opacity(0.7))
-      Spacer()
-      Text(value)
-        .font(.footnote.weight(.medium))
-        .foregroundStyle(.white)
-    }
-    .padding(.vertical, 4)
-  }
-
-  private var closeButton: some View {
-    Button {
-      onClose()
-    } label: {
-      Label("关闭", systemImage: "xmark")
-        .font(.footnote.weight(.medium))
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 14)
-        .background(Color.white.opacity(0.08))
-    }
-    .buttonStyle(.plain)
   }
 }
 
