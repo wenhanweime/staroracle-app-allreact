@@ -117,6 +117,7 @@ enum ChatSendService {
 
           var currentEvent: String?
           var dataLines: [String] = []
+          var didReceiveDone = false
 
           func dispatchEventIfNeeded() throws {
             guard !dataLines.isEmpty else {
@@ -148,6 +149,7 @@ enum ChatSendService {
                     NSLog("⚠️ ChatSendService | trace_id mismatch request=%@ server=%@", requestTraceId, serverTrace)
                   }
                   continuation.yield(.done(messageId: decoded.message_id, chatId: resolvedChatId, traceId: decoded.trace_id))
+                  didReceiveDone = true
                 }
               }
             case "error":
@@ -165,6 +167,10 @@ enum ChatSendService {
             let line = rawLine.trimmingCharacters(in: .newlines)
             if line.isEmpty {
               try dispatchEventIfNeeded()
+              if didReceiveDone {
+                bytes.task.cancel()
+                break
+              }
               continue
             }
             if line.hasPrefix(":") { continue }
