@@ -53,26 +53,36 @@ struct GalaxyBackgroundView: View {
               starStore.setIsAsking(false, position: StarPosition(x: xPct, y: yPct))
             }
 
-            let remoteCard: InspirationCard?
-            if SupabaseRuntime.loadConfig() != nil {
-              remoteCard = await StarPluckService.pluckInspiration()
-            } else {
-              remoteCard = nil
-            }
-
-            guard !Task.isCancelled else { return }
-
             await MainActor.run {
-              if let remoteCard {
-                starStore.presentInspirationCard(remoteCard)
-              } else {
-                _ = starStore.drawInspirationCard(region: region)
-              }
+              _ = starStore.drawInspirationCard(region: region)
               lastTapRegion = region
               lastTapDate = Date()
 
               // Unlock UI
               galaxyStore.setIsGeneratingCard(false)
+            }
+
+            guard SupabaseRuntime.loadConfig() != nil else { return }
+            let localCardId = await MainActor.run { starStore.currentInspirationCard?.id }
+            guard let localCardId, !localCardId.isEmpty else { return }
+
+            let remoteCard = await StarPluckService.pluckInspiration()
+            guard !Task.isCancelled else { return }
+            guard let remoteCard else { return }
+
+            await MainActor.run {
+              guard starStore.currentInspirationCard?.id == localCardId else { return }
+              let merged = InspirationCard(
+                id: localCardId,
+                title: remoteCard.title,
+                question: remoteCard.question,
+                reflection: remoteCard.reflection,
+                tags: remoteCard.tags,
+                emotionalTone: remoteCard.emotionalTone,
+                category: remoteCard.category,
+                spawnedAt: remoteCard.spawnedAt
+              )
+              starStore.replaceCurrentInspirationCard(merged)
             }
           }
         },

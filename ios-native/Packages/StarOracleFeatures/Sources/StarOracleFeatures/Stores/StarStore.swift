@@ -270,6 +270,10 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
     soundService?.play(.starClick)
   }
 
+  public func replaceCurrentInspirationCard(_ card: InspirationCard) {
+    currentInspirationCard = card
+  }
+
   public func upsertConstellationStar(_ star: Star) {
     var stars = constellation.stars
     if let index = stars.firstIndex(where: { $0.id == star.id }) {
