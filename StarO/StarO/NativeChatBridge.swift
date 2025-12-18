@@ -776,6 +776,10 @@ extension NativeChatBridge: InputDrawerDelegate {
 
   nonisolated func inputDrawerDidFocus() {
     NSLog("🎯 NativeChatBridge.inputDrawerDidFocus")
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      self.ensureOverlayVisible(collapsed: false)
+    }
   }
 
   nonisolated func inputDrawerDidBlur() {}
