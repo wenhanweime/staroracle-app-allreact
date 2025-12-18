@@ -1,4 +1,6 @@
 import Foundation
+import AVFoundation
+import Speech
 import SwiftUI
 import UIKit
 import StarOracleCore
@@ -276,6 +278,17 @@ class InputViewController: UIViewController {
     private var sendButton: UIButton!
     private var micButton: UIButton!
     private var awarenessView: FloatingAwarenessPlanetView!
+
+    // MARK: - Speech (Apple Speech framework)
+    private let speechRecognizer: SFSpeechRecognizer? = {
+        let zh = Locale(identifier: "zh-CN")
+        return SFSpeechRecognizer(locale: zh)
+    }()
+    private let audioEngine = AVAudioEngine()
+    private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
+    private var recognitionTask: SFSpeechRecognitionTask?
+    private var isSpeechRecording: Bool = false
+    private var speechBaseText: String = ""
     
     // 约束
     private var containerLeadingConstraint: NSLayoutConstraint!
@@ -654,7 +667,164 @@ class InputViewController: UIViewController {
     
     @objc private func micButtonTapped() {
         NSLog("🎯 麦克风按钮被点击")
-        // TODO: 集成语音识别功能
+        if isSpeechRecording {
+            stopSpeechRecognition()
+        } else {
+            Task { @MainActor [weak self] in
+                await self?.startSpeechRecognitionIfPossible()
+            }
+        }
+    }
+
+    @MainActor
+    private func startSpeechRecognitionIfPossible() async {
+        guard let speechRecognizer else {
+            presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
+            return
+        }
+        guard speechRecognizer.isAvailable else {
+            presentPermissionAlert(title: "语音识别暂不可用", message: "语音识别服务当前不可用，请稍后再试。")
+            return
+        }
+
+        let speechOK = await requestSpeechAuthorization()
+        guard speechOK else {
+            presentPermissionAlert(title: "需要语音识别权限", message: "请在系统设置中允许“语音识别”权限后再试。")
+            return
+        }
+
+        let micOK = await requestMicrophonePermission()
+        guard micOK else {
+            presentPermissionAlert(title: "需要麦克风权限", message: "请在系统设置中允许“麦克风”权限后再试。")
+            return
+        }
+
+        do {
+            try beginSpeechRecognition()
+        } catch {
+            presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
+            stopSpeechRecognition()
+        }
+    }
+
+    @MainActor
+    private func requestSpeechAuthorization() async -> Bool {
+        let status = SFSpeechRecognizer.authorizationStatus()
+        if status == .authorized { return true }
+        return await withCheckedContinuation { continuation in
+            SFSpeechRecognizer.requestAuthorization { newStatus in
+                continuation.resume(returning: newStatus == .authorized)
+            }
+        }
+    }
+
+    @MainActor
+    private func requestMicrophonePermission() async -> Bool {
+        let session = AVAudioSession.sharedInstance()
+        switch session.recordPermission {
+        case .granted:
+            return true
+        case .denied:
+            return false
+        case .undetermined:
+            return await withCheckedContinuation { continuation in
+                session.requestRecordPermission { granted in
+                    continuation.resume(returning: granted)
+                }
+            }
+        @unknown default:
+            return false
+        }
+    }
+
+    private func beginSpeechRecognition() throws {
+        stopSpeechRecognition()
+
+        speechBaseText = textField.text ?? ""
+
+        let audioSession = AVAudioSession.sharedInstance()
+        try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
+        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+
+        let request = SFSpeechAudioBufferRecognitionRequest()
+        request.shouldReportPartialResults = true
+        recognitionRequest = request
+
+        let inputNode = audioEngine.inputNode
+        inputNode.removeTap(onBus: 0)
+        let recordingFormat = inputNode.outputFormat(forBus: 0)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
+            self?.recognitionRequest?.append(buffer)
+        }
+
+        audioEngine.prepare()
+        try audioEngine.start()
+
+        isSpeechRecording = true
+        updateMicButton(isRecording: true)
+
+        recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
+            guard let self else { return }
+
+            if let result {
+                let spoken = result.bestTranscription.formattedString
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: spoken)
+                    self.textField.text = merged
+                    self.updateSendButtonState()
+                    self.manager?.handleTextChange(merged)
+                }
+            }
+
+            if error != nil || (result?.isFinal ?? false) {
+                DispatchQueue.main.async { [weak self] in
+                    self?.stopSpeechRecognition()
+                }
+            }
+        }
+    }
+
+    private func stopSpeechRecognition() {
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine.inputNode.removeTap(onBus: 0)
+
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
+
+        recognitionTask?.cancel()
+        recognitionTask = nil
+
+        isSpeechRecording = false
+        updateMicButton(isRecording: false)
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
+
+    private func updateMicButton(isRecording: Bool) {
+        let name = isRecording ? "stop.circle.fill" : "mic.fill"
+        let image = UIImage(systemName: name)
+        micButton.setImage(image, for: .normal)
+        micButton.tintColor = isRecording
+          ? UIColor(red: 168/255.0, green: 85/255.0, blue: 247/255.0, alpha: 1.0)
+          : UIColor(white: 1.0, alpha: 0.6)
+    }
+
+    private func mergeSpeechText(base: String, spoken: String) -> String {
+        let trimmedBase = base.trimmingCharacters(in: .whitespacesAndNewlines)
+        let trimmedSpoken = spoken.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmedBase.isEmpty { return trimmedSpoken }
+        if trimmedSpoken.isEmpty { return trimmedBase }
+        return "\(trimmedBase) \(trimmedSpoken)"
+    }
+
+    @MainActor
+    private func presentPermissionAlert(title: String, message: String) {
+        let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
+        alert.addAction(UIAlertAction(title: "好的", style: .default))
+        present(alert, animated: true)
     }
     
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {

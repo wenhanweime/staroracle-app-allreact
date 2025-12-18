@@ -69,3 +69,4 @@
 - 菜单抽屉样式：将左侧菜单从“圆角卡片”改为“全高侧拉抽屉”，背景铺满安全区并增加右侧分隔线；同时移除 `RootView` 中的左侧额外 padding，并将 ChatOverlay/InputDrawer 的水平顶起偏移从 `menuWidth + 24` 改为 `menuWidth`（`DrawerMenuView` / `RootView`）。
 - 抽屉顶起对齐：支持 ChatOverlay/InputDrawer 的“负向水平偏移”，当右侧 `StarCollection` 抽屉打开时将对话浮窗/输入框整体向左顶起（`RootView` 在 `.collection` 时传 `-collectionWidth`；移除 `ChatOverlayManager/OverlayViewController/InputDrawerManager/InputViewController` 对 offset 的 `max(0, ...)` 限制）。
 - 灵感卡内容（答案之书/名言）：引入“答案之书”全量答案（本地 `BookOfAnswers.answers`），并在 `star-pluck` 返回 `content_type=question` 且 `answer` 为空时自动用答案之书补齐；同时将 `content_type` 写入 tags（`content_type:quote/question`），并在灵感卡背面按类型调整展示——quote 类型大字显示引用（`question`），署名作为底部小字（`reflection`），修复“只看到尼采/格式不对”的问题（`StarPluckService` / `InspirationCardOverlay`）。
+- 语音输入（Speech）：接入 Apple `Speech` + `AVAudioEngine`，点击输入框右侧麦克风按钮开始/停止中文语音转文字并实时回填输入框；补齐 `NSMicrophoneUsageDescription` 与 `NSSpeechRecognitionUsageDescription`（通过 `GENERATE_INFOPLIST_FILE` 的 `INFOPLIST_KEY_*` 配置注入）。
