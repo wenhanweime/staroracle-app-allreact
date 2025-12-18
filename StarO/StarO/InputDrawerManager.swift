@@ -56,6 +56,10 @@ public class InputDrawerManager {
     // MARK: - Public API
     
     func attach(to scene: UIWindowScene) {
+        // 若已经绑定同一 scene，避免重复 rebind 造成窗口闪烁
+        if windowScene === scene, let window = inputWindow, window.windowScene === scene {
+            return
+        }
         windowScene = scene
         if let window = inputWindow {
             window.windowScene = scene
@@ -494,15 +498,8 @@ class InputViewController: UIViewController {
     private func setupKeyboardObservers() {
         NotificationCenter.default.addObserver(
             self,
-            selector: #selector(keyboardWillShow(_:)),
-            name: UIResponder.keyboardWillShowNotification,
-            object: nil
-        )
-        
-        NotificationCenter.default.addObserver(
-            self,
-            selector: #selector(keyboardWillHide(_:)),
-            name: UIResponder.keyboardWillHideNotification,
+            selector: #selector(keyboardWillChangeFrame(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
             object: nil
         )
     }
@@ -628,44 +625,44 @@ class InputViewController: UIViewController {
         // TODO: 集成语音识别功能
     }
     
-    @objc private func keyboardWillShow(_ notification: Notification) {
+    @objc private func keyboardWillChangeFrame(_ notification: Notification) {
         guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
-        
-        // 保存键盘出现前的位置
-        bottomSpaceBeforeKeyboard = manager?.bottomSpace ?? 20
-        NSLog("🎯 键盘即将显示，保存当前bottomSpace: \(bottomSpaceBeforeKeyboard)")
-        
-        let keyboardHeight = keyboardFrame.height
-        // 获取安全区底部高度
+
+        let duration = (notification.userInfo?[UIResponder.keyboardAnimationDurationUserInfoKey] as? Double) ?? 0.25
+        let curveValue = (notification.userInfo?[UIResponder.keyboardAnimationCurveUserInfoKey] as? UInt) ?? 7
+        let curveOptions = UIView.AnimationOptions(rawValue: curveValue << 16)
+
+        // 计算：从 safeArea 底部到键盘顶部的实际覆盖高度（px）
         let safeAreaBottom = view.safeAreaInsets.bottom
-        
-        // 计算输入框应该在键盘上方的位置
-        // 键盘高度包含了安全区，所以要减去安全区高度避免重复计算
-        let actualKeyboardHeight = keyboardHeight - safeAreaBottom
-        currentKeyboardActualHeight = actualKeyboardHeight
-        isKeyboardVisible = true
-        containerBottomConstraint.constant = -actualKeyboardHeight - 16
-        
-        NSLog("🎯 键盘高度: \(keyboardHeight), 安全区: \(safeAreaBottom), 实际键盘高度: \(actualKeyboardHeight)")
-        
-        UIView.animate(withDuration: 0.3) {
-            self.view.layoutIfNeeded()
-        } completion: { _ in
-            // 动画完成后，通知ChatOverlay输入框的新位置
-            self.notifyInputDrawerActualPosition()
+        let keyboardFrameInView = view.convert(keyboardFrame, from: nil)
+        let safeBottomY = view.bounds.maxY - safeAreaBottom
+        let overlapFromSafe = max(0, safeBottomY - keyboardFrameInView.minY)
+
+        if overlapFromSafe > 0 {
+            if !isKeyboardVisible {
+                bottomSpaceBeforeKeyboard = manager?.bottomSpace ?? 20
+                NSLog("🎯 键盘即将显示，保存当前bottomSpace: \(bottomSpaceBeforeKeyboard)")
+            }
+            isKeyboardVisible = true
+            currentKeyboardActualHeight = overlapFromSafe
+            containerBottomConstraint.constant = -(overlapFromSafe + 16)
+            NSLog("🎯 键盘变化: safeBottom=\(safeAreaBottom), overlapFromSafe=\(overlapFromSafe)")
+        } else {
+            if isKeyboardVisible {
+                NSLog("🎯 键盘即将隐藏，恢复到位置: \(bottomSpaceBeforeKeyboard)")
+            }
+            isKeyboardVisible = false
+            currentKeyboardActualHeight = 0
+            let restoreSpace = manager?.bottomSpace ?? bottomSpaceBeforeKeyboard
+            bottomSpaceBeforeKeyboard = restoreSpace
+            containerBottomConstraint.constant = -restoreSpace
         }
-    }
-    
-    @objc private func keyboardWillHide(_ notification: Notification) {
-        // 恢复到键盘出现前的位置
-        isKeyboardVisible = false
-        containerBottomConstraint.constant = -bottomSpaceBeforeKeyboard
-        NSLog("🎯 键盘即将隐藏，恢复到位置: \(bottomSpaceBeforeKeyboard)")
-        
-        UIView.animate(withDuration: 0.3) {
+
+        UIView.animate(withDuration: duration,
+                       delay: 0,
+                       options: [.allowUserInteraction, .beginFromCurrentState, curveOptions]) {
             self.view.layoutIfNeeded()
         } completion: { _ in
-            // 动画完成后，通知ChatOverlay输入框的新位置
             self.notifyInputDrawerActualPosition()
         }
     }

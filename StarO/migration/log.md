@@ -44,3 +44,4 @@
 - 对话兜底回源：若 `chat-send` 未收到任何 `delta`（如幂等短路仅返回 `done`、或流式被系统吞掉），则在 `done.message_id` 存在时自动回源 `GET /rest/v1/messages?id=eq.<message_id>` 拉取 assistant 内容并补写到 UI，避免前端空消息一直转圈。
 - 修复编译：`chat-send` 兜底回源逻辑中对 `String??` 的可选绑定写法不正确导致编译失败，已改为显式扁平化后再判断。
 - 网络异常恢复：`chat-send` SSE 过程中遇到 `networkConnectionLost/timedOut` 等错误时，不立即展示失败文案；先轮询 `GET /rest/v1/messages (role=assistant, order=desc, limit=1)`，若发现本次请求后产生的新 assistant 消息则补写到 UI 并结束 loading，避免“后端已落库但前端显示失败/一直转圈”。
+- 输入框闪烁修复：`InputDrawerManager.attach(to:)` 增加同一 `UIWindowScene` 的去重，避免 SwiftUI 键盘布局变更触发频繁 attach 导致窗口抖动；输入框键盘联动改为监听 `keyboardWillChangeFrame` 并使用系统提供的 duration/curve 同步动画，降低第三方键盘多次 frame 变化导致的闪烁。
