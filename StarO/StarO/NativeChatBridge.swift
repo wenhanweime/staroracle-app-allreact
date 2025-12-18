@@ -299,6 +299,11 @@ final class NativeChatBridge: NSObject, ObservableObject {
       var doneChatId: String?
 
       do {
+        if conversationStore.session(id: effectiveChatId)?.hasSupabaseConversationStarted != true {
+          let title = conversationStore.currentSession()?.hasCustomTitle == true ? conversationStore.currentSession()?.displayTitle : nil
+          try await ChatCreateService.ensureChatExists(chatId: effectiveChatId, title: title)
+        }
+
         for try await event in ChatSendService.streamMessage(
           chatId: effectiveChatId,
           message: question,

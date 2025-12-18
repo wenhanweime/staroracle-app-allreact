@@ -195,3 +195,108 @@ enum ChatSendService {
     }
   }
 }
+
+@MainActor
+enum ChatCreateService {
+  enum ChatCreateError: LocalizedError {
+    case missingConfig
+    case missingUserId
+    case invalidResponse
+    case http(status: Int, body: String)
+
+    var errorDescription: String? {
+      switch self {
+      case .missingConfig:
+        return "未配置 SUPABASE_URL + TOKEN/SUPABASE_JWT"
+      case .missingUserId:
+        return "未能解析用户身份（user_id）"
+      case .invalidResponse:
+        return "创建会话响应无效"
+      case let .http(status, body):
+        return "创建会话失败(\(status))：\(body)"
+      }
+    }
+  }
+
+  static func ensureChatExists(chatId: String, title: String?) async throws {
+    let trimmedId = chatId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedId.isEmpty else { throw ChatCreateError.invalidResponse }
+    guard let config = SupabaseRuntime.loadConfig() else { throw ChatCreateError.missingConfig }
+
+    let userId =
+      AuthSessionStore.load()?.userId ??
+      userIdFromJWT(config.jwt)
+    guard let userId, !userId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw ChatCreateError.missingUserId
+    }
+
+    let baseURL = config.url
+      .appendingPathComponent("rest")
+      .appendingPathComponent("v1")
+      .appendingPathComponent("chats")
+
+    guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+      throw ChatCreateError.invalidResponse
+    }
+    components.queryItems = [
+      .init(name: "on_conflict", value: "id")
+    ]
+    guard let url = components.url else { throw ChatCreateError.invalidResponse }
+
+    var row: [String: Any] = [
+      "id": trimmedId,
+      "user_id": userId
+    ]
+
+    let cleanTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if !cleanTitle.isEmpty {
+      row["title"] = cleanTitle
+    }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "POST"
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue(SupabaseRuntime.makeTraceId(), forHTTPHeaderField: SupabaseRuntime.HeaderName.traceId)
+    request.setValue("resolution=merge-duplicates,return=minimal", forHTTPHeaderField: "Prefer")
+    if let anonKey = config.anonKey {
+      request.setValue(anonKey, forHTTPHeaderField: "apikey")
+    }
+    request.setValue(SupabaseRuntime.authHeaderValue(for: config.jwt), forHTTPHeaderField: "Authorization")
+    request.httpBody = try JSONSerialization.data(withJSONObject: [row], options: [])
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let http = response as? HTTPURLResponse else { throw ChatCreateError.invalidResponse }
+    guard (200..<300).contains(http.statusCode) else {
+      let text = String(data: data, encoding: .utf8) ?? ""
+      throw ChatCreateError.http(status: http.statusCode, body: String(text.prefix(200)))
+    }
+  }
+
+  private static func userIdFromJWT(_ jwt: String) -> String? {
+    let trimmed = jwt.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    let normalized = trimmed.lowercased().hasPrefix("bearer ") ? String(trimmed.dropFirst(7)) : trimmed
+    let parts = normalized.split(separator: ".")
+    guard parts.count >= 2 else { return nil }
+    let payloadPart = String(parts[1])
+    guard let data = decodeBase64URL(payloadPart) else { return nil }
+    guard
+      let json = try? JSONSerialization.jsonObject(with: data, options: []),
+      let dict = json as? [String: Any]
+    else {
+      return nil
+    }
+    let sub = (dict["sub"] as? String)?.trimmingCharacters(in: .whitespacesAndNewlines)
+    return (sub?.isEmpty == false) ? sub : nil
+  }
+
+  private static func decodeBase64URL(_ input: String) -> Data? {
+    var value = input.replacingOccurrences(of: "-", with: "+").replacingOccurrences(of: "_", with: "/")
+    let remainder = value.count % 4
+    if remainder != 0 {
+      value.append(String(repeating: "=", count: 4 - remainder))
+    }
+    return Data(base64Encoded: value)
+  }
+}
