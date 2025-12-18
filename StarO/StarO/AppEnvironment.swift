@@ -18,6 +18,7 @@ final class AppEnvironment: ObservableObject {
   let chatBridge: NativeChatBridge
   private var didBootstrapConversation = false
   private var didSyncSupabaseStars = false
+  private var switchSessionTask: Task<Void, Never>?
 
   private static let iso: ISO8601DateFormatter = {
     let formatter = ISO8601DateFormatter()
@@ -68,12 +69,34 @@ final class AppEnvironment: ObservableObject {
   }
 
   func switchSession(to sessionId: String) {
+    switchSessionTask?.cancel()
     guard let session = conversationStore.switchSession(to: sessionId) else { return }
     if SupabaseRuntime.loadConfig() != nil, session.hasSupabaseConversationStarted == true {
       conversationStore.beginReviewSession(forChatId: sessionId)
     }
     let messages = conversationStore.messages(forSession: sessionId)
+    chatStore.setLoading(false)
     chatStore.loadMessages(messages, title: session.displayTitle)
+
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+    guard messages.isEmpty else { return }
+
+    switchSessionTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      let fetched = await ChatMessagesService.fetchMessages(chatId: sessionId, limit: 400)
+      guard !Task.isCancelled else { return }
+      guard self.conversationStore.currentSessionId == sessionId else { return }
+      guard !fetched.isEmpty else { return }
+
+      self.conversationStore.replaceSessionMessages(
+        sessionId: sessionId,
+        messages: fetched,
+        updatedAt: fetched.last?.timestamp,
+        markSupabaseConversationStarted: true
+      )
+      self.conversationStore.beginReviewSession(forChatId: sessionId)
+      self.chatStore.loadMessages(fetched, title: session.displayTitle)
+    }
   }
 
   func createSession(title: String?) {

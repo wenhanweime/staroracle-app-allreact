@@ -285,6 +285,31 @@ final class ConversationStore: ObservableObject {
     }
   }
 
+  func replaceSessionMessages(
+    sessionId: String,
+    messages: [CoreChatMessage],
+    updatedAt: Date? = nil,
+    markSupabaseConversationStarted: Bool = false
+  ) {
+    guard let index = sessions.firstIndex(where: { $0.id == sessionId }) else { return }
+    let converted = messages.map { message in
+      PersistMessage(
+        id: message.id,
+        text: message.text,
+        isUser: message.isUser,
+        timestamp: message.timestamp
+      )
+    }
+    mutateState {
+      self.sessionsStorage[index].messages = converted
+      self.sessionsStorage[index].updatedAt = updatedAt ?? Date()
+      if markSupabaseConversationStarted {
+        self.sessionsStorage[index].hasSupabaseConversationStarted = true
+      }
+    }
+    scheduleSave()
+  }
+
   func updateCurrentSessionMessages(_ messages: [CoreChatMessage]) {
     pendingMessageUpdate?.cancel()
     let snapshot = messages

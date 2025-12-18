@@ -578,6 +578,8 @@ final class NativeChatBridge: NSObject, ObservableObject {
       .receive(on: DispatchQueue.main)
       .sink { [weak self] messages in
         guard let self else { return }
+        // 将当前会话的消息落到 ConversationStore，确保左侧历史会话可回放
+        self.conversationStore.updateCurrentSessionMessages(messages)
         self.refreshOverlayMessages(sourceMessages: messages)
       }
       .store(in: &cancellables)
