@@ -215,11 +215,13 @@ enum ChatSendService {
           if let done = pendingDone {
             if didYieldDelta != true,
                let messageId = done.messageId?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !messageId.isEmpty,
-               let fallback = try? await fetchAssistantMessageContent(messageId: messageId, config: config),
-               let fallback, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-              NSLog("ℹ️ ChatSendService | no delta received, fallback fetch message_id=%@", messageId)
-              continuation.yield(.delta(fallback))
+               !messageId.isEmpty {
+              let fetched = (try? await fetchAssistantMessageContent(messageId: messageId, config: config)) ?? nil
+              if let fallback = fetched,
+                 !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                NSLog("ℹ️ ChatSendService | no delta received, fallback fetch message_id=%@", messageId)
+                continuation.yield(.delta(fallback))
+              }
             }
             continuation.yield(.done(messageId: done.messageId, chatId: done.chatId, traceId: done.traceId))
           }
