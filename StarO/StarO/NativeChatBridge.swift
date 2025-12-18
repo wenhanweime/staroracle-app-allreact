@@ -788,6 +788,7 @@ extension NativeChatBridge: InputDrawerDelegate {
     Task { @MainActor [weak self] in
       guard let self else { return }
       self.ensureOverlayVisible(collapsed: false)
+      self.overlayManager.requestScrollToBottom(animated: true, reason: "输入框聚焦")
     }
   }
 

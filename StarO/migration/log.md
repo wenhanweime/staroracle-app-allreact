@@ -58,3 +58,5 @@
 - Auth 启动体验：新增 `AuthService.hasRestoredSession`，在会话异步恢复完成前不展示登录页，避免已登录用户启动时闪现 `LoginView`（`RootView.shouldShowLogin`）。
 - 星卡入口：点击对话内“查看星卡”提示仅弹出星卡详情 Sheet，不再自动切换右侧 `StarCollection` 面板（移除 `RootView` 内 `snapTo(.collection)`）。
 - 对话底部间距：展开态 `ChatOverlay` 的 `contentInset.bottom` 改为使用输入框实际高度（`InputDrawerState.latestHeight`）计算遮挡重叠；并将无重叠时默认 bottom inset 从固定 `120px` 改为 `safeAreaBottom + 12px`，修复“提示与输入框间距过大”的视觉问题。
+- 对话顶起统一：移除展开态布局里额外的 `bottomSpaceView(120px)` 固定占位，避免与 `contentInset.bottom` 叠加导致“气泡被顶起过高”；展开态底部避让只由一套动态规则负责（`adjustExpandedContentInset`）。
+- 键盘联动一致性：输入框/键盘位置变化时提前发布“目标 bottomSpace”（不等待动画完成），让 `ChatOverlay` 与键盘同节奏调整；同时输入框聚焦时统一触发“滚到底”请求，解决“上滑查看历史后点输入无法顶起/体验不一致”。

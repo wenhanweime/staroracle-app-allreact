@@ -115,6 +115,12 @@ public class ChatOverlayManager {
     // 🚨 【关键修复】基于状态机的消息去重机制
     private var lastMessagesHash: String = ""
 
+    private struct PendingScrollToBottomRequest {
+        let animated: Bool
+        let reason: String
+    }
+    private var pendingScrollToBottomRequest: PendingScrollToBottomRequest?
+
     // MARK: - Public API
     public init() {
         // 🔧 取消键盘层级调整：键盘弹起/收回时不再切换浮窗窗口层级，避免窗口重排导致的闪烁
@@ -123,6 +129,22 @@ public class ChatOverlayManager {
     }
     
     deinit {}
+
+    func requestScrollToBottom(animated: Bool = true, reason: String) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.pendingScrollToBottomRequest = PendingScrollToBottomRequest(animated: animated, reason: reason)
+            self.flushPendingScrollToBottomIfPossible()
+        }
+    }
+
+    fileprivate func flushPendingScrollToBottomIfPossible() {
+        guard let request = pendingScrollToBottomRequest else { return }
+        guard isVisible, currentState == .expanded, let overlayViewController else { return }
+        if overlayViewController.isAnimatingInsert { return }
+        overlayViewController.scrollToBottom(animated: request.animated, reason: request.reason, force: true)
+        pendingScrollToBottomRequest = nil
+    }
     
     func attach(to scene: UIWindowScene) {
         // 若已经绑定同一 scene，避免重复 rebind 造成窗口闪烁
@@ -635,6 +657,7 @@ public class ChatOverlayManager {
             NSLog("🧊 冻结窗口：插入动画期间，updateUI无动画执行")
             overlayViewController.updateForState(self.currentState)
             overlayViewController.view.layoutIfNeeded()
+            flushPendingScrollToBottomIfPossible()
             return
         }
         
@@ -648,9 +671,11 @@ public class ChatOverlayManager {
                            animations: {
                 overlayViewController.updateForState(self.currentState)
                 overlayViewController.view.layoutIfNeeded()
+                self.flushPendingScrollToBottomIfPossible()
             }, completion: nil)
         } else {
             overlayViewController.updateForState(self.currentState)
+            flushPendingScrollToBottomIfPossible()
         }
     }
     
@@ -717,6 +742,22 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         let nearBottom = distanceFromBottom < autoScrollThreshold
         NSLog("🧭 AutoScroll 判定: contentH=\(contentHeight), visibleH=\(visibleHeight), offsetY=\(offsetY), dist=\(distanceFromBottom), nearBottom=\(nearBottom), interacting=\(isUserInteracting)")
         return nearBottom && !isUserInteracting
+    }
+
+    func scrollToBottom(animated: Bool, reason: String, force: Bool = false) {
+        guard !visibleMessages.isEmpty else { return }
+        // 先同步一次避让规则，保证滚到底后不会被输入框遮挡
+        if manager?.currentState == .expanded {
+            layoutCoordinator?.syncInitialLayout()
+        }
+        messagesList.layoutIfNeeded()
+        view.layoutIfNeeded()
+
+        let lastRow = max(0, visibleMessages.count - 1)
+        let indexPath = IndexPath(row: lastRow, section: 0)
+        if force || shouldAutoScrollToBottom() {
+            safeScrollToRow(indexPath, at: .bottom, animated: animated, reason: reason)
+        }
     }
 
     // MARK: - 冻结窗口内的安全UI操作封装
@@ -836,6 +877,7 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         let screenHeight = UIScreen.main.bounds.height
         let safeAreaBottom = view.safeAreaInsets.bottom
         let inputDrawerHeight = InputDrawerState.shared.latestHeight
+        let visualGap: CGFloat = 8
         
         // 计算输入框顶部的 Y 坐标（使用输入框实际高度，避免底部留白过大/被遮挡）
         let inputDrawerTopY = screenHeight - inputDrawerBottomSpace - inputDrawerHeight
@@ -846,7 +888,7 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         // 如果输入框在浮窗底部之上（重叠），需要调整内边距
         if inputDrawerTopY < containerBottomY {
             // 计算重叠高度，并额外加上间隙确保视觉清晰
-            let overlap = containerBottomY - inputDrawerTopY + 12  // 加上 12px 间隙
+            let overlap = containerBottomY - inputDrawerTopY + visualGap
             
             var currentInsets = messagesList.contentInset
             let oldBottom = currentInsets.bottom
@@ -870,7 +912,7 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         } else {
             // 输入框在浮窗底部之下或齐平：只保留安全区+少量呼吸空间，避免“底部留白过大”
             var currentInsets = messagesList.contentInset
-            let defaultBottomInset: CGFloat = max(16, safeAreaBottom + 12)
+            let defaultBottomInset: CGFloat = max(16, safeAreaBottom + visualGap)
             
             if abs(currentInsets.bottom - defaultBottomInset) > 1 {
                 let oldBottom = currentInsets.bottom
@@ -1161,8 +1203,10 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
             bottomSpaceView.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor),
             bottomSpaceView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor),
             bottomSpaceView.bottomAnchor.constraint(equalTo: expandedView.bottomAnchor),
-            bottomSpaceView.heightAnchor.constraint(equalToConstant: 120)  // 增加到120px，为输入框预留足够空间
-        ]
+	            // 重要：不在布局层额外预留底部空白，避免与 `contentInset.bottom` 的输入框避让规则叠加导致“气泡被顶起过高”
+	            // 底部避让完全由 `adjustExpandedContentInset` 统一接管（根据输入框实际位置动态计算）
+	            bottomSpaceView.heightAnchor.constraint(equalToConstant: 0)
+	        ]
         NSLayoutConstraint.activate(expandedViewConstraints)
         isExpandedLayoutActive = true
         setExpandedLayout(active: false)

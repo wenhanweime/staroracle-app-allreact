@@ -573,6 +573,10 @@ class InputViewController: UIViewController {
 
         // 使用与浮窗一致的轻量动画，营造柔和的推上推下效果
         containerBottomConstraint.constant = -space
+        // 先发布“目标位置”（不等待动画完成），让 ChatOverlay 同步做避让与滚动策略，保证交互一致
+        let predictedBottomSpaceFromScreen = view.safeAreaInsets.bottom + space
+        InputDrawerState.shared.latestActualBottomSpace = predictedBottomSpaceFromScreen
+        InputDrawerState.shared.latestHeight = containerView.bounds.height
         UIView.animate(
             withDuration: 0.26,
             delay: 0,
@@ -687,6 +691,11 @@ class InputViewController: UIViewController {
             bottomSpaceBeforeKeyboard = restoreSpace
             containerBottomConstraint.constant = -restoreSpace
         }
+
+        // 先发布“目标位置”（不等待键盘动画完成），让 ChatOverlay 同步做避让与滚动策略，保证顶起体验一致
+        let predictedBottomSpaceFromScreen = view.safeAreaInsets.bottom - containerBottomConstraint.constant
+        InputDrawerState.shared.latestActualBottomSpace = predictedBottomSpaceFromScreen
+        InputDrawerState.shared.latestHeight = containerView.bounds.height
 
         UIView.animate(withDuration: duration,
                        delay: 0,
