@@ -74,18 +74,41 @@ enum StarPluckService {
       let decoded = try JSONDecoder().decode(InspirationResponseBody.self, from: data)
       guard decoded.type == "inspiration", let content = decoded.content else { return nil }
 
+      let contentType = (content.content_type ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
       let question = (content.question ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
       let answer = (content.answer ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
       guard !question.isEmpty else { return nil }
 
       let createdAt = parseISODate(content.created_at)
 
+      let resolvedReflection: String = {
+        if !answer.isEmpty { return answer }
+        if contentType == "question" { return BookOfAnswers.randomAnswer() }
+        return ""
+      }()
+
+      var tags = content.tags ?? []
+      if !contentType.isEmpty {
+        tags.append("content_type:\(contentType)")
+      }
+
+      let resolvedTitle: String = {
+        switch contentType {
+        case "quote":
+          return "灵感卡 · 名言"
+        case "question":
+          return "灵感卡 · 答案之书"
+        default:
+          return "灵感卡"
+        }
+      }()
+
       return InspirationCard(
         id: content.id ?? UUID().uuidString,
-        title: "灵感卡",
+        title: resolvedTitle,
         question: question,
-        reflection: answer,
-        tags: content.tags ?? [],
+        reflection: resolvedReflection,
+        tags: tags,
         emotionalTone: "探寻中",
         category: "philosophy_and_existence",
         spawnedAt: createdAt.map { Int($0.timeIntervalSince1970) }

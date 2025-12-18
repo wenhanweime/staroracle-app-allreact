@@ -242,6 +242,29 @@ struct CardBackFace: View {
     
     @State private var inputText = ""
     @FocusState private var isFocused: Bool
+
+    private var contentTypeTag: String {
+        card.tags.first(where: { $0.hasPrefix("content_type:") }) ?? ""
+    }
+
+    private var isQuote: Bool {
+        contentTypeTag == "content_type:quote"
+    }
+
+    private var mainText: String {
+        let value = (isQuote ? card.question : card.reflection).trimmingCharacters(in: .whitespacesAndNewlines)
+        if !value.isEmpty { return value }
+        return "……"
+    }
+
+    private var footerText: String {
+        let value = (isQuote ? card.reflection : card.question).trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return "" }
+        if isQuote {
+            return value.hasPrefix("—") ? value : "— \(value)"
+        }
+        return value
+    }
     
     var body: some View {
         ZStack {
@@ -275,7 +298,7 @@ struct CardBackFace: View {
                 Spacer()
                 
                 // Answer
-                Text(card.reflection) // Using reflection as the main answer for now, or card.answer if available
+                Text(mainText)
                     .font(.system(size: 24, weight: .bold, design: .serif))
                     .multilineTextAlignment(.center)
                     .foregroundStyle(.white)
@@ -285,13 +308,15 @@ struct CardBackFace: View {
                 Spacer()
                 
                 // Reflection/Footer
-                Text(card.question) // Using question as the reflection/footer
-                    .font(.system(size: 12, design: .serif))
-                    .italic()
-                    .foregroundStyle(.white.opacity(0.6))
-                    .multilineTextAlignment(.center)
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 20)
+                if !footerText.isEmpty {
+                    Text(footerText)
+                        .font(.system(size: 12, design: .serif))
+                        .italic()
+                        .foregroundStyle(.white.opacity(0.6))
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 20)
+                }
                 
                 // Input Area
                 HStack(spacing: 12) {
