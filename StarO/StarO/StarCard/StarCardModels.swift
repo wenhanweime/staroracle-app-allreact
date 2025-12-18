@@ -97,12 +97,20 @@ struct StarCardConfig {
         let seedString = star.id
         let seed = UInt64(galaxyDeterministicSeed(from: seedString))
         var rng = SeededRandom(seed: seed)
+
+        func pickIndex(_ count: Int) -> Int {
+            guard count > 0 else { return 0 }
+            let value = min(0.999999999999, max(0.0, rng.next()))
+            return Int(floor(value * Double(count)))
+        }
         
         // Select Style
-        // 回归：仅保留原版“可翻转/紫色带动画”的星卡风格（不再随机行星/像素行星）。
-        let styles: [StarCardStyle] = [.standard, .cross, .burst, .sparkle, .ringed]
-        let styleIndex = Int(rng.next(in: 0...Double(styles.count - 1)))
-        let style = styles[max(0, min(styles.count - 1, styleIndex))]
+        // 回归：恢复原版多样性（含 planet_ 经典行星），但不启用 pixel_ 实验行星。
+        let styles: [StarCardStyle] = [
+            .standard, .cross, .burst, .sparkle, .ringed,
+            .planetSmooth, .planetCraters, .planetSeas, .planetDust, .planetRings
+        ]
+        let style = styles[pickIndex(styles.count)]
         
         // Select Theme
         // 回归：固定使用紫色主题（Nebula Purple），避免因云端 UUID 变化导致主题漂移。
