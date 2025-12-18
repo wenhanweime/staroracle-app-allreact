@@ -391,3 +391,78 @@ enum ChatCreateService {
     return Data(base64Encoded: value)
   }
 }
+
+@MainActor
+enum ChatUpdateService {
+  enum UpdateError: LocalizedError {
+    case missingConfig
+    case invalidChatId
+    case invalidTitle
+    case invalidResponse
+    case http(status: Int, body: String)
+
+    var errorDescription: String? {
+      switch self {
+      case .missingConfig:
+        return "未配置 SUPABASE_URL + TOKEN/SUPABASE_JWT"
+      case .invalidChatId:
+        return "chat_id 无效"
+      case .invalidTitle:
+        return "title 无效"
+      case .invalidResponse:
+        return "更新会话信息响应无效"
+      case let .http(status, body):
+        return "更新会话信息失败(\(status))：\(body)"
+      }
+    }
+  }
+
+  static func updateChatTitle(chatId: String, title: String) async throws {
+    let trimmedId = chatId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedId.isEmpty else { throw UpdateError.invalidChatId }
+    let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedTitle.isEmpty else { throw UpdateError.invalidTitle }
+
+    let config: SupabaseRuntime.Config
+    do {
+      config = try await SupabaseRuntime.loadConfigRefreshingIfNeeded()
+    } catch let error as SupabaseRuntime.SessionError {
+      if case .missingProjectConfig = error {
+        throw UpdateError.missingConfig
+      }
+      throw error
+    }
+
+    let baseURL = config.url
+      .appendingPathComponent("rest")
+      .appendingPathComponent("v1")
+      .appendingPathComponent("chats")
+
+    guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+      throw UpdateError.invalidResponse
+    }
+    components.queryItems = [
+      .init(name: "id", value: "eq.\(trimmedId)")
+    ]
+    guard let url = components.url else { throw UpdateError.invalidResponse }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "PATCH"
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    request.setValue(SupabaseRuntime.makeTraceId(), forHTTPHeaderField: SupabaseRuntime.HeaderName.traceId)
+    request.setValue("return=minimal", forHTTPHeaderField: "Prefer")
+    if let anonKey = config.anonKey {
+      request.setValue(anonKey, forHTTPHeaderField: "apikey")
+    }
+    request.setValue(SupabaseRuntime.authHeaderValue(for: config.jwt), forHTTPHeaderField: "Authorization")
+    request.httpBody = try JSONSerialization.data(withJSONObject: ["title": trimmedTitle], options: [])
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let http = response as? HTTPURLResponse else { throw UpdateError.invalidResponse }
+    guard (200..<300).contains(http.statusCode) else {
+      let text = String(data: data, encoding: .utf8) ?? ""
+      throw UpdateError.http(status: http.statusCode, body: String(text.prefix(200)))
+    }
+  }
+}

@@ -65,3 +65,4 @@
 
 - 迁移协作：章程补充 `StarO/migration/userpromptrecord.md` 的“已读/子任务完成”标注规则，并将 `# 2` 转为任务清单以便逐条验收与追溯。
 - UI（主页顶栏）：ChatOverlay 展开时不再对背景根视图做“向上位移/3D 旋转”，仅保留轻微缩放，修复主页顶部按钮被顶进灵动岛/安全区的问题（`ChatOverlayManager.applyBackgroundTransform`）。
+- 历史会话标题：修复“标题一直是新会话/未命名会话”的链路——`ChatStore.generateConversationTitle()` 原先要求 `conversationTitle` 为空才会触发；现在将 `"新会话"/"未命名会话"` 视为占位标题也允许生成；并在 `chat-send` 完成与打开云端会话时触发生成，生成后写回本地 `ConversationStore`，同时 `PATCH /rest/v1/chats?id=eq.<chat_id>` 同步更新云端 `chats.title`（仅在未自定义标题时覆盖，避免误改用户命名）。

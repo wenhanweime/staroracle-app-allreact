@@ -75,8 +75,16 @@ final class AppEnvironment: ObservableObject {
       conversationStore.beginReviewSession(forChatId: sessionId)
     }
     let messages = conversationStore.messages(forSession: sessionId)
+    if session.hasCustomTitle != true {
+      chatStore.setConversationTitle("")
+    }
     chatStore.setLoading(false)
-    chatStore.loadMessages(messages, title: session.displayTitle)
+    chatStore.loadMessages(messages, title: session.hasCustomTitle == true ? session.displayTitle : nil)
+    if session.hasCustomTitle != true {
+      Task { @MainActor [weak self] in
+        await self?.generateAndApplyTitleIfNeeded(chatId: sessionId)
+      }
+    }
 
     guard SupabaseRuntime.loadConfig() != nil else { return }
     guard messages.isEmpty else { return }
@@ -95,13 +103,22 @@ final class AppEnvironment: ObservableObject {
         markSupabaseConversationStarted: true
       )
       self.conversationStore.beginReviewSession(forChatId: sessionId)
-      self.chatStore.loadMessages(fetched, title: session.displayTitle)
+      if session.hasCustomTitle != true {
+        self.chatStore.setConversationTitle("")
+      }
+      self.chatStore.loadMessages(fetched, title: session.hasCustomTitle == true ? session.displayTitle : nil)
+      if session.hasCustomTitle != true {
+        await self.generateAndApplyTitleIfNeeded(chatId: sessionId)
+      }
     }
   }
 
   func createSession(title: String?) {
     let session = conversationStore.createSession(title: title)
-    chatStore.loadMessages([], title: session.displayTitle)
+    if session.hasCustomTitle != true {
+      chatStore.setConversationTitle("")
+    }
+    chatStore.loadMessages([], title: session.hasCustomTitle == true ? session.displayTitle : nil)
   }
 
   func renameSession(id: String, title: String) {
@@ -111,7 +128,11 @@ final class AppEnvironment: ObservableObject {
   func deleteSession(id: String) {
     conversationStore.deleteSession(id: id)
     let messages = conversationStore.messages(forSession: nil)
-    chatStore.loadMessages(messages, title: conversationStore.currentSession()?.displayTitle)
+    let current = conversationStore.currentSession()
+    if current?.hasCustomTitle != true {
+      chatStore.setConversationTitle("")
+    }
+    chatStore.loadMessages(messages, title: current?.hasCustomTitle == true ? current?.displayTitle : nil)
   }
 
   func bootstrapConversationIfNeeded() {
@@ -120,7 +141,46 @@ final class AppEnvironment: ObservableObject {
     conversationStore.bootstrapIfNeeded()
     let initialMessages = conversationStore.messages(forSession: nil)
     if !initialMessages.isEmpty {
-      chatStore.loadMessages(initialMessages, title: conversationStore.currentSession()?.displayTitle)
+      let current = conversationStore.currentSession()
+      if current?.hasCustomTitle != true {
+        chatStore.setConversationTitle("")
+      }
+      chatStore.loadMessages(initialMessages, title: current?.hasCustomTitle == true ? current?.displayTitle : nil)
+      if current?.hasCustomTitle != true {
+        Task { @MainActor [weak self] in
+          await self?.generateAndApplyTitleIfNeeded(chatId: self?.conversationStore.currentSessionId ?? "")
+        }
+      }
+    }
+  }
+
+  private func generateAndApplyTitleIfNeeded(chatId: String) async {
+    let trimmedId = chatId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedId.isEmpty else { return }
+    guard conversationStore.currentSessionId == trimmedId else { return }
+    guard let session = conversationStore.session(id: trimmedId) else { return }
+    guard session.hasCustomTitle != true else { return }
+    guard session.messages.count >= 2 else { return }
+
+    do {
+      try await chatStore.generateConversationTitle()
+    } catch {
+      NSLog("⚠️ AppEnvironment.generateConversationTitle | error=%@", error.localizedDescription)
+      return
+    }
+
+    let generated = chatStore.conversationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !generated.isEmpty else { return }
+    guard conversationStore.currentSessionId == trimmedId else { return }
+    guard let latest = conversationStore.session(id: trimmedId), latest.hasCustomTitle != true else { return }
+
+    let currentTitle = latest.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let isPlaceholder = currentTitle.isEmpty || currentTitle == "新会话" || currentTitle == "未命名会话"
+    guard isPlaceholder else { return }
+
+    conversationStore.renameSession(id: trimmedId, title: generated)
+    if SupabaseRuntime.loadConfig() != nil {
+      try? await ChatUpdateService.updateChatTitle(chatId: trimmedId, title: generated)
     }
   }
 
@@ -143,18 +203,22 @@ final class AppEnvironment: ObservableObject {
 
     await syncSupabaseStarsIfNeeded()
 
-    let title = (chat.title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    let resolvedTitle = title.isEmpty ? "未命名会话" : title
     let messages = await ChatMessagesService.fetchMessages(chatId: chat.id, limit: 400)
-    conversationStore.upsertSupabaseSession(
+    let session = conversationStore.upsertSupabaseSession(
       id: chat.id,
-      title: resolvedTitle,
+      title: chat.title,
       messages: messages,
       createdAt: Self.parseISODate(chat.created_at),
       updatedAt: Self.parseISODate(chat.updated_at)
     )
     conversationStore.beginReviewSession(forChatId: chat.id)
-    chatStore.loadMessages(messages, title: resolvedTitle)
+    if session.hasCustomTitle != true {
+      chatStore.setConversationTitle("")
+    }
+    chatStore.loadMessages(messages, title: session.hasCustomTitle == true ? session.displayTitle : nil)
+    if session.hasCustomTitle != true {
+      await generateAndApplyTitleIfNeeded(chatId: chat.id)
+    }
   }
 
   private static func parseISODate(_ raw: String?) -> Date? {
@@ -239,7 +303,69 @@ final class LiveAIService: AIServiceProtocol {
     from messages: [StarOracleCore.ChatMessage],
     configuration: AIConfiguration
   ) async throws -> String {
-    try await fallback.generateConversationTitle(from: messages, configuration: configuration)
+    guard Self.isLive(configuration: configuration) else {
+      return try await fallback.generateConversationTitle(from: messages, configuration: configuration)
+    }
+
+    let transcript = messages
+      .filter { !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+      .prefix(12)
+      .map { message in
+        let trimmed = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shortened = trimmed.count > 80 ? "\(trimmed.prefix(80))…" : trimmed
+        return "\(message.isUser ? "用户" : "助手")：\(shortened)"
+      }
+      .joined(separator: "\n")
+
+    let prompt = """
+你是一个对话标题生成器。请根据下面的对话内容，生成一个简短的中文标题：
+- 不超过 12 个字
+- 不要包含引号
+- 不要换行
+- 只输出标题文本
+
+对话内容：
+\(transcript)
+"""
+
+    do {
+      let request = try makeChatRequest(
+        configuration: configuration,
+        messages: [
+          .init(role: "system", content: "你只输出标题文本，不要输出其他任何解释。"),
+          .init(role: "user", content: prompt)
+        ],
+        stream: false,
+        maxTokens: 24,
+        temperature: 0.2
+      )
+
+      let (data, response) = try await urlSession.data(for: request)
+      guard let http = response as? HTTPURLResponse else { throw AIServiceError.invalidResponse }
+      guard (200..<300).contains(http.statusCode) else {
+        let body = String(data: data, encoding: .utf8) ?? ""
+        throw AIServiceError.http(status: http.statusCode, body: String(body.prefix(400)))
+      }
+
+      if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+         let choices = json["choices"] as? [[String: Any]],
+         let message = choices.first?["message"] as? [String: Any],
+         let content = message["content"] as? String {
+        let cleaned = content
+          .replacingOccurrences(of: "\n", with: " ")
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+          .trimmingCharacters(in: CharacterSet(charactersIn: "\"“”‘’《》"))
+          .trimmingCharacters(in: .whitespacesAndNewlines)
+        if !cleaned.isEmpty {
+          return String(cleaned.prefix(12))
+        }
+      }
+
+      throw AIServiceError.invalidPayload
+    } catch {
+      NSLog("⚠️ LiveAIService.generateConversationTitle | fallback due to error=%@", error.localizedDescription)
+      return try await fallback.generateConversationTitle(from: messages, configuration: configuration)
+    }
   }
 
   func validate(configuration: AIConfiguration) async throws {

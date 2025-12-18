@@ -227,11 +227,12 @@ final class NativeChatBridge: NSObject, ObservableObject {
       NSLog("🧾 NativeChatBridge | 检测到 review_session_id，跳过10分钟分段 chat_id=%@", chatId)
       return
     }
-    guard conversationStore.shouldStartNewSessionDueToInactivity() else { return }
-    NSLog("🕒 NativeChatBridge | 超过10分钟无活动，自动新建 chat_id 分段")
-    let session = conversationStore.createSession(title: nil)
-    chatStore.loadMessages([], title: session.displayTitle)
-  }
+	    guard conversationStore.shouldStartNewSessionDueToInactivity() else { return }
+	    NSLog("🕒 NativeChatBridge | 超过10分钟无活动，自动新建 chat_id 分段")
+	    let session = conversationStore.createSession(title: nil)
+	    chatStore.setConversationTitle("")
+	    chatStore.loadMessages([], title: nil)
+	  }
 
   private func startStreaming(for question: String) {
     streamingTask?.cancel()
@@ -460,7 +461,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
       chatStore.finalizeStreamingMessage(id: messageId)
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
-      try? await chatStore.generateConversationTitle()
+      await generateAndApplyConversationTitleIfNeeded(chatId: conversationStore.currentSessionId)
       setLastErrorMessage(nil)
     } catch {
       NSLog("❌ NativeChatBridge.performStreaming | error=%@", error.localizedDescription)
@@ -522,7 +523,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
       chatStore.finalizeStreamingMessage(id: streamingMessageId)
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
-      try? await chatStore.generateConversationTitle()
+      await generateAndApplyConversationTitleIfNeeded(chatId: doneChatId ?? chatId)
       setLastErrorMessage(nil)
 
       if let doneChatId, doneChatId != chatId {
@@ -595,7 +596,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
             chatStore.finalizeStreamingMessage(id: streamingMessageId)
             chatStore.setLoading(false)
             overlayManager.setLoading(false)
-            try? await chatStore.generateConversationTitle()
+            await generateAndApplyConversationTitleIfNeeded(chatId: chatId)
             setLastErrorMessage(nil)
             conversationStore.markSseDone(sessionId: chatId)
             if didSendGalaxyStarIndices {
@@ -614,6 +615,37 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
     NSLog("🛟 NativeChatBridge | 云端恢复失败，超时 chat_id=%@", chatId)
     return false
+  }
+
+  private func generateAndApplyConversationTitleIfNeeded(chatId: String) async {
+    let trimmedId = chatId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedId.isEmpty else { return }
+    guard conversationStore.currentSessionId == trimmedId else { return }
+    guard let session = conversationStore.session(id: trimmedId) else { return }
+    guard session.hasCustomTitle != true else { return }
+
+    do {
+      try await chatStore.generateConversationTitle()
+    } catch {
+      NSLog("⚠️ NativeChatBridge | generateConversationTitle failed error=%@", error.localizedDescription)
+      return
+    }
+
+    let generated = chatStore.conversationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !generated.isEmpty else { return }
+    guard conversationStore.currentSessionId == trimmedId else { return }
+    guard let latestSession = conversationStore.session(id: trimmedId) else { return }
+    guard latestSession.hasCustomTitle != true else { return }
+
+    // 仅在默认占位标题时覆盖，避免误改用户自定义命名
+    let current = latestSession.title.trimmingCharacters(in: .whitespacesAndNewlines)
+    let isPlaceholder = current.isEmpty || current == "新会话" || current == "未命名会话"
+    guard isPlaceholder else { return }
+
+    conversationStore.renameSession(id: trimmedId, title: generated)
+    if SupabaseRuntime.loadConfig() != nil {
+      try? await ChatUpdateService.updateChatTitle(chatId: trimmedId, title: generated)
+    }
   }
 
   private func observeChatStore() {

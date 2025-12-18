@@ -143,7 +143,9 @@ public final class ChatStore: ObservableObject, ChatStoreProtocol {
   }
 
   public func generateConversationTitle() async throws {
-    guard conversationTitle.isEmpty,
+    let trimmed = conversationTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    let isPlaceholder = trimmed.isEmpty || trimmed == "新会话" || trimmed == "未命名会话"
+    guard isPlaceholder,
           messages.count >= 2,
           let config = await configurationProvider() else {
       return
