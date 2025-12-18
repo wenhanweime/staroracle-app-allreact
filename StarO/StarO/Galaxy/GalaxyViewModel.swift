@@ -559,45 +559,6 @@ final class GalaxyViewModel: ObservableObject {
         }
     }
 
-    func nearestPermanentHighlightIndex(
-        at location: CGPoint,
-        in size: CGSize,
-        tapTimestamp: CFTimeInterval?,
-        threshold: CGFloat = 36.0
-    ) -> Int? {
-        guard threshold > 0 else { return nil }
-        guard ringCount > 0 else { return nil }
-        guard !highlights.isEmpty else { return nil }
-
-        let elapsedAtTap: TimeInterval = {
-            if let ts = tapTimestamp, timeOrigin > 0 {
-                return max(0, ts - timeOrigin)
-            }
-            return elapsedTime
-        }()
-
-        let thresholdSquared = threshold * threshold
-        var best: (id: String, distanceSquared: CGFloat)?
-
-        for (id, highlight) in highlights {
-            guard highlight.isPermanent else { continue }
-            guard id.hasPrefix("s-") else { continue }
-            guard let star = starLookup[id] else { continue }
-
-            let pos = screenPosition(for: star, ringIndex: star.band, in: size, elapsed: elapsedAtTap)
-            let dx = pos.x - location.x
-            let dy = pos.y - location.y
-            let d2 = dx * dx + dy * dy
-            if d2 > thresholdSquared { continue }
-            if let best, d2 >= best.distanceSquared { continue }
-            best = (id: id, distanceSquared: d2)
-        }
-
-        guard let best else { return nil }
-        let suffix = best.id.dropFirst(2)
-        return Int(suffix)
-    }
-
     private func highlightColor(for star: GalaxyStar) -> Color {
         galaxyBlendHex(star.litHex, highlightTintHex, ratio: 0.45)
     }

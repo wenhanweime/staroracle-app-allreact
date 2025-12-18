@@ -19,7 +19,7 @@
 - 对齐能量与升级：星卡详情页在有 Supabase 配置时调用 `GET /functions/v1/get-energy` 展示能量余额，并提供“升级”按钮调用 `POST /functions/v1/star-evolve (action=upgrade_button)`；成功后回源刷新 `stars(id=...)` 并更新 `StarStore`。
 - 对齐回顾续聊：从历史会话切换/对话内打开星卡时生成 `review_session_id` 并仅在该次进入后的首条 `chat-send` 携带；当 `review_session_id` 待发送时跳过 10 分钟分段，确保复用原 `chat_id`。
 - 对齐点亮真值：`Star` 模型新增 `galaxyStarIndices`，从 `stars.galaxy_star_indices` 注入；Galaxy 背景将这些索引作为“永久点亮”渲染，不再依赖坐标近邻匹配。
-- 对齐星点点击：点击已永久点亮的银河星点（`s-<index>`）时，按 `galaxyStarIndices` 反查星卡并打开详情（复用 `.chatOverlayOpenStar` 通知链路）。
+- 对齐星点点击：（误读，后续已回退）曾实现“点击已永久点亮的银河星点（`s-<index>`）→ 按 `galaxyStarIndices` 反查星卡并打开详情”（复用 `.chatOverlayOpenStar` 通知链路）；现已拍板 Galaxy 单击不作为资产星卡入口。
 
 ## 2025-12-18
 
@@ -28,6 +28,7 @@
 - 工程对齐：修复 async IIFE 写法导致的编译错误，并移除非 Sendable 的全局 `ISO8601DateFormatter` 静态缓存以通过严格并发检查。
 - Auth（M1 邮箱登录）：新增 `LoginView` + `AuthService`（直连 Supabase Auth REST），Session 写入 Keychain；`SupabaseRuntime.loadConfig()` 会从 Keychain 读取 access token，从而在“未提供 TOKEN/SUPABASE_JWT”时也能调用后端；启动时自动恢复会话并尝试调用 `get-energy` 做每日能量初始化。
 - Auth 体验修复：即使 `SupabaseConfig.plist` 含 `SUPABASE_JWT`（测试 token），当 Keychain 无会话时也会优先展示登录界面；并且 `SupabaseRuntime.loadConfig()` 优先使用 Keychain 的 access token（避免登录后仍走测试 token）。
-- UI 回归：恢复星卡“可翻转/紫色带动画”风格（`StarCardConfig` 固定 Nebula Purple + 仅保留星型样式），并在星卡详情页顶部展示可翻转星卡；点击银河已点亮星点打开星卡时不再强制切换到收藏页。
+- UI 回归：恢复星卡“可翻转/紫色带动画”风格（`StarCardConfig` 固定 Nebula Purple + 仅保留星型样式），并在星卡详情页顶部展示可翻转星卡；（曾尝试）点击银河已点亮星点打开星卡时不再强制切换到收藏页（后续已回退，见下条）。
 - Auth 文案：登录失败时对常见错误做更友好映射（如“邮箱或密码错误/网络不可用/网络连接中断”等），避免误提示为 network lost。
 - 协作规则：新增 `StarO/migration/constitution.md`，强制要求“每次改动必须补迁移日志 + 对应 git 提交”。
+- 交互回退：删除 Galaxy 单击“命中永久点亮星点 → 直接打开资产星卡详情”的分支，避免出现两套点击交互；Galaxy 单击统一保持“点亮区域 → 弹出灵感卡”，资产星卡入口只保留在收藏/对话提示。

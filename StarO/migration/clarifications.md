@@ -9,10 +9,9 @@
 
 ## Open
 
-- [ ] 点击银河星点打开星卡：若多个 `stars` 共享同一个 `galaxy_star_indices` 的 index（重叠点亮），端侧点击该星点应打开哪一张星卡？当前实现为“命中第一张”。
 - [ ] 云端 messages 同步：本地发送消息的 id（`user-.../ai-...`）与服务端 `messages.id` / `done.message_id` 未对齐；若后续要实现“回源刷新后不重复 + 双向同步”，需要设计 messageId 映射或调整本地 id 策略。
 - [ ] Auth SDK 选型：SoT 任务包含接入 `supabase-swift`；当前端侧先用 Auth REST + Keychain 打通邮箱登录，后续若要支持 Apple/Google（M1.5）建议再评估是否切回 `supabase-swift` 以减少 OAuth/PKCE 自研成本。
 
 ## Done
 
-- [ ] （占位）在这里补充已澄清项
+- [x] Galaxy 单击不作为“资产星卡详情”入口：为避免出现两套交互（点亮区域出灵感卡 vs 点某颗永久星点直接开详情），已拍板回退“点击永久点亮星点打开星卡”的分支；Galaxy 单击统一走“点亮区域 → 弹出灵感卡”。

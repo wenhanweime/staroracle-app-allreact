@@ -24,18 +24,6 @@ struct GalaxyBackgroundView: View {
         size: proxy.size,
         onRegionSelected: nil,
         onTap: { point, size, region, timestamp in
-          if let tappedIndex = viewModel.nearestPermanentHighlightIndex(at: point, in: size, tapTimestamp: timestamp),
-             let starId = starStore.constellation.stars.first(where: { $0.galaxyStarIndices?.contains(tappedIndex) == true })?.id {
-            debounceTask?.cancel()
-            galaxyStore.setIsGeneratingCard(false)
-            NotificationCenter.default.post(
-              name: .chatOverlayOpenStar,
-              object: nil,
-              userInfo: ["starId": starId, "source": "galaxy"]
-            )
-            return
-          }
-
           // 纯点击 Galaxy：每次点击都产生“临时高亮（TapHighlight）”，并上报后端做跨设备 1 天同步。
           let ttlExpiresAt = Date().addingTimeInterval(24 * 60 * 60)
           viewModel.triggerHighlight(

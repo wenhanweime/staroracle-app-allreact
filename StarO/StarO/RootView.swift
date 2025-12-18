@@ -132,15 +132,11 @@ struct RootView: View {
       }
       .onReceive(NotificationCenter.default.publisher(for: .chatOverlayOpenStar)) { notification in
         guard let starId = notification.userInfo?["starId"] as? String else { return }
-        let source = notification.userInfo?["source"] as? String
-        let shouldStayOnGalaxy = source == "galaxy"
         if SupabaseRuntime.loadConfig() != nil,
            conversationStore.session(id: conversationStore.currentSessionId)?.hasSupabaseConversationStarted == true {
           conversationStore.beginReviewSession(forChatId: conversationStore.currentSessionId)
         }
-        if !shouldStayOnGalaxy {
-          snapTo(.collection)
-        }
+        snapTo(.collection)
         if let star = findStar(by: starId) {
           selectedStar = star
         }
