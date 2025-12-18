@@ -1,0 +1,33 @@
+# Swift 迁移日志（本仓）
+
+**真值（SoT）**
+- 迁移文档：`../staroracle-backend/docs/swift-migration/`
+- 接口契约：`../staroracle-backend/docs/contracts/`
+
+> 说明：这里只记录“本仓相对 SoT 的执行进度、关键改动与决策”，用于追溯迁移过程；不在本文件内维护完整计划/规格，避免与 SoT 漂移。
+
+## 2025-12-17
+
+- 文档真值切换：移除本仓 `StarO/swift-migration/` 与 `docs/swift-migration/`，旧内容已备份到 `trash/`。
+- 新增本仓迁移记录入口：`StarO/migration/clarifications.md` 与 `StarO/migration/log.md`。
+- 新增交接文档：`StarO/migration/handoff.md`。
+- 对齐契约：为 Edge Functions 请求补齐 `X-Trace-Id`；`chat-send` 补齐 `X-Idempotency-Key` + `body.idempotency_key`（并兼容 `done.chat_id` 缺失时回退到请求 chat_id）。
+- 对齐对话串联：TapHighlight 选中的 `galaxy_star_indices` 暂存并仅在“新会话首条 chat-send”携带；成功 `done` 后清理（`review_session_id` 已预留端侧入口）。
+- 对齐交互：灵感卡提交在有 Supabase 配置时改为“新建会话 → 进入 chat-send 对话”，不再走本地 `addStar` 生成星星。
+- 对齐摘星：点击 Galaxy 生成灵感卡在有 Supabase 配置时优先调用 `POST /functions/v1/star-pluck (mode=inspiration)`，失败则回退到本地 mock。
+- 对齐成星提示：`chat-send done` 后短轮询 `stars(chat_id=...)`，发现首条星卡/等级提升时在对话插入“点击查看星卡”提示，点击后跳转收藏并打开星卡详情。
+- 对齐能量与升级：星卡详情页在有 Supabase 配置时调用 `GET /functions/v1/get-energy` 展示能量余额，并提供“升级”按钮调用 `POST /functions/v1/star-evolve (action=upgrade_button)`；成功后回源刷新 `stars(id=...)` 并更新 `StarStore`。
+- 对齐回顾续聊：从历史会话切换/对话内打开星卡时生成 `review_session_id` 并仅在该次进入后的首条 `chat-send` 携带；当 `review_session_id` 待发送时跳过 10 分钟分段，确保复用原 `chat_id`。
+- 对齐点亮真值：`Star` 模型新增 `galaxyStarIndices`，从 `stars.galaxy_star_indices` 注入；Galaxy 背景将这些索引作为“永久点亮”渲染，不再依赖坐标近邻匹配。
+- 对齐星点点击：点击已永久点亮的银河星点（`s-<index>`）时，按 `galaxyStarIndices` 反查星卡并打开详情（复用 `.chatOverlayOpenStar` 通知链路）。
+
+## 2025-12-18
+
+- 数据同步（Stars）：新增 `GET /rest/v1/stars` 拉取资产星卡列表（`StarsService.fetchStars`），并在 App 启动（`RootView`）触发 `AppEnvironment.syncSupabaseStarsIfNeeded()` 批量 upsert 到 `StarStore`，用于银河/收藏展示云端星卡。
+- 数据同步（Messages/Chats）：新增 `GET /rest/v1/messages` 拉取会话消息（`ChatMessagesService.fetchMessages`）；侧边栏“云端会话”支持点击打开，导入到 `ConversationStore` 并载入 `ChatStore`（同时生成 `review_session_id` 以对齐回顾续聊规则）。
+- 工程对齐：修复 async IIFE 写法导致的编译错误，并移除非 Sendable 的全局 `ISO8601DateFormatter` 静态缓存以通过严格并发检查。
+- Auth（M1 邮箱登录）：新增 `LoginView` + `AuthService`（直连 Supabase Auth REST），Session 写入 Keychain；`SupabaseRuntime.loadConfig()` 会从 Keychain 读取 access token，从而在“未提供 TOKEN/SUPABASE_JWT”时也能调用后端；启动时自动恢复会话并尝试调用 `get-energy` 做每日能量初始化。
+- Auth 体验修复：即使 `SupabaseConfig.plist` 含 `SUPABASE_JWT`（测试 token），当 Keychain 无会话时也会优先展示登录界面；并且 `SupabaseRuntime.loadConfig()` 优先使用 Keychain 的 access token（避免登录后仍走测试 token）。
+- UI 回归：恢复星卡“可翻转/紫色带动画”风格（`StarCardConfig` 固定 Nebula Purple + 仅保留星型样式），并在星卡详情页顶部展示可翻转星卡；点击银河已点亮星点打开星卡时不再强制切换到收藏页。
+- Auth 文案：登录失败时对常见错误做更友好映射（如“邮箱或密码错误/网络不可用/网络连接中断”等），避免误提示为 network lost。
+- 协作规则：新增 `StarO/migration/constitution.md`，强制要求“每次改动必须补迁移日志 + 对应 git 提交”。
