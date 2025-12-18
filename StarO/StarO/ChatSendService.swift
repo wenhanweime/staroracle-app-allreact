@@ -116,6 +116,8 @@ enum ChatSendService {
           var currentEvent: String?
           var dataLines: [String] = []
           var didReceiveDone = false
+          var didYieldDelta = false
+          var pendingDone: (messageId: String?, chatId: String, traceId: String?)?
 
           func dispatchEventIfNeeded() throws {
             guard !dataLines.isEmpty else {
@@ -134,6 +136,7 @@ enum ChatSendService {
               if let decoded = try? JSONDecoder().decode(DeltaPayload.self, from: data),
                  let text = decoded.text, !text.isEmpty {
                 continuation.yield(.delta(text))
+                didYieldDelta = true
               }
             case "done":
               if let decoded = try? JSONDecoder().decode(DonePayload.self, from: data) {
@@ -146,7 +149,7 @@ enum ChatSendService {
                      serverTrace != requestTraceId {
                     NSLog("⚠️ ChatSendService | trace_id mismatch request=%@ server=%@", requestTraceId, serverTrace)
                   }
-                  continuation.yield(.done(messageId: decoded.message_id, chatId: resolvedChatId, traceId: decoded.trace_id))
+                  pendingDone = (messageId: decoded.message_id, chatId: resolvedChatId, traceId: decoded.trace_id)
                   didReceiveDone = true
                 }
               }
@@ -209,6 +212,17 @@ enum ChatSendService {
           }
 
           try dispatchEventIfNeeded()
+          if let done = pendingDone {
+            if didYieldDelta != true,
+               let messageId = done.messageId?.trimmingCharacters(in: .whitespacesAndNewlines),
+               !messageId.isEmpty,
+               let fallback = try? await fetchAssistantMessageContent(messageId: messageId, config: config),
+               let fallback, !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+              NSLog("ℹ️ ChatSendService | no delta received, fallback fetch message_id=%@", messageId)
+              continuation.yield(.delta(fallback))
+            }
+            continuation.yield(.done(messageId: done.messageId, chatId: done.chatId, traceId: done.traceId))
+          }
           continuation.finish()
         } catch is CancellationError {
           continuation.finish(throwing: ChatSendError.cancelled)
@@ -221,6 +235,53 @@ enum ChatSendService {
         task.cancel()
       }
     }
+  }
+}
+
+private extension ChatSendService {
+  static func fetchAssistantMessageContent(messageId: String, config: SupabaseRuntime.Config) async throws -> String? {
+    let baseURL = config.url
+      .appendingPathComponent("rest")
+      .appendingPathComponent("v1")
+      .appendingPathComponent("messages")
+
+    guard var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false) else {
+      return nil
+    }
+    components.queryItems = [
+      .init(name: "select", value: "id,role,content"),
+      .init(name: "id", value: "eq.\(messageId)"),
+      .init(name: "limit", value: "1")
+    ]
+    guard let url = components.url else { return nil }
+
+    var request = URLRequest(url: url)
+    request.httpMethod = "GET"
+    request.setValue("application/json", forHTTPHeaderField: "Accept")
+    request.setValue(SupabaseRuntime.makeTraceId(), forHTTPHeaderField: SupabaseRuntime.HeaderName.traceId)
+    if let anonKey = config.anonKey {
+      request.setValue(anonKey, forHTTPHeaderField: "apikey")
+    }
+    request.setValue(SupabaseRuntime.authHeaderValue(for: config.jwt), forHTTPHeaderField: "Authorization")
+
+    let (data, response) = try await URLSession.shared.data(for: request)
+    guard let http = response as? HTTPURLResponse else { return nil }
+    guard (200..<300).contains(http.statusCode) else {
+      let text = String(data: data, encoding: .utf8) ?? ""
+      NSLog("⚠️ ChatSendService.fetchAssistantMessageContent | http=%d body=%@", http.statusCode, String(text.prefix(200)))
+      return nil
+    }
+
+    struct Row: Decodable {
+      let role: String?
+      let content: String?
+    }
+    let rows = (try? JSONDecoder().decode([Row].self, from: data)) ?? []
+    guard let row = rows.first else { return nil }
+    let role = (row.role ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard role == "assistant" else { return nil }
+    let content = (row.content ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    return content.isEmpty ? nil : content
   }
 }
 
