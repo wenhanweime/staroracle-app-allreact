@@ -269,9 +269,44 @@ final class NativeChatBridge: NSObject, ObservableObject {
   }
 
   private func refreshOverlayMessages(sourceMessages: [StarOracleCore.ChatMessage]? = nil) {
-    let base = (sourceMessages ?? chatStore.messages).map(makeOverlayMessage)
-    let hints = overlayHintsByChatId[conversationStore.currentSessionId] ?? []
-    let merged = base + hints
+    let now = Date()
+    let windowStart = now.addingTimeInterval(-24 * 60 * 60)
+    let currentChatId = conversationStore.currentSessionId
+    let currentSessionUpdatedAt = conversationStore.session(id: currentChatId)?.updatedAt ?? now
+
+    let shouldAggregate24Hours = currentSessionUpdatedAt >= windowStart
+
+    var base: [OverlayChatMessage] = []
+    var includedChatIds: [String] = []
+
+    if shouldAggregate24Hours {
+      for session in conversationStore.listSessions() {
+        let chatId = session.id
+        guard session.updatedAt >= windowStart || chatId == currentChatId else { continue }
+
+        includedChatIds.append(chatId)
+        let messages: [StarOracleCore.ChatMessage]
+        if chatId == currentChatId {
+          messages = sourceMessages ?? chatStore.messages
+        } else {
+          messages = conversationStore.messages(forSession: chatId)
+        }
+
+        for message in messages {
+          if chatId != currentChatId, message.timestamp < windowStart { continue }
+          base.append(makeOverlayMessage(message))
+        }
+      }
+    } else {
+      includedChatIds = [currentChatId]
+      base = (sourceMessages ?? chatStore.messages).map(makeOverlayMessage)
+    }
+
+    var merged = base
+    for chatId in includedChatIds {
+      merged.append(contentsOf: overlayHintsByChatId[chatId] ?? [])
+    }
+
     let sorted = merged.sorted { lhs, rhs in
       if lhs.timestamp != rhs.timestamp {
         return lhs.timestamp < rhs.timestamp

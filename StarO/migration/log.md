@@ -49,3 +49,4 @@
 - 对话重试入口：当 AI 消息显示“未能获取星语回应/发送失败/请求已取消”等失败文案时，在该气泡内展示“重试”按钮；点击后会基于最后一条用户消息（复用 `idempotency_key`）重新发起 `chat-send` 并复用当前 AI 占位进行流式更新。
 - 星卡提示优化：将“已生成一颗星星/点击查看星卡”渲染为紧凑胶囊提示（自适应宽度、压缩行高），并在对话浮窗内按时间戳合并排序提示与消息，避免提示一直固定占据最后一条位置。
 - 历史会话回放修复：对话过程中将 `ChatStore.messages` 同步写入 `ConversationStore`（避免只存标题/时间导致点开为空）；切换历史会话时若本地消息为空且已配置 Supabase，则自动回源 `GET /rest/v1/messages?chat_id=...` 拉取并回填后再载入（`NativeChatBridge.observeChatStore` / `AppEnvironment.switchSession` / `ConversationStore.replaceSessionMessages`）。自测：本地编译通过；发起多轮对话后从左侧菜单切换历史会话应能正常回放。
+- 对话历史规则（24h 连续展示）：保持现有“10 分钟 inactivity 分段 / chat_id 可变 / 上下文与记忆策略不变”，但聊天浮窗改为聚合展示最近 24 小时内的多段会话消息，视觉上连续、可上滑回看；若当前切换到超过 24 小时的旧会话，则仅展示该会话自身消息（`NativeChatBridge.refreshOverlayMessages`）。
