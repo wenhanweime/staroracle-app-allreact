@@ -63,12 +63,11 @@ struct RootView: View {
             )
             .frame(width: menuWidth, alignment: .leading)
             .frame(maxHeight: .infinity, alignment: .top)
-            .padding(.leading, 24)
             .transition(.move(edge: .leading))
 
             HStack(spacing: 0) {
               Color.clear
-                .frame(width: menuWidth + 24)
+                .frame(width: menuWidth)
                 .allowsHitTesting(false)
               Color.black.opacity(0.001)
                 .contentShape(Rectangle())
@@ -116,7 +115,7 @@ struct RootView: View {
         DispatchQueue.main.async {
           environment.bootstrapConversationIfNeeded()
           chatBridge.activateIfNeeded()
-          let offset = activePane == .menu ? menuWidth + 24 : 0
+          let offset = activePane == .menu ? menuWidth : 0
           chatBridge.setHorizontalOffset(offset, animated: false)
         }
       }
@@ -125,7 +124,7 @@ struct RootView: View {
       }
       .onChange(of: activePane) { _, newValue in
         DispatchQueue.main.async {
-          let offset = newValue == .menu ? menuWidth + 24 : 0
+          let offset = newValue == .menu ? menuWidth : 0
           chatBridge.setHorizontalOffset(offset, animated: true)
         }
       }

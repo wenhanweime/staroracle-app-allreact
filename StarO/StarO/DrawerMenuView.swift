@@ -47,7 +47,7 @@ struct DrawerMenuView: View {
         searchBar
       }
       .padding(.horizontal, 24)
-      .padding(.top, 16)
+      .padding(.top, 56)
       .padding(.bottom, 12)
       Divider().overlay(Color.white.opacity(0.1))
 
@@ -64,8 +64,7 @@ struct DrawerMenuView: View {
         .padding(.horizontal, 24)
         .padding(.vertical, 10)
     }
-    .frame(width: 340)
-    .frame(maxHeight: .infinity, alignment: .top)
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
     .background(
       LinearGradient(
         colors: [
@@ -76,12 +75,13 @@ struct DrawerMenuView: View {
         endPoint: .bottomTrailing
       )
       .overlay(Color.white.opacity(0.05), alignment: .top)
+      .ignoresSafeArea()
     )
-    .clipShape(RoundedRectangle(cornerRadius: 28, style: .continuous))
-    .shadow(color: .black.opacity(0.4), radius: 30, x: 0, y: 20)
     .overlay(
-      RoundedRectangle(cornerRadius: 28, style: .continuous)
-        .stroke(Color.white.opacity(0.06), lineWidth: 1)
+      Rectangle()
+        .fill(Color.white.opacity(0.08))
+        .frame(width: 1)
+        .frame(maxWidth: .infinity, alignment: .trailing)
     )
     .sheet(item: $sessionToRename, onDismiss: { renameText = "" }) { session in
       RenameSessionSheet(
