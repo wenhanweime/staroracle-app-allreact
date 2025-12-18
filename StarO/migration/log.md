@@ -67,3 +67,4 @@
 - UI（主页顶栏）：ChatOverlay 展开时不再对背景根视图做“向上位移/3D 旋转”，仅保留轻微缩放，修复主页顶部按钮被顶进灵动岛/安全区的问题（`ChatOverlayManager.applyBackgroundTransform`）。
 - 历史会话标题：修复“标题一直是新会话/未命名会话”的链路——`ChatStore.generateConversationTitle()` 原先要求 `conversationTitle` 为空才会触发；现在将 `"新会话"/"未命名会话"` 视为占位标题也允许生成；并在 `chat-send` 完成与打开云端会话时触发生成，生成后写回本地 `ConversationStore`，同时 `PATCH /rest/v1/chats?id=eq.<chat_id>` 同步更新云端 `chats.title`（仅在未自定义标题时覆盖，避免误改用户命名）。
 - 菜单抽屉样式：将左侧菜单从“圆角卡片”改为“全高侧拉抽屉”，背景铺满安全区并增加右侧分隔线；同时移除 `RootView` 中的左侧额外 padding，并将 ChatOverlay/InputDrawer 的水平顶起偏移从 `menuWidth + 24` 改为 `menuWidth`（`DrawerMenuView` / `RootView`）。
+- 抽屉顶起对齐：支持 ChatOverlay/InputDrawer 的“负向水平偏移”，当右侧 `StarCollection` 抽屉打开时将对话浮窗/输入框整体向左顶起（`RootView` 在 `.collection` 时传 `-collectionWidth`；移除 `ChatOverlayManager/OverlayViewController/InputDrawerManager/InputViewController` 对 offset 的 `max(0, ...)` 限制）。

@@ -115,7 +115,14 @@ struct RootView: View {
         DispatchQueue.main.async {
           environment.bootstrapConversationIfNeeded()
           chatBridge.activateIfNeeded()
-          let offset = activePane == .menu ? menuWidth : 0
+          let offset: CGFloat = switch activePane {
+          case .menu:
+            menuWidth
+          case .collection:
+            -collectionWidth
+          case .home:
+            0
+          }
           chatBridge.setHorizontalOffset(offset, animated: false)
         }
       }
@@ -124,7 +131,14 @@ struct RootView: View {
       }
       .onChange(of: activePane) { _, newValue in
         DispatchQueue.main.async {
-          let offset = newValue == .menu ? menuWidth : 0
+          let offset: CGFloat = switch newValue {
+          case .menu:
+            menuWidth
+          case .collection:
+            -collectionWidth
+          case .home:
+            0
+          }
           chatBridge.setHorizontalOffset(offset, animated: true)
         }
       }

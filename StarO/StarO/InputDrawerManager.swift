@@ -185,12 +185,11 @@ public class InputDrawerManager {
     }
 
     func setHorizontalOffset(_ offset: CGFloat, animated: Bool = true) {
-        let normalized = max(0, offset)
-        NSLog("🎯 InputDrawer: 更新水平偏移 -> \(normalized) (animated: \(animated))")
-        NSLog("🎯 InputDrawerManager: 设置水平偏移: \(normalized)")
-        horizontalOffset = normalized
+        NSLog("🎯 InputDrawer: 更新水平偏移 -> \(offset) (animated: \(animated))")
+        NSLog("🎯 InputDrawerManager: 设置水平偏移: \(offset)")
+        horizontalOffset = offset
         DispatchQueue.main.async { [weak self] in
-            self?.inputViewController?.updateHorizontalOffset(normalized, animated: animated)
+            self?.inputViewController?.updateHorizontalOffset(offset, animated: animated)
         }
     }
     
@@ -591,14 +590,13 @@ class InputViewController: UIViewController {
     }
 
     func updateHorizontalOffset(_ offset: CGFloat, animated: Bool) {
-        let normalized = max(0, offset)
-        if abs(horizontalOffset - normalized) < 0.5 {
-            horizontalOffset = normalized
+        if abs(horizontalOffset - offset) < 0.5 {
+            horizontalOffset = offset
             return
         }
-        horizontalOffset = normalized
-        containerLeadingConstraint.constant = 16 + normalized
-        containerTrailingConstraint.constant = -16 + normalized
+        horizontalOffset = offset
+        containerLeadingConstraint.constant = 16 + offset
+        containerTrailingConstraint.constant = -16 + offset
 
         let updates = {
             self.view.layoutIfNeeded()

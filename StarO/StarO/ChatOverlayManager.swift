@@ -362,11 +362,10 @@ public class ChatOverlayManager {
     }
     
     func setHorizontalOffset(_ offset: CGFloat, animated: Bool = true) {
-        let normalized = max(0, offset)
-        NSLog("🎯 ChatOverlayManager: 设置水平偏移: \(normalized) (animated: \(animated))")
-        horizontalOffset = normalized
+        NSLog("🎯 ChatOverlayManager: 设置水平偏移: \(offset) (animated: \(animated))")
+        horizontalOffset = offset
         DispatchQueue.main.async { [weak self] in
-            self?.overlayViewController?.setHorizontalOffset(normalized, animated: animated)
+            self?.overlayViewController?.setHorizontalOffset(offset, animated: animated)
         }
     }
     
@@ -1333,13 +1332,12 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
     }
 
     func setHorizontalOffset(_ offset: CGFloat, animated: Bool) {
-        let normalized = max(0, offset)
-        NSLog("🎯 ChatOverlay VC: 更新水平偏移 -> \(normalized) (animated: \(animated))")
-        if abs(horizontalOffset - normalized) < 0.5 {
-            horizontalOffset = normalized
+        NSLog("🎯 ChatOverlay VC: 更新水平偏移 -> \(offset) (animated: \(animated))")
+        if abs(horizontalOffset - offset) < 0.5 {
+            horizontalOffset = offset
             return
         }
-        horizontalOffset = normalized
+        horizontalOffset = offset
         let state = manager?.currentState ?? .collapsed
         let updates = {
             self.updateForState(state)
