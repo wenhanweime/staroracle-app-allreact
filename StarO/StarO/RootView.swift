@@ -14,6 +14,7 @@ struct RootView: View {
 
   @State private var activePane: ActivePane = .home
   @State private var selectedStar: Star?
+  @State private var isShowingAccount: Bool = false
   @State private var dragOffset: CGFloat = 0
 
   var body: some View {
@@ -56,6 +57,7 @@ struct RootView: View {
               onOpenCollection: { snapTo(.collection) },
               onOpenAIConfig: {},
               onOpenInspiration: {},
+              onOpenAccount: { openAccount() },
               onOpenServerChat: { chat in environment.openServerChat(chat) },
               onSwitchSession: { id in environment.switchSession(to: id) },
               onCreateSession: { title in environment.createSession(title: title) },
@@ -143,6 +145,9 @@ struct RootView: View {
       }
       .sheet(item: $selectedStar) { star in
         StarDetailSheet(star: star) { selectedStar = nil }
+      }
+      .sheet(isPresented: $isShowingAccount) {
+        AccountView()
       }
     }
   }
@@ -262,6 +267,13 @@ struct RootView: View {
     if let star = starStore.constellation.stars.first(where: { $0.id == id }) { return star }
     if let star = starStore.inspirationStars.first(where: { $0.id == id }) { return star }
     return nil
+  }
+
+  private func openAccount() {
+    snapTo(.home)
+    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) {
+      isShowingAccount = true
+    }
   }
 
   private func handleDragChanged(_ translation: CGFloat, width: CGFloat) {

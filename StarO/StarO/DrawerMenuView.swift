@@ -7,12 +7,14 @@ struct DrawerMenuView: View {
   @EnvironmentObject private var starStore: StarStore
   @EnvironmentObject private var chatStore: ChatStore
   @EnvironmentObject private var conversationStore: ConversationStore
+  @EnvironmentObject private var authService: AuthService
 
   var onClose: () -> Void
   var onOpenTemplate: () -> Void
   var onOpenCollection: () -> Void
   var onOpenAIConfig: () -> Void
   var onOpenInspiration: () -> Void
+  var onOpenAccount: () -> Void
   var onOpenServerChat: (ChatListService.Chat) -> Void
   var onSwitchSession: (String) -> Void
   var onCreateSession: (String?) -> Void
@@ -50,17 +52,35 @@ struct DrawerMenuView: View {
     VStack(spacing: 0) {
       header
       Divider().overlay(Color.white.opacity(0.1))
-      ScrollView(showsIndicators: false) {
-        VStack(alignment: .leading, spacing: 24) {
-          searchBar
-          sessionList
-          Divider().overlay(Color.white.opacity(0.05))
-          menuSection
-          Divider().overlay(Color.white.opacity(0.05))
-          statsSection
-        }
-        .padding(24)
+      VStack(alignment: .leading, spacing: 16) {
+        searchBar
       }
+      .padding(.horizontal, 24)
+      .padding(.top, 20)
+      .padding(.bottom, 12)
+
+      ScrollView(showsIndicators: false) {
+        VStack(alignment: .leading, spacing: 18) {
+          sessionList
+        }
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+      }
+
+      Divider().overlay(Color.white.opacity(0.05))
+      VStack(alignment: .leading, spacing: 18) {
+        menuSection
+        Divider().overlay(Color.white.opacity(0.05))
+        statsSection
+      }
+      .padding(.horizontal, 24)
+      .padding(.vertical, 16)
+
+      Divider().overlay(Color.white.opacity(0.05))
+      accountSection
+        .padding(.horizontal, 24)
+        .padding(.vertical, 14)
+
       closeButton
     }
     .frame(width: 340)
@@ -316,6 +336,72 @@ struct DrawerMenuView: View {
     isLoadingServerChats = true
     defer { isLoadingServerChats = false }
     serverChats = await ChatListService.fetchChats(kind: "free", limit: 30)
+  }
+
+  private var accountSection: some View {
+    Button {
+      onOpenAccount()
+      onClose()
+    } label: {
+      HStack(spacing: 12) {
+        ZStack {
+          Circle()
+            .fill(
+              LinearGradient(
+                colors: [Color.purple.opacity(0.75), Color.blue.opacity(0.6)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+              )
+            )
+          Text(accountAvatarText)
+            .font(.system(size: 16, weight: .semibold))
+            .foregroundStyle(.white.opacity(0.9))
+        }
+        .frame(width: 38, height: 38)
+        .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+
+        VStack(alignment: .leading, spacing: 2) {
+          Text(accountTitle)
+            .font(.footnote.weight(.medium))
+            .foregroundStyle(.white)
+          if !accountSubtitle.isEmpty {
+            Text(accountSubtitle)
+              .font(.caption2)
+              .foregroundStyle(.white.opacity(0.6))
+              .lineLimit(1)
+              .truncationMode(.middle)
+          }
+        }
+        Spacer()
+        Image(systemName: "chevron.right")
+          .font(.caption2)
+          .foregroundStyle(.white.opacity(0.6))
+      }
+      .padding(.vertical, 10)
+      .padding(.horizontal, 12)
+      .background(Color.white.opacity(0.04), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+      .overlay(
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .stroke(Color.white.opacity(0.08), lineWidth: 1)
+      )
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var accountTitle: String {
+    let email = (authService.userEmail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let prefix = (email.split(separator: "@").first.map(String.init) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    return prefix.isEmpty ? "个人主页" : prefix
+  }
+
+  private var accountSubtitle: String {
+    (authService.userEmail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var accountAvatarText: String {
+    let value = accountTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let first = value.first { return String(first).uppercased() }
+    return "?"
   }
 
   private var menuSection: some View {

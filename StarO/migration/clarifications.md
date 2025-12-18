@@ -11,8 +11,10 @@
 
 - [ ] 云端 messages 同步：本地发送消息的 id（`user-.../ai-...`）与服务端 `messages.id` / `done.message_id` 未对齐；若后续要实现“回源刷新后不重复 + 双向同步”，需要设计 messageId 映射或调整本地 id 策略。
 - [ ] Auth SDK 选型：SoT 任务包含接入 `supabase-swift`；当前端侧先用 Auth REST + Keychain 打通邮箱登录，后续若要支持 Apple/Google（M1.5）建议再评估是否切回 `supabase-swift` 以减少 OAuth/PKCE 自研成本。
+- [ ] 注册后资料补全（onboarding）：新用户注册成功后，需要引导设置昵称/头像（当前 avatar 形态为 `avatar_emoji`；未来可扩展为头像图片），避免个人主页长期为空白。
 
 ## Done
 
 - [x] Galaxy 单击不作为“资产星卡详情”入口：为避免出现两套交互（点亮区域出灵感卡 vs 点某颗永久星点直接开详情），已拍板回退“点击永久点亮星点打开星卡”的分支；Galaxy 单击统一走“点亮区域 → 弹出灵感卡”。
 - [x] 星卡视觉类型并列（star/planet/pixel）：端侧必须同时启用星型、经典 `planet_*` 行星与像素 `pixel_*` 行星；抽样按组并列（各占 1/3，类内均匀），避免迁移过程中误删某一类导致“类型不全”。
+- [x] 个人主页入口与契约对齐：左侧菜单底部固定入口打开个人主页；对齐后端 `get-profile`/`update-profile`，支持查看账号信息与编辑昵称/头像。
