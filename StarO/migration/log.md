@@ -45,3 +45,5 @@
 - 修复编译：`chat-send` 兜底回源逻辑中对 `String??` 的可选绑定写法不正确导致编译失败，已改为显式扁平化后再判断。
 - 网络异常恢复：`chat-send` SSE 过程中遇到 `networkConnectionLost/timedOut` 等错误时，不立即展示失败文案；先轮询 `GET /rest/v1/messages (role=assistant, order=desc, limit=1)`，若发现本次请求后产生的新 assistant 消息则补写到 UI 并结束 loading，避免“后端已落库但前端显示失败/一直转圈”。
 - 输入框闪烁修复：`InputDrawerManager.attach(to:)` 增加同一 `UIWindowScene` 的去重，避免 SwiftUI 键盘布局变更触发频繁 attach 导致窗口抖动；输入框键盘联动改为监听 `keyboardWillChangeFrame` 并使用系统提供的 duration/curve 同步动画，降低第三方键盘多次 frame 变化导致的闪烁。
+- 星卡弹窗层级修复：当系统 Sheet（星卡详情/个人主页）出现时，将 `ChatOverlay` 与 `InputDrawer` 的 `UIWindowLevel` 临时下沉到 `normal` 以下，确保弹窗始终显示在对话浮窗之上（避免“点击查看星卡被浮窗压住/看不到”）。
+- 对话重试入口：当 AI 消息显示“未能获取星语回应/发送失败/请求已取消”等失败文案时，在该气泡内展示“重试”按钮；点击后会基于最后一条用户消息（复用 `idempotency_key`）重新发起 `chat-send` 并复用当前 AI 占位进行流式更新。

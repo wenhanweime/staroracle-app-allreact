@@ -61,6 +61,7 @@ extension Notification.Name {
     // 🔧 已移除chatOverlayVisibilityChanged，统一使用chatOverlayStateChanged
     static let inputDrawerPositionChanged = Notification.Name("inputDrawerPositionChanged")  // 新增：输入框位置变化通知
     static let chatOverlayOpenStar = Notification.Name("chatOverlayOpenStar")
+    static let chatOverlayRetryLastMessage = Notification.Name("chatOverlayRetryLastMessage")
 }
 
 // MARK: - ChatOverlayManager业务逻辑类
@@ -82,6 +83,8 @@ public class ChatOverlayManager {
     private let defaultWindowLevel = UIWindow.Level.statusBar - 1
     // 🔧 键盘事件不再提升到 alert 层级，保持与默认层级一致以避免切层闪烁
     private let elevatedWindowLevel = UIWindow.Level.statusBar - 1
+    private var isExternalModalPresented = false
+    private var externalModalWindowLevelBackup: UIWindow.Level?
     
     // 状态变化回调
     private var onStateChange: ((OverlayState) -> Void)?
@@ -119,6 +122,22 @@ public class ChatOverlayManager {
         if let window = overlayWindow {
             window.windowScene = scene
             window.frame = scene.screen.bounds
+        }
+    }
+
+    func setExternalModalPresented(_ presented: Bool) {
+        isExternalModalPresented = presented
+        guard let window = overlayWindow else { return }
+        if presented {
+            if externalModalWindowLevelBackup == nil {
+                externalModalWindowLevelBackup = window.windowLevel
+            }
+            window.isUserInteractionEnabled = false
+            window.windowLevel = UIWindow.Level.normal - 2
+        } else {
+            window.isUserInteractionEnabled = true
+            window.windowLevel = externalModalWindowLevelBackup ?? defaultWindowLevel
+            externalModalWindowLevelBackup = nil
         }
     }
     
@@ -567,8 +586,9 @@ public class ChatOverlayManager {
             window.windowScene = scene
         }
         // 设置层级：确保在星座之上但低于InputDrawer (statusBar-0.5)
-        window.windowLevel = UIWindow.Level.statusBar - 1  // 比InputDrawer低0.5级
+        window.windowLevel = isExternalModalPresented ? (UIWindow.Level.normal - 2) : (UIWindow.Level.statusBar - 1)  // 比InputDrawer低0.5级
         window.backgroundColor = UIColor.clear
+        window.isUserInteractionEnabled = !isExternalModalPresented
         
         // 关键：让窗口不阻挡其他交互，只处理容器内的触摸
         window.isHidden = false
@@ -1842,6 +1862,9 @@ extension OverlayViewController: UITableViewDataSource, UITableViewDelegate {
             let message = visibleMessages[indexPath.row]
             NSLog("🎯 配置cell: \(message.isUser ? "用户" : "AI") - \(message.text)")
             cell.configure(with: message)
+            cell.onRetryTapped = {
+                NotificationCenter.default.post(name: .chatOverlayRetryLastMessage, object: nil)
+            }
 
             // 🔧 简化：所有cell都设置为正常状态，动画状态在reloadData后单独设置
             cell.transform = .identity
@@ -1912,10 +1935,16 @@ class MessageTableViewCell: UITableViewCell {
     private let messageLabel = UILabel()
     private let timeLabel = UILabel()
     private let activity = StarRayActivityView()
+    private let retryButton = UIButton(type: .system)
     
     private var leadingConstraint: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
     private var timeLabelConstraint: NSLayoutConstraint?
+    private var messageLabelBottomConstraint: NSLayoutConstraint?
+    private var retryButtonTopConstraint: NSLayoutConstraint?
+    private var retryButtonBottomConstraint: NSLayoutConstraint?
+
+    var onRetryTapped: (() -> Void)?
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
         super.init(style: style, reuseIdentifier: reuseIdentifier)
@@ -1928,10 +1957,15 @@ class MessageTableViewCell: UITableViewCell {
     
     override func prepareForReuse() {
         super.prepareForReuse()
+        onRetryTapped = nil
         // 重置约束
         leadingConstraint?.isActive = false
         trailingConstraint?.isActive = false
         timeLabelConstraint?.isActive = false
+        retryButtonTopConstraint?.isActive = false
+        retryButtonBottomConstraint?.isActive = false
+        messageLabelBottomConstraint?.isActive = true
+        retryButton.isHidden = true
     }
     
     private func setupUI() {
@@ -1958,6 +1992,18 @@ class MessageTableViewCell: UITableViewCell {
         // 自定义加载指示器（八芒星旋转）
         activity.translatesAutoresizingMaskIntoConstraints = false
         messageContainerView.addSubview(activity)
+
+        // 重试按钮
+        retryButton.setTitle("重试", for: .normal)
+        retryButton.titleLabel?.font = UIFont.systemFont(ofSize: 13, weight: .semibold)
+        retryButton.tintColor = UIColor.white
+        retryButton.backgroundColor = UIColor.systemPurple
+        retryButton.layer.cornerRadius = 10
+        retryButton.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+        retryButton.addTarget(self, action: #selector(retryButtonTapped), for: .touchUpInside)
+        retryButton.translatesAutoresizingMaskIntoConstraints = false
+        retryButton.isHidden = true
+        messageContainerView.addSubview(retryButton)
         
         // 设置固定的约束
         NSLayoutConstraint.activate([
@@ -1967,7 +2013,6 @@ class MessageTableViewCell: UITableViewCell {
             messageLabel.topAnchor.constraint(equalTo: messageContainerView.topAnchor, constant: 12),
             messageLabel.leadingAnchor.constraint(equalTo: messageContainerView.leadingAnchor, constant: 16),
             messageLabel.trailingAnchor.constraint(equalTo: messageContainerView.trailingAnchor, constant: -16),
-            messageLabel.bottomAnchor.constraint(equalTo: messageContainerView.bottomAnchor, constant: -12),
             
             activity.centerYAnchor.constraint(equalTo: messageContainerView.centerYAnchor),
             activity.leadingAnchor.constraint(equalTo: messageLabel.leadingAnchor),
@@ -1976,6 +2021,21 @@ class MessageTableViewCell: UITableViewCell {
             
             timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
         ])
+
+        // 默认：messageLabel 占满容器；显示 retry 时会切换约束
+        messageLabelBottomConstraint = messageLabel.bottomAnchor.constraint(equalTo: messageContainerView.bottomAnchor, constant: -12)
+        messageLabelBottomConstraint?.isActive = true
+
+        retryButtonTopConstraint = retryButton.topAnchor.constraint(equalTo: messageLabel.bottomAnchor, constant: 10)
+        retryButtonBottomConstraint = retryButton.bottomAnchor.constraint(equalTo: messageContainerView.bottomAnchor, constant: -12)
+        NSLayoutConstraint.activate([
+            retryButton.leadingAnchor.constraint(equalTo: messageLabel.leadingAnchor),
+            retryButton.trailingAnchor.constraint(lessThanOrEqualTo: messageContainerView.trailingAnchor, constant: -16)
+        ])
+    }
+
+    @objc private func retryButtonTapped() {
+        onRetryTapped?()
     }
     
     func configure(with message: ChatMessage) {
@@ -1985,6 +2045,15 @@ class MessageTableViewCell: UITableViewCell {
         // AI空文本 -> 显示loading指示器
         let isLoadingAI = (!message.isUser && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         let isStarHint = message.id.hasPrefix("hint-star:")
+        let trimmedText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let shouldShowRetry = (!message.isUser)
+          && !isLoadingAI
+          && !isStarHint
+          && (
+            trimmedText.contains("未能获取星语回应")
+            || trimmedText.contains("发送失败")
+            || trimmedText.contains("请求已取消")
+          )
         
         // 星卡提示（非气泡）：灰色文本 + 蓝色“点击查看…”
         if isStarHint {
@@ -1993,6 +2062,10 @@ class MessageTableViewCell: UITableViewCell {
             activity.isHidden = true
             timeLabel.isHidden = true
             timeLabel.text = ""
+            retryButton.isHidden = true
+            retryButtonTopConstraint?.isActive = false
+            retryButtonBottomConstraint?.isActive = false
+            messageLabelBottomConstraint?.isActive = true
             
             messageContainerView.layer.cornerRadius = 0
             messageContainerView.backgroundColor = .clear
@@ -2050,6 +2123,19 @@ class MessageTableViewCell: UITableViewCell {
         leadingConstraint?.isActive = false
         trailingConstraint?.isActive = false
         timeLabelConstraint?.isActive = false
+
+        // 重试按钮：仅在失败文案时展示
+        if shouldShowRetry {
+            retryButton.isHidden = false
+            messageLabelBottomConstraint?.isActive = false
+            retryButtonTopConstraint?.isActive = true
+            retryButtonBottomConstraint?.isActive = true
+        } else {
+            retryButton.isHidden = true
+            retryButtonTopConstraint?.isActive = false
+            retryButtonBottomConstraint?.isActive = false
+            messageLabelBottomConstraint?.isActive = true
+        }
         
         // 根据是否是用户消息设置不同的样式
         if message.isUser {

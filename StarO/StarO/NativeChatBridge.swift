@@ -41,6 +41,14 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private var overlayHintIdsByChatId: [String: Set<String>] = [:]
   private var overlayHintsByChatId: [String: [OverlayChatMessage]] = [:]
 
+  private struct CloudSendContext: Sendable {
+    let message: String
+    let galaxyStarIndices: [Int]?
+    let reviewSessionId: String?
+  }
+
+  private var cloudSendContextByIdempotencyKey: [String: CloudSendContext] = [:]
+
   init(
     chatStore: ChatStore,
     starStore: StarStore,
@@ -174,6 +182,11 @@ final class NativeChatBridge: NSObject, ObservableObject {
     overlayManager.setHorizontalOffset(offset, animated: animated)
   }
 
+  func setSystemModalPresented(_ presented: Bool) {
+    overlayManager.setExternalModalPresented(presented)
+    inputManager.setExternalModalPresented(presented)
+  }
+
   func sendMessage(_ text: String) {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
@@ -186,6 +199,16 @@ final class NativeChatBridge: NSObject, ObservableObject {
     inputManager.setText("")
     setLastErrorMessage(nil)
     startStreaming(for: trimmed)
+  }
+
+  func retryLastMessage() {
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+    guard let lastUserMessage = chatStore.messages.last(where: { $0.isUser }) else { return }
+    retryCloudMessage(
+      chatId: conversationStore.currentSessionId,
+      message: lastUserMessage.text,
+      idempotencyKey: lastUserMessage.id
+    )
   }
 
   private func rotateSessionIfNeededForFreeChat() {
@@ -207,6 +230,41 @@ final class NativeChatBridge: NSObject, ObservableObject {
     streamingTask = Task { [weak self] in
       guard let self else { return }
       await self.performStreaming(for: question)
+    }
+  }
+
+  private func retryCloudMessage(chatId: String, message: String, idempotencyKey: String) {
+    streamingTask?.cancel()
+    starsPollingTask?.cancel()
+
+    let streamingMessageId: String = {
+      if let last = chatStore.messages.last, !last.isUser {
+        return last.id
+      }
+      return chatStore.beginStreamingAIMessage(initial: "")
+    }()
+
+    chatStore.updateStreamingMessage(id: streamingMessageId, text: "")
+    chatStore.setLoading(true)
+    overlayManager.setLoading(true)
+    setLastErrorMessage(nil)
+
+    let traceId = SupabaseRuntime.makeTraceId()
+    let context = cloudSendContextByIdempotencyKey[idempotencyKey]
+    let galaxyStarIndices = context?.galaxyStarIndices ?? conversationStore.galaxyStarIndicesForFirstChatSend(sessionId: chatId)
+    let reviewSessionId = context?.reviewSessionId ?? conversationStore.pendingReviewSessionId(forChatId: chatId)
+
+    streamingTask = Task { [weak self] in
+      guard let self else { return }
+      await self.performCloudStreaming(
+        chatId: chatId,
+        message: message,
+        traceId: traceId,
+        idempotencyKey: idempotencyKey,
+        galaxyStarIndices: galaxyStarIndices,
+        reviewSessionId: reviewSessionId,
+        streamingMessageId: streamingMessageId
+      )
     }
   }
 
@@ -292,74 +350,22 @@ final class NativeChatBridge: NSObject, ObservableObject {
       let requestIdempotencyKey = chatStore.messages.last(where: { $0.isUser })?.id ?? SupabaseRuntime.makeIdempotencyKey()
       let galaxyStarIndices = conversationStore.galaxyStarIndicesForFirstChatSend(sessionId: effectiveChatId)
       let reviewSessionId = conversationStore.pendingReviewSessionId(forChatId: effectiveChatId)
-      let didSendGalaxyStarIndices = galaxyStarIndices != nil
-      let didSendReviewSessionId = reviewSessionId != nil
       let streamingMessageId = chatStore.beginStreamingAIMessage(initial: "")
-      var buffer = ""
-      var doneChatId: String?
-      var requestStartedAt = Date()
+      cloudSendContextByIdempotencyKey[requestIdempotencyKey] = CloudSendContext(
+        message: question,
+        galaxyStarIndices: galaxyStarIndices,
+        reviewSessionId: reviewSessionId
+      )
 
-      do {
-        if conversationStore.session(id: effectiveChatId)?.hasSupabaseConversationStarted != true {
-          let title = conversationStore.currentSession()?.hasCustomTitle == true ? conversationStore.currentSession()?.displayTitle : nil
-          try await ChatCreateService.ensureChatExists(chatId: effectiveChatId, title: title)
-        }
-
-        requestStartedAt = Date()
-        for try await event in ChatSendService.streamMessage(
-          chatId: effectiveChatId,
-          message: question,
-          traceId: requestTraceId,
-          idempotencyKey: requestIdempotencyKey,
-          galaxyStarIndices: galaxyStarIndices,
-          reviewSessionId: reviewSessionId
-        ) {
-          switch event {
-          case let .delta(chunk):
-            buffer.append(chunk)
-            chatStore.updateStreamingMessage(id: streamingMessageId, text: buffer)
-          case let .done(_, chatId, _):
-            doneChatId = chatId
-            conversationStore.markSseDone(sessionId: chatId)
-            if didSendGalaxyStarIndices {
-              conversationStore.clearPendingGalaxyStarIndices()
-            }
-            if didSendReviewSessionId {
-              conversationStore.clearReviewSession(forChatId: chatId)
-            }
-          }
-        }
-
-        chatStore.finalizeStreamingMessage(id: streamingMessageId)
-        chatStore.setLoading(false)
-        overlayManager.setLoading(false)
-        try? await chatStore.generateConversationTitle()
-        setLastErrorMessage(nil)
-
-        if let doneChatId, doneChatId != effectiveChatId {
-          NSLog("⚠️ NativeChatBridge | done.chat_id 与请求 chat_id 不一致 request=%@ done=%@", effectiveChatId, doneChatId)
-        }
-        if let doneChatId {
-          startStarsPolling(afterDoneChatId: doneChatId)
-        }
-      } catch {
-        if await tryRecoverFromCloudIfPossible(
-          error: error,
-          chatId: effectiveChatId,
-          requestStartedAt: requestStartedAt,
-          streamingMessageId: streamingMessageId,
-          didSendGalaxyStarIndices: didSendGalaxyStarIndices,
-          didSendReviewSessionId: didSendReviewSessionId
-        ) {
-          return
-        }
-        NSLog("❌ NativeChatBridge.performStreaming(chat-send) | error=%@", error.localizedDescription)
-        chatStore.updateStreamingMessage(id: streamingMessageId, text: "未能获取星语回应，请稍后再试。")
-        chatStore.finalizeStreamingMessage(id: streamingMessageId)
-        chatStore.setLoading(false)
-        overlayManager.setLoading(false)
-        setLastErrorMessage("发送失败：\(error.localizedDescription)")
-      }
+      await performCloudStreaming(
+        chatId: effectiveChatId,
+        message: question,
+        traceId: requestTraceId,
+        idempotencyKey: requestIdempotencyKey,
+        galaxyStarIndices: galaxyStarIndices,
+        reviewSessionId: reviewSessionId,
+        streamingMessageId: streamingMessageId
+      )
       return
     }
 
@@ -406,6 +412,85 @@ final class NativeChatBridge: NSObject, ObservableObject {
       NSLog("❌ NativeChatBridge.performStreaming | error=%@", error.localizedDescription)
       chatStore.updateStreamingMessage(id: messageId, text: "未能获取星语回应，请稍后再试。")
       chatStore.finalizeStreamingMessage(id: messageId)
+      chatStore.setLoading(false)
+      overlayManager.setLoading(false)
+      setLastErrorMessage("发送失败：\(error.localizedDescription)")
+    }
+  }
+
+  private func performCloudStreaming(
+    chatId: String,
+    message: String,
+    traceId: String,
+    idempotencyKey: String,
+    galaxyStarIndices: [Int]?,
+    reviewSessionId: String?,
+    streamingMessageId: String
+  ) async {
+    var buffer = ""
+    var doneChatId: String?
+    var requestStartedAt = Date()
+
+    let didSendGalaxyStarIndices = galaxyStarIndices != nil
+    let didSendReviewSessionId = reviewSessionId != nil
+
+    do {
+      if conversationStore.session(id: chatId)?.hasSupabaseConversationStarted != true {
+        let title = conversationStore.currentSession()?.hasCustomTitle == true ? conversationStore.currentSession()?.displayTitle : nil
+        try await ChatCreateService.ensureChatExists(chatId: chatId, title: title)
+      }
+
+      requestStartedAt = Date()
+      for try await event in ChatSendService.streamMessage(
+        chatId: chatId,
+        message: message,
+        traceId: traceId,
+        idempotencyKey: idempotencyKey,
+        galaxyStarIndices: galaxyStarIndices,
+        reviewSessionId: reviewSessionId
+      ) {
+        switch event {
+        case let .delta(chunk):
+          buffer.append(chunk)
+          chatStore.updateStreamingMessage(id: streamingMessageId, text: buffer)
+        case let .done(_, doneId, _):
+          doneChatId = doneId
+          conversationStore.markSseDone(sessionId: doneId)
+          if didSendGalaxyStarIndices {
+            conversationStore.clearPendingGalaxyStarIndices()
+          }
+          if didSendReviewSessionId {
+            conversationStore.clearReviewSession(forChatId: doneId)
+          }
+        }
+      }
+
+      chatStore.finalizeStreamingMessage(id: streamingMessageId)
+      chatStore.setLoading(false)
+      overlayManager.setLoading(false)
+      try? await chatStore.generateConversationTitle()
+      setLastErrorMessage(nil)
+
+      if let doneChatId, doneChatId != chatId {
+        NSLog("⚠️ NativeChatBridge | done.chat_id 与请求 chat_id 不一致 request=%@ done=%@", chatId, doneChatId)
+      }
+      if let doneChatId {
+        startStarsPolling(afterDoneChatId: doneChatId)
+      }
+    } catch {
+      if await tryRecoverFromCloudIfPossible(
+        error: error,
+        chatId: chatId,
+        requestStartedAt: requestStartedAt,
+        streamingMessageId: streamingMessageId,
+        didSendGalaxyStarIndices: didSendGalaxyStarIndices,
+        didSendReviewSessionId: didSendReviewSessionId
+      ) {
+        return
+      }
+      NSLog("❌ NativeChatBridge.performStreaming(chat-send) | error=%@", error.localizedDescription)
+      chatStore.updateStreamingMessage(id: streamingMessageId, text: "未能获取星语回应，请稍后再试。")
+      chatStore.finalizeStreamingMessage(id: streamingMessageId)
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
       setLastErrorMessage("发送失败：\(error.localizedDescription)")
@@ -519,6 +604,16 @@ final class NativeChatBridge: NSObject, ObservableObject {
           default:
             break
           }
+        }
+      }
+      .store(in: &cancellables)
+
+    NotificationCenter.default.publisher(for: .chatOverlayRetryLastMessage)
+      .receive(on: DispatchQueue.main)
+      .sink { [weak self] _ in
+        guard let self else { return }
+        DispatchQueue.main.async {
+          self.retryLastMessage()
         }
       }
       .store(in: &cancellables)

@@ -144,6 +144,12 @@ struct RootView: View {
       .sheet(isPresented: $isShowingAccount) {
         AccountView()
       }
+      .onChange(of: selectedStar) { _, newValue in
+        chatBridge.setSystemModalPresented(newValue != nil || isShowingAccount)
+      }
+      .onChange(of: isShowingAccount) { _, newValue in
+        chatBridge.setSystemModalPresented(selectedStar != nil || newValue)
+      }
     }
   }
 

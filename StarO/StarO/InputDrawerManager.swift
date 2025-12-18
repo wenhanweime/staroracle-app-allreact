@@ -49,6 +49,8 @@ public class InputDrawerManager {
     internal var bottomSpace: CGFloat = 20 // 默认20px，匹配React版本
     internal var horizontalOffset: CGFloat = 0
     private var inputViewController: InputViewController?
+    private var isExternalModalPresented = false
+    private var externalModalWindowLevelBackup: UIWindow.Level?
     
     // 事件代理
     public weak var delegate: InputDrawerDelegate?
@@ -64,6 +66,22 @@ public class InputDrawerManager {
         if let window = inputWindow {
             window.windowScene = scene
             window.frame = scene.screen.bounds
+        }
+    }
+
+    func setExternalModalPresented(_ presented: Bool) {
+        isExternalModalPresented = presented
+        guard let window = inputWindow else { return }
+        if presented {
+            if externalModalWindowLevelBackup == nil {
+                externalModalWindowLevelBackup = window.windowLevel
+            }
+            window.isUserInteractionEnabled = false
+            window.windowLevel = UIWindow.Level.normal - 1
+        } else {
+            window.isUserInteractionEnabled = true
+            window.windowLevel = externalModalWindowLevelBackup ?? (UIWindow.Level.statusBar - 0.5)
+            externalModalWindowLevelBackup = nil
         }
     }
     
@@ -184,8 +202,9 @@ public class InputDrawerManager {
         if let scene {
             window.windowScene = scene
         }
-        window.windowLevel = UIWindow.Level.statusBar - 0.5  // 略低于statusBar，但高于普通窗口
+        window.windowLevel = isExternalModalPresented ? (UIWindow.Level.normal - 1) : (UIWindow.Level.statusBar - 0.5)  // 略低于statusBar，但高于普通窗口
         window.backgroundColor = UIColor.clear
+        window.isUserInteractionEnabled = !isExternalModalPresented
         
         // 关键：让窗口不阻挡其他交互，只处理输入框区域的触摸
         window.isHidden = false
