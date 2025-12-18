@@ -64,3 +64,4 @@
 ## 2025-12-19
 
 - 迁移协作：章程补充 `StarO/migration/userpromptrecord.md` 的“已读/子任务完成”标注规则，并将 `# 2` 转为任务清单以便逐条验收与追溯。
+- UI（主页顶栏）：ChatOverlay 展开时不再对背景根视图做“向上位移/3D 旋转”，仅保留轻微缩放，修复主页顶部按钮被顶进灵动岛/安全区的问题（`ChatOverlayManager.applyBackgroundTransform`）。

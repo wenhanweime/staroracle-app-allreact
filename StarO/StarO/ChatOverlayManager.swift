@@ -523,13 +523,9 @@ public class ChatOverlayManager {
                            animations: {
                 switch state {
                 case .expanded:
-                    // 展开状态：缩放0.92，向上移动15px，绕X轴旋转4度，降低亮度
+                    // 展开状态：仅做轻微缩放，不做向上位移/3D旋转，避免主页顶部按钮被“顶进”灵动岛区域
                     var transform = CATransform3DIdentity
-                    transform.m34 = -1.0 / 1000.0  // 设置透视效果
                     transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
-                    transform = CATransform3DTranslate(transform, 0, -15, 0)
-                    transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)  // 绕X轴旋转4度
-                    
                     backgroundView.layer.transform = transform
                     
                 case .collapsed, .hidden:
@@ -537,22 +533,18 @@ public class ChatOverlayManager {
                     backgroundView.layer.transform = CATransform3DIdentity
                 }
             }, completion: nil)
-        } else {
-            // 无动画模式：立即设置状态
-            switch state {
-            case .expanded:
-                var transform = CATransform3DIdentity
-                transform.m34 = -1.0 / 1000.0
-                transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
-                transform = CATransform3DTranslate(transform, 0, -15, 0)
-                transform = CATransform3DRotate(transform, 4.0 * .pi / 180.0, 1, 0, 0)
-                
-                backgroundView.layer.transform = transform
-                
-            case .collapsed, .hidden:
-                backgroundView.layer.transform = CATransform3DIdentity
-            }
-        }
+	        } else {
+	            // 无动画模式：立即设置状态
+	            switch state {
+	            case .expanded:
+	                var transform = CATransform3DIdentity
+	                transform = CATransform3DScale(transform, 0.92, 0.92, 1.0)
+	                backgroundView.layer.transform = transform
+	                
+	            case .collapsed, .hidden:
+	                backgroundView.layer.transform = CATransform3DIdentity
+	            }
+	        }
         lastBackgroundState = state
     }
     
