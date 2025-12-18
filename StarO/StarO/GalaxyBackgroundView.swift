@@ -41,9 +41,9 @@ struct GalaxyBackgroundView: View {
           galaxyStore.setIsGeneratingCard(true)
           
           debounceTask = Task {
-            // Wait for 600ms to allow rapid tapping (exploration)
+            // Wait for 120ms to allow rapid tapping (exploration)
             // Only the last tap will trigger the card generation AND the highlight
-            try? await Task.sleep(nanoseconds: 600_000_000)
+            try? await Task.sleep(nanoseconds: 120_000_000)
             
             guard !Task.isCancelled else { return }
 

@@ -1,5 +1,16 @@
+import Foundation
 import SwiftUI
 import UIKit
+import StarOracleCore
+
+private func NSLog(_ format: String, _ args: CVarArg...) {
+    guard StarOracleDebug.verboseLogsEnabled else { return }
+    if args.isEmpty {
+        Foundation.NSLog("%@", format)
+    } else {
+        withVaList(args) { Foundation.NSLogv(format, $0) }
+    }
+}
 
 // MARK: - InputPassthroughWindow - 自定义窗口类，支持触摸事件穿透
 class InputPassthroughWindow: UIWindow {

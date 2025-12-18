@@ -51,3 +51,5 @@
 - 历史会话回放修复：对话过程中将 `ChatStore.messages` 同步写入 `ConversationStore`（避免只存标题/时间导致点开为空）；切换历史会话时若本地消息为空且已配置 Supabase，则自动回源 `GET /rest/v1/messages?chat_id=...` 拉取并回填后再载入（`NativeChatBridge.observeChatStore` / `AppEnvironment.switchSession` / `ConversationStore.replaceSessionMessages`）。自测：本地编译通过；发起多轮对话后从左侧菜单切换历史会话应能正常回放。
 - 对话历史规则（24h 连续展示）：保持现有“10 分钟 inactivity 分段 / chat_id 可变 / 上下文与记忆策略不变”，但聊天浮窗改为聚合展示最近 24 小时内的多段会话消息，视觉上连续、可上滑回看；若当前切换到超过 24 小时的旧会话，则仅展示该会话自身消息（`NativeChatBridge.refreshOverlayMessages`）。
 - 交互补齐：点击输入框（获得焦点）时，若对话浮窗处于隐藏/收缩状态，则自动弹出并展开浮窗，避免“必须先发送消息才弹出浮窗”的割裂体验（`NativeChatBridge.inputDrawerDidFocus`）。
+- 性能（日志）：新增 `StarOracleDebug.verboseLogs` 开关（默认关闭），并将 `ChatOverlayManager/InputDrawerManager/NativeChatBridge` 的 `NSLog` 输出改为受该开关控制；同时将 `ChatStore/StarStore/GalaxyStore/GalaxyGridStore/ConversationStore/KeyboardObserver` 的 callStack 日志改为默认关闭；个人主页（Account）“调试”中新增“详细日志”开关便于需要时再打开。
+- 性能（Galaxy 点击）：将 Galaxy 点击防抖等待从 600ms 调整为 120ms，并避免 `GalaxyViewModel.handleTap` 在外部已提供 onTap 回调时重复触发默认高亮计算（减少一次全量候选扫描），降低点击卡顿与延迟感。

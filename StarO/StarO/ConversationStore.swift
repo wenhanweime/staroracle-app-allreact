@@ -72,7 +72,7 @@ final class ConversationStore: ObservableObject {
   private let fileURL: URL
   private var saveTask: Task<Void, Never>?
   private var pendingMessageUpdate: DispatchWorkItem?
-  private let stateLoggingEnabled = true
+  private var stateLoggingEnabled: Bool { StarOracleDebug.verboseLogsEnabled }
   private var isPublishingEnabled = false
   private var isBootstrapped = false
   private var isPublishScheduled = false
@@ -325,7 +325,9 @@ final class ConversationStore: ObservableObject {
 
   @MainActor
   private func performUpdateCurrentSessionMessages(_ messages: [CoreChatMessage]) {
-    NSLog("🚨 updateCurrentSessionMessages called | stack: \(Thread.callStackSymbols.joined(separator: "\n"))")
+    if stateLoggingEnabled {
+      NSLog("🚨 updateCurrentSessionMessages called | stack: \(Thread.callStackSymbols.joined(separator: "\n"))")
+    }
     guard let index = sessions.firstIndex(where: { $0.id == currentSessionId }) else { return }
     let converted = messages.map { message in
       PersistMessage(

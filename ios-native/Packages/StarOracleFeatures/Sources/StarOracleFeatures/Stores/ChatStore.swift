@@ -19,7 +19,7 @@ public final class ChatStore: ObservableObject, ChatStoreProtocol {
 
   private let aiService: AIServiceProtocol
   private let configurationProvider: @Sendable () async -> AIConfiguration?
-  private let stateLoggingEnabled = true
+  private var stateLoggingEnabled: Bool { StarOracleDebug.verboseLogsEnabled }
 
   public init(
     messages: [ChatMessage] = [],

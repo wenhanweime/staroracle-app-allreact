@@ -219,7 +219,9 @@ final class GalaxyViewModel: ObservableObject {
     func handleTap(at location: CGPoint, in size: CGSize, tapTimestamp: CFTimeInterval? = nil) {
         guard ringCount > 0 else { return }
         #if DEBUG
-        print("[GalaxyViewModel] handleTap at (\(location.x), \(location.y)) size (\(size.width), \(size.height))")
+        if StarOracleDebug.verboseLogsEnabled {
+            print("[GalaxyViewModel] handleTap at (\(location.x), \(location.y)) size (\(size.width), \(size.height))")
+        }
         #endif
         
         // 只保留region选择功能
@@ -228,8 +230,10 @@ final class GalaxyViewModel: ObservableObject {
         // Pass timestamp to callback
         onTap?(location, size, region, tapTimestamp ?? elapsedTime)
         
-        // Restore immediate highlight trigger
-        triggerHighlight(at: location, in: size, tapTimestamp: tapTimestamp)
+        // 默认高亮（闪烁）：仅在外部未提供 onTap 回调时启用，避免重复计算高亮导致卡顿。
+        if onTap == nil {
+            triggerHighlight(at: location, in: size, tapTimestamp: tapTimestamp)
+        }
     }
     
     func triggerHighlight(
@@ -269,20 +273,26 @@ final class GalaxyViewModel: ObservableObject {
         
         guard !candidates.isEmpty else {
             #if DEBUG
-            print("[GalaxyViewModel] no selectable stars around tap")
+            if StarOracleDebug.verboseLogsEnabled {
+                print("[GalaxyViewModel] no selectable stars around tap")
+            }
             #endif
             return
         }
         
         #if DEBUG
-        print("[GalaxyViewModel] candidates: \(candidates.count)")
+        if StarOracleDebug.verboseLogsEnabled {
+            print("[GalaxyViewModel] candidates: \(candidates.count)")
+        }
         #endif
         
         // 挑选高亮星星（加权随机）
         let selected = pickHighlights(from: candidates, targetCount: min(30, candidates.count), rng: &rng)
         
         #if DEBUG
-        print("[GalaxyViewModel] selected: \(selected.count) stars for highlight")
+        if StarOracleDebug.verboseLogsEnabled {
+            print("[GalaxyViewModel] selected: \(selected.count) stars for highlight")
+        }
         #endif
         
         // 禁用脉冲动画（删除大球形闪烁，仅保留星点高亮）
@@ -291,7 +301,9 @@ final class GalaxyViewModel: ObservableObject {
         // 应用高亮状态（用于星星变大变亮）
         let entries = applyHighlights(from: selected, isPermanent: isPermanent, expiresAt: expiresAt, rng: &rng)
         #if DEBUG
-        print("[GalaxyViewModel] highlights added: \(entries.count), total: \(highlights.count)")
+        if StarOracleDebug.verboseLogsEnabled {
+            print("[GalaxyViewModel] highlights added: \(entries.count), total: \(highlights.count)")
+        }
         #endif
         
         // Update global RNG only if we didn't use a deterministic one

@@ -51,7 +51,7 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
   private let soundService: SoundServiceProtocol?
   private let hapticService: HapticServiceProtocol?
 
-  private let stateLoggingEnabled = true
+  private var stateLoggingEnabled: Bool { StarOracleDebug.verboseLogsEnabled }
 
   public init(
     constellation: Constellation = Constellation(),

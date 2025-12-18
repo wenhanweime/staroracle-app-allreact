@@ -17,7 +17,7 @@ public final class GalaxyGridStore: ObservableObject, GalaxyGridStoreProtocol {
   }
 
   private var neighbors: [[Int]]
-  private let stateLoggingEnabled = true
+  private var stateLoggingEnabled: Bool { StarOracleDebug.verboseLogsEnabled }
 
   public init(
     width: Double = 0,

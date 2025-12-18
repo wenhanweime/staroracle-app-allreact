@@ -21,6 +21,7 @@ struct AccountView: View {
   @State private var isSaving = false
   @State private var isShowingAIConfig = false
   @State private var errorMessage: String?
+  @State private var isVerboseLogsEnabled: Bool = StarOracleDebug.verboseLogsEnabled
 
   @State private var draftDisplayName: String = ""
   @State private var draftAvatarEmoji: String = ""
@@ -192,6 +193,10 @@ struct AccountView: View {
   private var debugSection: some View {
     Section("调试") {
       labeledValueRow(title: "云端会话", value: hasSupabaseConfig ? "可打开" : "未启用")
+      Toggle("详细日志", isOn: $isVerboseLogsEnabled)
+        .onChange(of: isVerboseLogsEnabled) { _, newValue in
+          StarOracleDebug.setVerboseLogsEnabled(newValue)
+        }
     }
   }
 

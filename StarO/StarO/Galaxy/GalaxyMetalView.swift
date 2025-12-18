@@ -21,7 +21,9 @@ struct GalaxyMetalContainer: View {
                     .allowsHitTesting(false)
                 
                 GalaxyTouchOverlay(onTap: { point, ts in
-                    print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f) ts=%.3f", point.x, point.y, ts))
+                    if StarOracleDebug.verboseLogsEnabled {
+                        print(String(format: "[GalaxyMetalContainer] tap at (%.1f, %.1f) ts=%.3f", point.x, point.y, ts))
+                    }
                     viewModel.onRegionSelected = onRegionSelected
                     viewModel.onTap = onTap
                     viewModel.handleTap(at: point, in: size, tapTimestamp: ts)

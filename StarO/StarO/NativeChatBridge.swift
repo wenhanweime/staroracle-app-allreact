@@ -8,6 +8,15 @@ import StarOracleServices
 
 extension ObservableObjectPublisher: @unchecked Sendable {}
 
+private func NSLog(_ format: String, _ args: CVarArg...) {
+  guard StarOracleDebug.verboseLogsEnabled else { return }
+  if args.isEmpty {
+    Foundation.NSLog("%@", format)
+  } else {
+    withVaList(args) { Foundation.NSLogv(format, $0) }
+  }
+}
+
 @MainActor
 final class NativeChatBridge: NSObject, ObservableObject {
   enum PresentationState {

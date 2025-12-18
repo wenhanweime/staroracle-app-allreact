@@ -1,5 +1,6 @@
 import Combine
 import SwiftUI
+import StarOracleCore
 
 #if os(iOS)
 import UIKit
@@ -31,6 +32,7 @@ final class KeyboardObserver: ObservableObject {
 
 private extension KeyboardObserver {
   func logStateChange(_ label: String) {
+    guard StarOracleDebug.verboseLogsEnabled else { return }
     NSLog("⚠️ KeyboardObserver mutate \(label) | stack:\n\(Thread.callStackSymbols.joined(separator: "\n"))")
   }
 }

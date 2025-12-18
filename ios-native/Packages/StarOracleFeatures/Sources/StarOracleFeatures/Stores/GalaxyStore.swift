@@ -22,7 +22,7 @@ public final class GalaxyStore: ObservableObject, GalaxyStoreProtocol {
     willSet { logStateChange("isGeneratingCard -> \(newValue)") }
   }
 
-  private let stateLoggingEnabled = true
+  private var stateLoggingEnabled: Bool { StarOracleDebug.verboseLogsEnabled }
   private var pendingCanvasSizeWork: DispatchWorkItem?
 
   public init(
