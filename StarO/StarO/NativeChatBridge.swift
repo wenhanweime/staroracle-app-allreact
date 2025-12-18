@@ -271,7 +271,17 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private func refreshOverlayMessages(sourceMessages: [StarOracleCore.ChatMessage]? = nil) {
     let base = (sourceMessages ?? chatStore.messages).map(makeOverlayMessage)
     let hints = overlayHintsByChatId[conversationStore.currentSessionId] ?? []
-    overlayManager.updateMessages(base + hints)
+    let merged = base + hints
+    let sorted = merged.sorted { lhs, rhs in
+      if lhs.timestamp != rhs.timestamp {
+        return lhs.timestamp < rhs.timestamp
+      }
+      if lhs.isUser != rhs.isUser {
+        return lhs.isUser && !rhs.isUser
+      }
+      return lhs.id < rhs.id
+    }
+    overlayManager.updateMessages(sorted)
   }
 
   private func appendStarHint(chatId: String, kind: String, starId: String, text: String) {

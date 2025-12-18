@@ -1940,9 +1940,16 @@ class MessageTableViewCell: UITableViewCell {
     private var leadingConstraint: NSLayoutConstraint?
     private var trailingConstraint: NSLayoutConstraint?
     private var timeLabelConstraint: NSLayoutConstraint?
+    private var centerXConstraint: NSLayoutConstraint?
     private var messageLabelBottomConstraint: NSLayoutConstraint?
+    private var messageLabelTopConstraint: NSLayoutConstraint?
     private var retryButtonTopConstraint: NSLayoutConstraint?
     private var retryButtonBottomConstraint: NSLayoutConstraint?
+    private var containerTopConstraint: NSLayoutConstraint?
+    private var containerBottomToTimeLabelTopConstraint: NSLayoutConstraint?
+    private var containerBottomToContentBottomConstraint: NSLayoutConstraint?
+    private var timeLabelBottomConstraint: NSLayoutConstraint?
+    private var timeLabelHeightConstraint: NSLayoutConstraint?
 
     var onRetryTapped: (() -> Void)?
     
@@ -1962,6 +1969,7 @@ class MessageTableViewCell: UITableViewCell {
         leadingConstraint?.isActive = false
         trailingConstraint?.isActive = false
         timeLabelConstraint?.isActive = false
+        centerXConstraint?.isActive = false
         retryButtonTopConstraint?.isActive = false
         retryButtonBottomConstraint?.isActive = false
         messageLabelBottomConstraint?.isActive = true
@@ -2006,20 +2014,27 @@ class MessageTableViewCell: UITableViewCell {
         messageContainerView.addSubview(retryButton)
         
         // 设置固定的约束
+        containerTopConstraint = messageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8)
+        containerBottomToTimeLabelTopConstraint = messageContainerView.bottomAnchor.constraint(equalTo: timeLabel.topAnchor, constant: -4)
+        containerBottomToContentBottomConstraint = messageContainerView.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+        timeLabelBottomConstraint = timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+        timeLabelHeightConstraint = timeLabel.heightAnchor.constraint(equalToConstant: 0)
+
+        messageLabelTopConstraint = messageLabel.topAnchor.constraint(equalTo: messageContainerView.topAnchor, constant: 12)
+
         NSLayoutConstraint.activate([
-            messageContainerView.topAnchor.constraint(equalTo: contentView.topAnchor, constant: 8),
-            messageContainerView.bottomAnchor.constraint(equalTo: timeLabel.topAnchor, constant: -4),
-            
-            messageLabel.topAnchor.constraint(equalTo: messageContainerView.topAnchor, constant: 12),
+            containerTopConstraint!,
+            containerBottomToTimeLabelTopConstraint!,
+            messageLabelTopConstraint!,
             messageLabel.leadingAnchor.constraint(equalTo: messageContainerView.leadingAnchor, constant: 16),
             messageLabel.trailingAnchor.constraint(equalTo: messageContainerView.trailingAnchor, constant: -16),
-            
+
             activity.centerYAnchor.constraint(equalTo: messageContainerView.centerYAnchor),
             activity.leadingAnchor.constraint(equalTo: messageLabel.leadingAnchor),
             activity.widthAnchor.constraint(equalToConstant: 20),
             activity.heightAnchor.constraint(equalToConstant: 20),
-            
-            timeLabel.bottomAnchor.constraint(equalTo: contentView.bottomAnchor, constant: -8)
+
+            timeLabelBottomConstraint!
         ])
 
         // 默认：messageLabel 占满容器；显示 retry 时会切换约束
@@ -2039,6 +2054,17 @@ class MessageTableViewCell: UITableViewCell {
     }
     
     func configure(with message: ChatMessage) {
+        // 统一重置：避免复用导致“星卡提示样式/约束”残留
+        containerTopConstraint?.constant = 8
+        containerBottomToTimeLabelTopConstraint?.isActive = true
+        containerBottomToContentBottomConstraint?.isActive = false
+        timeLabelHeightConstraint?.isActive = false
+        messageLabelTopConstraint?.constant = 12
+        messageLabelBottomConstraint?.constant = -12
+        centerXConstraint?.isActive = false
+        messageContainerView.layer.borderWidth = 0
+        messageContainerView.layer.borderColor = nil
+
         // 回退：使用普通文本渲染，避免富文本带来的替换/渲染问题
         messageLabel.attributedText = nil
         messageLabel.text = nil
@@ -2067,9 +2093,19 @@ class MessageTableViewCell: UITableViewCell {
             retryButtonBottomConstraint?.isActive = false
             messageLabelBottomConstraint?.isActive = true
             
-            messageContainerView.layer.cornerRadius = 0
-            messageContainerView.backgroundColor = .clear
-            messageLabel.font = UIFont.systemFont(ofSize: 14, weight: .regular)
+            // 更轻量的提示：小胶囊 + 紧凑行高
+            containerTopConstraint?.constant = 4
+            containerBottomToTimeLabelTopConstraint?.isActive = false
+            containerBottomToContentBottomConstraint?.isActive = true
+            timeLabelHeightConstraint?.isActive = true
+            messageLabelTopConstraint?.constant = 6
+            messageLabelBottomConstraint?.constant = -6
+
+            messageContainerView.layer.cornerRadius = 14
+            messageContainerView.layer.borderWidth = 1
+            messageContainerView.layer.borderColor = UIColor.systemGray4.withAlphaComponent(0.25).cgColor
+            messageContainerView.backgroundColor = UIColor.systemGray6.withAlphaComponent(0.4)
+            messageLabel.font = UIFont.systemFont(ofSize: 13, weight: .regular)
             messageLabel.textAlignment = .center
             messageLabel.textColor = .systemGray
             
@@ -2090,14 +2126,15 @@ class MessageTableViewCell: UITableViewCell {
             leadingConstraint?.isActive = false
             trailingConstraint?.isActive = false
             timeLabelConstraint?.isActive = false
+            centerXConstraint?.isActive = false
             
-            leadingConstraint = messageContainerView.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
-            trailingConstraint = messageContainerView.trailingAnchor.constraint(equalTo: contentView.trailingAnchor, constant: -16)
-            timeLabelConstraint = timeLabel.leadingAnchor.constraint(equalTo: contentView.leadingAnchor, constant: 16)
+            leadingConstraint = messageContainerView.leadingAnchor.constraint(greaterThanOrEqualTo: contentView.leadingAnchor, constant: 24)
+            trailingConstraint = messageContainerView.trailingAnchor.constraint(lessThanOrEqualTo: contentView.trailingAnchor, constant: -24)
+            centerXConstraint = messageContainerView.centerXAnchor.constraint(equalTo: contentView.centerXAnchor)
             
             leadingConstraint?.isActive = true
             trailingConstraint?.isActive = true
-            timeLabelConstraint?.isActive = true
+            centerXConstraint?.isActive = true
             return
         }
         
