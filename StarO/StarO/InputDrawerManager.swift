@@ -278,6 +278,8 @@ class InputViewController: UIViewController {
     private var sendButton: UIButton!
     private var micButton: UIButton!
     private var awarenessView: FloatingAwarenessPlanetView!
+    private var speechToastLabel: UILabel?
+    private var speechToastHideWorkItem: DispatchWorkItem?
 
     // MARK: - Speech (Apple Speech framework)
     private let speechRecognizer: SFSpeechRecognizer? = {
@@ -464,6 +466,45 @@ class InputViewController: UIViewController {
             sendButton.widthAnchor.constraint(equalToConstant: 36), // 20px icon + 8px padding each side
             sendButton.heightAnchor.constraint(equalToConstant: 36)
         ])
+
+        // 语音提示（非阻塞 Toast）：用于在权限弹窗无法显示/服务不可用时给用户明确反馈
+        let toast = UILabel()
+        toast.text = nil
+        toast.textColor = UIColor(white: 1.0, alpha: 0.9)
+        toast.font = UIFont.systemFont(ofSize: 13, weight: .medium)
+        toast.backgroundColor = UIColor(white: 0.1, alpha: 0.92)
+        toast.layer.cornerRadius = 10
+        toast.layer.masksToBounds = true
+        toast.textAlignment = .center
+        toast.numberOfLines = 2
+        toast.alpha = 0
+        toast.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(toast)
+        speechToastLabel = toast
+        NSLayoutConstraint.activate([
+            toast.bottomAnchor.constraint(equalTo: containerView.topAnchor, constant: -10),
+            toast.centerXAnchor.constraint(equalTo: containerView.centerXAnchor),
+            toast.widthAnchor.constraint(lessThanOrEqualTo: view.widthAnchor, multiplier: 0.86),
+        ])
+    }
+
+    @MainActor
+    private func showSpeechToast(_ message: String) {
+        guard let toast = speechToastLabel else { return }
+        speechToastHideWorkItem?.cancel()
+        speechToastHideWorkItem = nil
+
+        toast.text = "  \(message)  "
+        UIView.animate(withDuration: 0.18, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+            toast.alpha = 1
+        }
+        let work = DispatchWorkItem { [weak toast] in
+            UIView.animate(withDuration: 0.24, delay: 0, options: [.allowUserInteraction, .beginFromCurrentState]) {
+                toast?.alpha = 0
+            }
+        }
+        speechToastHideWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0, execute: work)
     }
     
     private func setupChatOverlayObservers() {
@@ -670,13 +711,15 @@ class InputViewController: UIViewController {
     }
     
     @objc private func micButtonTapped() {
-        NSLog("🎯 麦克风按钮被点击")
+        // 这里用 Foundation.NSLog：即使关闭 verboseLogs 也需要能定位“是否收到点击”
+        Foundation.NSLog("🎙️ micButtonTapped")
         Task { @MainActor [weak self] in
             guard let self else { return }
             if self.isSpeechStopping { return }
             if self.isSpeechRecording {
                 self.stopSpeechRecognition()
             } else {
+                self.showSpeechToast("正在开启语音…")
                 await self.startSpeechRecognitionIfPossible()
             }
         }
@@ -685,32 +728,41 @@ class InputViewController: UIViewController {
     @MainActor
     private func startSpeechRecognitionIfPossible() async {
         guard !isSpeechStopping else { return }
-        guard validateSpeechUsageDescriptions() else { return }
+        guard validateSpeechUsageDescriptions() else {
+            showSpeechToast("缺少权限说明，无法请求语音权限")
+            return
+        }
         guard let speechRecognizer else {
             presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
+            showSpeechToast("设备不支持语音识别")
             return
         }
 	        guard speechRecognizer.isAvailable else {
             presentPermissionAlert(title: "语音识别暂不可用", message: "语音识别服务当前不可用，请稍后再试。")
+            showSpeechToast("语音识别服务暂不可用")
             return
         }
 
         let speechOK = await requestSpeechAuthorization()
         guard speechOK else {
             presentPermissionAlert(title: "需要语音识别权限", message: "请在系统设置中允许“语音识别”权限后再试。")
+            showSpeechToast("需要语音识别权限")
             return
         }
 
         let micOK = await requestMicrophonePermission()
         guard micOK else {
             presentPermissionAlert(title: "需要麦克风权限", message: "请在系统设置中允许“麦克风”权限后再试。")
+            showSpeechToast("需要麦克风权限")
             return
         }
 
         do {
             try beginSpeechRecognition()
         } catch {
+            Foundation.NSLog("🎙️ beginSpeechRecognition failed: \(error.localizedDescription)")
             presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
+            showSpeechToast("启动失败：\(error.localizedDescription)")
             stopSpeechRecognition()
         }
     }
