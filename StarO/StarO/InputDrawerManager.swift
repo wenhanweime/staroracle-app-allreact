@@ -817,38 +817,31 @@ class InputViewController: UIViewController {
     private func stopSpeechRecognition() {
         guard !isSpeechStopping else { return }
         isSpeechStopping = true
+        defer { isSpeechStopping = false }
 
         // 先让 UI 立即响应（避免用户感觉“按了停不下来”）
         isSpeechRecording = false
         updateMicButton(isRecording: false)
 
-        let request = recognitionRequest
-        let task = recognitionTask
-        recognitionRequest = nil
+        // 结束识别任务与音频请求
+        recognitionTask?.cancel()
         recognitionTask = nil
 
-        let shouldRemoveTap = didInstallSpeechTap
-        didInstallSpeechTap = false
+        recognitionRequest?.endAudio()
+        recognitionRequest = nil
 
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            guard let self else { return }
-
-            if self.audioEngine.isRunning {
-                self.audioEngine.stop()
-            }
-
-            if shouldRemoveTap {
-                self.audioEngine.inputNode.removeTap(onBus: 0)
-            }
-
-            self.audioEngine.reset()
-            request?.endAudio()
-            task?.finish()
-
-            DispatchQueue.main.async { [weak self] in
-                self?.isSpeechStopping = false
-            }
+        // 清理音频 tap 与引擎
+        if didInstallSpeechTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            didInstallSpeechTap = false
         }
+
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        audioEngine.reset()
+
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func updateMicButton(isRecording: Bool) {
