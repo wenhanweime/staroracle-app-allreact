@@ -296,6 +296,9 @@ class InputViewController: UIViewController {
     private var speechToken: UUID?
     private var speechBaseText: String = ""
     private var speechTapSignal: SpeechTapSignal?
+    private var speechDidReceiveAnyResult: Bool = false
+    private var pendingSpeechNoResultTask: Task<Void, Never>?
+    private var speechPreferOnDevice: Bool = true
     
     // 约束
     private var containerLeadingConstraint: NSLayoutConstraint!
@@ -833,10 +836,18 @@ class InputViewController: UIViewController {
     }
 
     private func beginSpeechRecognition() throws {
+        try beginSpeechRecognition(preferOnDevice: true)
+    }
+
+    private func beginSpeechRecognition(preferOnDevice: Bool) throws {
         let token = UUID()
         let baseText = textField.text ?? ""
 
         speechToken = token
+        speechPreferOnDevice = preferOnDevice
+        speechDidReceiveAnyResult = false
+        pendingSpeechNoResultTask?.cancel()
+        pendingSpeechNoResultTask = nil
 
         pendingSpeechDeactivateTask?.cancel()
         pendingSpeechDeactivateTask = nil
@@ -854,11 +865,15 @@ class InputViewController: UIViewController {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.taskHint = .dictation
-        if let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
+        if preferOnDevice, let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
             request.requiresOnDeviceRecognition = true
             Foundation.NSLog("🎙️ speech on-device enabled")
         } else {
+            if let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
+                Foundation.NSLog("🎙️ speech on-device supported but not forced")
+            } else {
             Foundation.NSLog("🎙️ speech on-device not supported")
+            }
         }
         recognitionRequest = request
 
@@ -882,6 +897,37 @@ class InputViewController: UIViewController {
         updateMicButton(isRecording: true)
         showSpeechToast("开始说话")
 
+        pendingSpeechNoResultTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 4_000_000_000)
+            } catch {
+                return
+            }
+            guard let self else { return }
+            guard self.speechToken == token, self.isSpeechRecording else { return }
+            guard self.speechDidReceiveAnyResult == false else { return }
+
+            // 音频已进入 tap，但识别层长时间无回调：给出明确反馈，并尝试回退策略
+            self.showSpeechToast("语音识别无响应，正在尝试恢复…")
+            Foundation.NSLog("🎙️ no speech callback after 4s (preferOnDevice=\(preferOnDevice))")
+
+            if preferOnDevice, (self.speechRecognizer?.supportsOnDeviceRecognition ?? false) {
+                // 回退：允许网络识别（部分设备/语言包 on-device 标记为 supported 但实际不工作）
+                self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: false, force: true)
+                do {
+                    try self.beginSpeechRecognition(preferOnDevice: false)
+                    self.showSpeechToast("已切换到网络识别")
+                } catch {
+                    Foundation.NSLog("🎙️ fallback beginSpeechRecognition failed: \(error.localizedDescription)")
+                    self.showSpeechToast("恢复失败：\(error.localizedDescription)")
+                    self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: true)
+                }
+            } else {
+                self.showSpeechToast("请检查网络/系统听写设置")
+                self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: true)
+            }
+        }
+
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async { [weak self] in
                 guard let self else { return }
@@ -889,6 +935,7 @@ class InputViewController: UIViewController {
 
                 if let result {
                     let spoken = result.bestTranscription.formattedString
+                    self.speechDidReceiveAnyResult = self.speechDidReceiveAnyResult || !spoken.isEmpty
                     Foundation.NSLog("🎙️ speech result len=\(spoken.count) final=\(result.isFinal)")
                     let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: spoken)
                     self.textField.text = merged
@@ -903,6 +950,9 @@ class InputViewController: UIViewController {
                     self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: false)
                 }
             }
+        }
+        if recognitionTask == nil {
+            Foundation.NSLog("🎙️ recognitionTask is nil (unexpected)")
         }
     }
 
@@ -930,6 +980,8 @@ class InputViewController: UIViewController {
             didInstallSpeechTap = false
         }
         speechTapSignal = nil
+        pendingSpeechNoResultTask?.cancel()
+        pendingSpeechNoResultTask = nil
 
         recognitionRequest?.endAudio()
         recognitionRequest = nil
