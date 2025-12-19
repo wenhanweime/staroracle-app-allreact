@@ -36,6 +36,7 @@ struct AccountView: View {
         accountInfoSection
         settingsSection
         debugSection
+        longTermMemorySection
 
         if isEditing {
           editSection
@@ -200,6 +201,26 @@ struct AccountView: View {
     }
   }
 
+  private var longTermMemorySection: some View {
+    Section("长期记忆") {
+      if !hasSupabaseConfig {
+        Text("未启用（需要 Supabase 配置）")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      } else if let memory = resolvedLongTermMemoryPrompt, !memory.isEmpty {
+        Text(memory)
+          .font(.footnote)
+          .textSelection(.enabled)
+        labeledValueRow(title: "更新时间", value: resolvedLongTermMemoryUpdatedAtText)
+        labeledValueRow(title: "纳入消息截止", value: resolvedLongTermMemoryLastMessageAtText)
+      } else {
+        Text("暂无（会在对话后自动生成）")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
   private var hasSupabaseConfig: Bool {
     SupabaseRuntime.loadConfig() != nil
   }
@@ -302,6 +323,29 @@ struct AccountView: View {
           !raw.isEmpty else { return "—" }
     if let parsed = parseISODate(raw) {
       return DateFormatter.localizedString(from: parsed, dateStyle: .medium, timeStyle: .none)
+    }
+    return raw
+  }
+
+  private var resolvedLongTermMemoryPrompt: String? {
+    let raw = profile?.longTermMemoryPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    return raw.isEmpty ? nil : raw
+  }
+
+  private var resolvedLongTermMemoryUpdatedAtText: String {
+    guard let raw = profile?.longTermMemoryUpdatedAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else { return "—" }
+    if let parsed = parseISODate(raw) {
+      return DateFormatter.localizedString(from: parsed, dateStyle: .medium, timeStyle: .short)
+    }
+    return raw
+  }
+
+  private var resolvedLongTermMemoryLastMessageAtText: String {
+    guard let raw = profile?.longTermMemoryLastMessageAt?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !raw.isEmpty else { return "—" }
+    if let parsed = parseISODate(raw) {
+      return DateFormatter.localizedString(from: parsed, dateStyle: .medium, timeStyle: .short)
     }
     return raw
   }

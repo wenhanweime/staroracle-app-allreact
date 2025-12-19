@@ -11,12 +11,18 @@ enum ProfileService {
     let avatarEmoji: String?
     let galaxySeed: String?
     let createdAt: String?
+    let longTermMemoryPrompt: String?
+    let longTermMemoryUpdatedAt: String?
+    let longTermMemoryLastMessageAt: String?
 
     enum CodingKeys: String, CodingKey {
       case displayName = "display_name"
       case avatarEmoji = "avatar_emoji"
       case galaxySeed = "galaxy_seed"
       case createdAt = "created_at"
+      case longTermMemoryPrompt = "long_term_memory_prompt"
+      case longTermMemoryUpdatedAt = "long_term_memory_updated_at"
+      case longTermMemoryLastMessageAt = "long_term_memory_last_message_at"
     }
   }
 
@@ -186,4 +192,3 @@ enum ProfileService {
     }
   }
 }
-

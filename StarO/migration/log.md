@@ -73,3 +73,4 @@
 - 星卡交互（收藏）：`StarCollection` 网格内点击不再直接翻转星卡；改为弹出“单卡聚焦浮层”（尺寸与灵感卡一致），在浮层内允许翻转，并可进一步进入详情（`StarCardFocusOverlay` / `StarCollectionPane` / `StarCardView.isTapToFlipEnabled`）。
 - 星卡交互（对话提示）：对话内“点击查看星卡”从直接打开详情 Sheet 改为弹出同款“单卡聚焦浮层”；并在浮层展示期间调用 `NativeChatBridge.setSystemModalPresented(true)` 下沉 ChatOverlay/InputDrawer 的窗口层级，确保星卡浮层始终在最上层（`RootView`）。
 - 对话渲染（Markdown）：普通消息气泡启用 Markdown（`NSAttributedString(markdown:)` + `InlinePresentationIntent` 映射为 bold/italic/code/删除线），并加 200 条缓存减少滚动/刷新时的重复解析；`hint-star:` 仍保持轻量胶囊样式与点击行为不变（`ChatOverlayManager.MessageTableViewCell`）。
+- 长期记忆（用户级）：后端 `chat-send` 在 `done` 后异步增量维护 `profiles.long_term_memory_prompt`（跨 `chat_id`），并在后续对话上下文中注入以提升跨会话个性化；个人主页新增“长期记忆”展示区用于排障（`AccountView` / `ProfileService`）。
