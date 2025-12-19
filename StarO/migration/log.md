@@ -99,5 +99,6 @@
 - 语音“无反应”可见反馈：麦克风点击时显示 toast“正在开启语音…”，并在权限/服务不可用/启动抛错等分支同步 toast + `Foundation.NSLog` 错误日志，避免用户无反馈（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音定位增强：在语音启动的每个关键 guard/权限分支加入不可屏蔽的 `Foundation.NSLog`，便于从控制台直接判断卡在“Info.plist/服务可用性/语音权限/麦克风权限/AVAudioEngine 启动异常”的哪一步（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音识别链路诊断：新增 tap 首包日志与识别回调日志（len/final/error），并在支持时启用 `requiresOnDeviceRecognition` + `taskHint=.dictation`，用于区分“音频未采集”与“识别服务无回调/网络问题”（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
-- 语音无回调兜底：若 tap 已收到音频但 4s 内无任何 result/error 回调，则提示用户并自动从“强制本地识别”回退到“允许网络识别”重试；若仍无回调则自动停止并提示检查网络/系统听写设置（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
+- 语音无回调兜底（回退）：曾实现“4s 无回调自动重试/联网回退”，但会在用户静默时误触发且提示易误导；现已移除联网回退与相关 toast，仅保留“请开始说话”提示（`StarO/StarO/InputDrawerManager.swift`）。
 - 语音无输出修复：修复 beginSpeechRecognition 内部先写 `speechToken` 又调用 `stopSpeechRecognitionLocked(force: true)` 导致 token 被清空，使得识别回调/兜底任务的 token 校验永远失败（表现为“开始说话但永远无识别回调日志/无兜底”）；改为 stop 之后再写入 token（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
+- 语音 UI 回归：麦克风按钮录音态显示“停止”图标并以紫色底高亮；toast 仅保留“请开始说话”，避免让用户误以为需要等待联网后才能开始说话（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。

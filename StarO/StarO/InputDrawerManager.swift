@@ -296,9 +296,6 @@ class InputViewController: UIViewController {
     private var speechToken: UUID?
     private var speechBaseText: String = ""
     private var speechTapSignal: SpeechTapSignal?
-    private var speechDidReceiveAnyResult: Bool = false
-    private var pendingSpeechNoResultTask: Task<Void, Never>?
-    private var speechPreferOnDevice: Bool = true
     
     // 约束
     private var containerLeadingConstraint: NSLayoutConstraint!
@@ -723,7 +720,6 @@ class InputViewController: UIViewController {
             if self.isSpeechRecording {
                 self.stopSpeechRecognition()
             } else {
-                self.showSpeechToast("正在开启语音…")
                 await self.startSpeechRecognitionIfPossible()
             }
         }
@@ -735,19 +731,16 @@ class InputViewController: UIViewController {
         guard !isSpeechStopping else { return }
         guard validateSpeechUsageDescriptions() else {
             Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: missing Info.plist usage descriptions")
-            showSpeechToast("缺少权限说明，无法请求语音权限")
             return
         }
         guard let speechRecognizer else {
             Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: speechRecognizer nil")
             presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
-            showSpeechToast("设备不支持语音识别")
             return
         }
 	        guard speechRecognizer.isAvailable else {
             Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: speechRecognizer not available")
             presentPermissionAlert(title: "语音识别暂不可用", message: "语音识别服务当前不可用，请稍后再试。")
-            showSpeechToast("语音识别服务暂不可用")
             return
         }
 
@@ -755,7 +748,6 @@ class InputViewController: UIViewController {
         guard speechOK else {
             Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: speech permission denied")
             presentPermissionAlert(title: "需要语音识别权限", message: "请在系统设置中允许“语音识别”权限后再试。")
-            showSpeechToast("需要语音识别权限")
             return
         }
 
@@ -763,7 +755,6 @@ class InputViewController: UIViewController {
         guard micOK else {
             Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: mic permission denied")
             presentPermissionAlert(title: "需要麦克风权限", message: "请在系统设置中允许“麦克风”权限后再试。")
-            showSpeechToast("需要麦克风权限")
             return
         }
 
@@ -773,7 +764,6 @@ class InputViewController: UIViewController {
         } catch {
             Foundation.NSLog("🎙️ beginSpeechRecognition failed: \(error.localizedDescription)")
             presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
-            showSpeechToast("启动失败：\(error.localizedDescription)")
             stopSpeechRecognition()
         }
     }
@@ -836,10 +826,6 @@ class InputViewController: UIViewController {
     }
 
     private func beginSpeechRecognition() throws {
-        try beginSpeechRecognition(preferOnDevice: true)
-    }
-
-    private func beginSpeechRecognition(preferOnDevice: Bool) throws {
         let token = UUID()
         let baseText = textField.text ?? ""
 
@@ -850,10 +836,6 @@ class InputViewController: UIViewController {
         // 注意：stopSpeechRecognitionLocked(force: true) 会清空 speechToken；
         // 必须在 stop 之后再写入本轮 token，否则识别回调/兜底任务会永远校验失败（表现为“开始说话但永远无回调”）。
         speechToken = token
-        speechPreferOnDevice = preferOnDevice
-        speechDidReceiveAnyResult = false
-        pendingSpeechNoResultTask?.cancel()
-        pendingSpeechNoResultTask = nil
 
         speechBaseText = baseText
 
@@ -867,15 +849,11 @@ class InputViewController: UIViewController {
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
         request.taskHint = .dictation
-        if preferOnDevice, let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
+        if let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
             request.requiresOnDeviceRecognition = true
             Foundation.NSLog("🎙️ speech on-device enabled")
         } else {
-            if let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
-                Foundation.NSLog("🎙️ speech on-device supported but not forced")
-            } else {
             Foundation.NSLog("🎙️ speech on-device not supported")
-            }
         }
         recognitionRequest = request
 
@@ -897,38 +875,7 @@ class InputViewController: UIViewController {
 
         isSpeechRecording = true
         updateMicButton(isRecording: true)
-        showSpeechToast("开始说话")
-
-        pendingSpeechNoResultTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 4_000_000_000)
-            } catch {
-                return
-            }
-            guard let self else { return }
-            guard self.speechToken == token, self.isSpeechRecording else { return }
-            guard self.speechDidReceiveAnyResult == false else { return }
-
-            // 音频已进入 tap，但识别层长时间无回调：给出明确反馈，并尝试回退策略
-            self.showSpeechToast("语音识别无响应，正在尝试恢复…")
-            Foundation.NSLog("🎙️ no speech callback after 4s (preferOnDevice=\(preferOnDevice))")
-
-            if preferOnDevice, (self.speechRecognizer?.supportsOnDeviceRecognition ?? false) {
-                // 回退：允许网络识别（部分设备/语言包 on-device 标记为 supported 但实际不工作）
-                self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: false, force: true)
-                do {
-                    try self.beginSpeechRecognition(preferOnDevice: false)
-                    self.showSpeechToast("已切换到网络识别")
-                } catch {
-                    Foundation.NSLog("🎙️ fallback beginSpeechRecognition failed: \(error.localizedDescription)")
-                    self.showSpeechToast("恢复失败：\(error.localizedDescription)")
-                    self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: true)
-                }
-            } else {
-                self.showSpeechToast("请检查网络/系统听写设置")
-                self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: true)
-            }
-        }
+        showSpeechToast("请开始说话")
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async { [weak self] in
@@ -937,7 +884,6 @@ class InputViewController: UIViewController {
 
                 if let result {
                     let spoken = result.bestTranscription.formattedString
-                    self.speechDidReceiveAnyResult = self.speechDidReceiveAnyResult || !spoken.isEmpty
                     Foundation.NSLog("🎙️ speech result len=\(spoken.count) final=\(result.isFinal)")
                     let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: spoken)
                     self.textField.text = merged
@@ -982,8 +928,6 @@ class InputViewController: UIViewController {
             didInstallSpeechTap = false
         }
         speechTapSignal = nil
-        pendingSpeechNoResultTask?.cancel()
-        pendingSpeechNoResultTask = nil
 
         recognitionRequest?.endAudio()
         recognitionRequest = nil
@@ -1013,12 +957,21 @@ class InputViewController: UIViewController {
     }
 
     private func updateMicButton(isRecording: Bool) {
-        let name = isRecording ? "stop.circle.fill" : "mic.fill"
-        let image = UIImage(systemName: name)
+        let primaryName = isRecording ? "stop.fill" : "mic.fill"
+        let fallbackName = isRecording ? "stop.circle.fill" : "mic"
+        let image = UIImage(systemName: primaryName) ?? UIImage(systemName: fallbackName)
+        if image == nil {
+            Foundation.NSLog("🎙️ updateMicButton missing symbol primary=\(primaryName) fallback=\(fallbackName)")
+        }
         micButton.setImage(image, for: .normal)
-        micButton.tintColor = isRecording
-          ? UIColor(red: 168/255.0, green: 85/255.0, blue: 247/255.0, alpha: 1.0)
-          : UIColor(white: 1.0, alpha: 0.6)
+        if isRecording {
+            let cosmicAccent = UIColor(red: 168/255.0, green: 85/255.0, blue: 247/255.0, alpha: 1.0) // #a855f7
+            micButton.backgroundColor = cosmicAccent
+            micButton.tintColor = .white
+        } else {
+            micButton.backgroundColor = .clear
+            micButton.tintColor = UIColor(white: 1.0, alpha: 0.6)
+        }
     }
 
     private func mergeSpeechText(base: String, spoken: String) -> String {
