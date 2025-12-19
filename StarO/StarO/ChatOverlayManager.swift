@@ -695,7 +695,7 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
     private var messagesList: UITableView!
     private var dragIndicator: UIView!
     private var expandedViewConstraints: [NSLayoutConstraint] = []
-    private var isExpandedLayoutActive = true
+    private var isExpandedLayoutActive = false
     // 去除渐变，改为与输入框一致的风格（纯色+浅色描边）
     var backgroundMaskAlpha: CGFloat {
         backgroundMaskView?.alpha ?? 0
@@ -1198,9 +1198,11 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
 	            // 底部避让完全由 `adjustExpandedContentInset` 统一接管（根据输入框实际位置动态计算）
 	            bottomSpaceView.heightAnchor.constraint(equalToConstant: 0)
 	        ]
-        NSLayoutConstraint.activate(expandedViewConstraints)
-        isExpandedLayoutActive = true
-        setExpandedLayout(active: false)
+        // ⚠️ 不要在初始化阶段激活 expanded 约束：
+        // 此时容器处于 collapsed 高度（65），会导致 expanded 内部布局不满足并打印 AutoLayout 警告。
+        // expanded 约束只在切换到 expanded 状态时再激活（updateForState(.expanded) → setExpandedLayout(true)）。
+        expandedView.isHidden = true
+        isExpandedLayoutActive = false
     }
     
     func updateForState(_ state: OverlayState) {
