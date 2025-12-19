@@ -712,7 +712,7 @@ class InputViewController: UIViewController {
     
     @objc private func micButtonTapped() {
         // 这里用 Foundation.NSLog：即使关闭 verboseLogs 也需要能定位“是否收到点击”
-        Foundation.NSLog("🎙️ micButtonTapped")
+        Foundation.NSLog("🎙️ micButtonTapped main=\(Thread.isMainThread) isRecording=\(isSpeechRecording) isStopping=\(isSpeechStopping)")
         Task { @MainActor [weak self] in
             guard let self else { return }
             if self.isSpeechStopping { return }
@@ -727,17 +727,21 @@ class InputViewController: UIViewController {
 
     @MainActor
     private func startSpeechRecognitionIfPossible() async {
+        Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible enter")
         guard !isSpeechStopping else { return }
         guard validateSpeechUsageDescriptions() else {
+            Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: missing Info.plist usage descriptions")
             showSpeechToast("缺少权限说明，无法请求语音权限")
             return
         }
         guard let speechRecognizer else {
+            Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: speechRecognizer nil")
             presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
             showSpeechToast("设备不支持语音识别")
             return
         }
 	        guard speechRecognizer.isAvailable else {
+            Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: speechRecognizer not available")
             presentPermissionAlert(title: "语音识别暂不可用", message: "语音识别服务当前不可用，请稍后再试。")
             showSpeechToast("语音识别服务暂不可用")
             return
@@ -745,6 +749,7 @@ class InputViewController: UIViewController {
 
         let speechOK = await requestSpeechAuthorization()
         guard speechOK else {
+            Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: speech permission denied")
             presentPermissionAlert(title: "需要语音识别权限", message: "请在系统设置中允许“语音识别”权限后再试。")
             showSpeechToast("需要语音识别权限")
             return
@@ -752,6 +757,7 @@ class InputViewController: UIViewController {
 
         let micOK = await requestMicrophonePermission()
         guard micOK else {
+            Foundation.NSLog("🎙️ startSpeechRecognitionIfPossible abort: mic permission denied")
             presentPermissionAlert(title: "需要麦克风权限", message: "请在系统设置中允许“麦克风”权限后再试。")
             showSpeechToast("需要麦克风权限")
             return
@@ -759,6 +765,7 @@ class InputViewController: UIViewController {
 
         do {
             try beginSpeechRecognition()
+            Foundation.NSLog("🎙️ beginSpeechRecognition started")
         } catch {
             Foundation.NSLog("🎙️ beginSpeechRecognition failed: \(error.localizedDescription)")
             presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
@@ -790,9 +797,11 @@ class InputViewController: UIViewController {
     @MainActor
     private func requestSpeechAuthorization() async -> Bool {
         let status = SFSpeechRecognizer.authorizationStatus()
+        Foundation.NSLog("🎙️ speech authorizationStatus=\(status.rawValue)")
         if status == .authorized { return true }
         return await withCheckedContinuation { continuation in
             SFSpeechRecognizer.requestAuthorization { newStatus in
+                Foundation.NSLog("🎙️ speech requestAuthorization -> \(newStatus.rawValue)")
                 continuation.resume(returning: newStatus == .authorized)
             }
         }
@@ -803,16 +812,21 @@ class InputViewController: UIViewController {
         let session = AVAudioSession.sharedInstance()
         switch session.recordPermission {
         case .granted:
+            Foundation.NSLog("🎙️ mic recordPermission=granted")
             return true
         case .denied:
+            Foundation.NSLog("🎙️ mic recordPermission=denied")
             return false
         case .undetermined:
+            Foundation.NSLog("🎙️ mic recordPermission=undetermined (requesting)")
             return await withCheckedContinuation { continuation in
                 session.requestRecordPermission { granted in
+                    Foundation.NSLog("🎙️ mic requestRecordPermission -> \(granted)")
                     continuation.resume(returning: granted)
                 }
             }
         @unknown default:
+            Foundation.NSLog("🎙️ mic recordPermission=unknown")
             return false
         }
     }

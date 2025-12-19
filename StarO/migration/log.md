@@ -97,3 +97,4 @@
 - 语音 tap 闭包隔离修复：将 tap helper 从 `UIViewController` 类型内部挪到文件级作用域，避免闭包在 MainActor 上下文创建时被推断为 `@MainActor`，从根上消除 `_swift_task_checkIsolatedSwift → dispatch_assert_queue` 触发路径（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音可用性提示修复：InputDrawerWindow 为了触摸透传不会 `makeKeyAndVisible()`，导致在其 VC 上 `present` 提示弹窗可能静默失败；改为从主窗口的 top VC `present`，确保权限/不可用原因能展示给用户；同时为 `SFSpeechRecognizer(locale: zh-CN)` 增加 fallback（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音“无反应”可见反馈：麦克风点击时显示 toast“正在开启语音…”，并在权限/服务不可用/启动抛错等分支同步 toast + `Foundation.NSLog` 错误日志，避免用户无反馈（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
+- 语音定位增强：在语音启动的每个关键 guard/权限分支加入不可屏蔽的 `Foundation.NSLog`，便于从控制台直接判断卡在“Info.plist/服务可用性/语音权限/麦克风权限/AVAudioEngine 启动异常”的哪一步（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
