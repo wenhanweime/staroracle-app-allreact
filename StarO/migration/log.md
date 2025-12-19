@@ -71,6 +71,7 @@
 - 灵感卡内容（答案之书/名言）：引入“答案之书”全量答案（本地 `BookOfAnswers.answers`），并在 `star-pluck` 返回 `content_type=question` 且 `answer` 为空时自动用答案之书补齐；同时将 `content_type` 写入 tags（`content_type:quote/question`），并在灵感卡背面按类型调整展示——quote 类型大字显示引用（`question`），署名作为底部小字（`reflection`），修复“只看到尼采/格式不对”的问题（`StarPluckService` / `InspirationCardOverlay`）。
 - 语音输入（Speech）：接入 Apple `Speech` + `AVAudioEngine`，点击输入框右侧麦克风按钮开始/停止中文语音转文字并实时回填输入框；补齐 `NSMicrophoneUsageDescription` 与 `NSSpeechRecognitionUsageDescription`（通过 `GENERATE_INFOPLIST_FILE` 的 `INFOPLIST_KEY_*` 配置注入）。
 - 语音崩溃兜底：在启动语音识别前校验 `Info.plist` 是否包含 `NSSpeechRecognitionUsageDescription/NSMicrophoneUsageDescription`，若缺失则提示并直接返回，避免触发系统 TCC（`com.avaudiosession.tccserver`）导致 `brk #0x1` 崩溃（`InputViewController.validateSpeechUsageDescriptions`）。
+- 语音停止修复：停止按钮点击后先立刻更新 UI，再在后台线程清理 `AVAudioEngine/SFSpeech` 资源；并增加 `isSpeechStopping/didInstallSpeechTap` 防止重复停止/未装 tap 时误清理，避免停止阶段再次触发 `brk #0x1`（`InputViewController.stopSpeechRecognition`）。
 - 星卡交互（收藏）：`StarCollection` 网格内点击不再直接翻转星卡；改为弹出“单卡聚焦浮层”（尺寸与灵感卡一致），在浮层内允许翻转，并可进一步进入详情（`StarCardFocusOverlay` / `StarCollectionPane` / `StarCardView.isTapToFlipEnabled`）。
 - 星卡交互（对话提示）：对话内“点击查看星卡”从直接打开详情 Sheet 改为弹出同款“单卡聚焦浮层”；并在浮层展示期间调用 `NativeChatBridge.setSystemModalPresented(true)` 下沉 ChatOverlay/InputDrawer 的窗口层级，确保星卡浮层始终在最上层（`RootView`）。
 - 对话渲染（Markdown）：普通消息气泡启用 Markdown（`NSAttributedString(markdown:)` + `InlinePresentationIntent` 映射为 bold/italic/code/删除线），并加 200 条缓存减少滚动/刷新时的重复解析；`hint-star:` 仍保持轻量胶囊样式与点击行为不变（`ChatOverlayManager.MessageTableViewCell`）。

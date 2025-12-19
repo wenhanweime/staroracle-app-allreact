@@ -288,6 +288,8 @@ class InputViewController: UIViewController {
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
     private var isSpeechRecording: Bool = false
+    private var isSpeechStopping: Bool = false
+    private var didInstallSpeechTap: Bool = false
     private var speechBaseText: String = ""
     
     // 约束
@@ -667,6 +669,9 @@ class InputViewController: UIViewController {
     
     @objc private func micButtonTapped() {
         NSLog("🎯 麦克风按钮被点击")
+        if isSpeechStopping {
+            return
+        }
         if isSpeechRecording {
             stopSpeechRecognition()
         } else {
@@ -676,13 +681,14 @@ class InputViewController: UIViewController {
         }
     }
 
-	    @MainActor
-	    private func startSpeechRecognitionIfPossible() async {
-	        guard validateSpeechUsageDescriptions() else { return }
-	        guard let speechRecognizer else {
-	            presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
-	            return
-	        }
+    @MainActor
+    private func startSpeechRecognitionIfPossible() async {
+        guard !isSpeechStopping else { return }
+        guard validateSpeechUsageDescriptions() else { return }
+        guard let speechRecognizer else {
+            presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
+            return
+        }
 	        guard speechRecognizer.isAvailable else {
             presentPermissionAlert(title: "语音识别暂不可用", message: "语音识别服务当前不可用，请稍后再试。")
             return
@@ -773,10 +779,12 @@ class InputViewController: UIViewController {
 
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
+        didInstallSpeechTap = false
         let recordingFormat = inputNode.outputFormat(forBus: 0)
         inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
             self?.recognitionRequest?.append(buffer)
         }
+        didInstallSpeechTap = true
 
         audioEngine.prepare()
         try audioEngine.start()
@@ -807,21 +815,40 @@ class InputViewController: UIViewController {
     }
 
     private func stopSpeechRecognition() {
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
-        audioEngine.inputNode.removeTap(onBus: 0)
+        guard !isSpeechStopping else { return }
+        isSpeechStopping = true
 
-        recognitionRequest?.endAudio()
-        recognitionRequest = nil
-
-        recognitionTask?.cancel()
-        recognitionTask = nil
-
+        // 先让 UI 立即响应（避免用户感觉“按了停不下来”）
         isSpeechRecording = false
         updateMicButton(isRecording: false)
 
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        let request = recognitionRequest
+        let task = recognitionTask
+        recognitionRequest = nil
+        recognitionTask = nil
+
+        let shouldRemoveTap = didInstallSpeechTap
+        didInstallSpeechTap = false
+
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            guard let self else { return }
+
+            if self.audioEngine.isRunning {
+                self.audioEngine.stop()
+            }
+
+            if shouldRemoveTap {
+                self.audioEngine.inputNode.removeTap(onBus: 0)
+            }
+
+            self.audioEngine.reset()
+            request?.endAudio()
+            task?.finish()
+
+            DispatchQueue.main.async { [weak self] in
+                self?.isSpeechStopping = false
+            }
+        }
     }
 
     private func updateMicButton(isRecording: Bool) {
