@@ -794,6 +794,8 @@ class InputViewController: UIViewController {
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             guard let self else { return }
+            // 避免旧任务/旧 request 的回调打断当前录音或触发重复 stop
+            guard self.recognitionRequest === request else { return }
 
             if let result {
                 let spoken = result.bestTranscription.formattedString
@@ -808,7 +810,9 @@ class InputViewController: UIViewController {
 
             if error != nil || (result?.isFinal ?? false) {
                 DispatchQueue.main.async { [weak self] in
-                    self?.stopSpeechRecognition()
+                    guard let self else { return }
+                    guard self.recognitionRequest === request else { return }
+                    self.stopSpeechRecognition()
                 }
             }
         }
@@ -824,22 +828,24 @@ class InputViewController: UIViewController {
         updateMicButton(isRecording: false)
 
         // 结束识别任务与音频请求
-        recognitionTask?.cancel()
-        recognitionTask = nil
-
-        recognitionRequest?.endAudio()
+        let request = recognitionRequest
         recognitionRequest = nil
 
+        let task = recognitionTask
+        recognitionTask = nil
+
         // 清理音频 tap 与引擎
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+
         if didInstallSpeechTap {
             audioEngine.inputNode.removeTap(onBus: 0)
             didInstallSpeechTap = false
         }
 
-        if audioEngine.isRunning {
-            audioEngine.stop()
-        }
-        audioEngine.reset()
+        request?.endAudio()
+        task?.cancel()
 
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
