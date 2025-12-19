@@ -676,13 +676,14 @@ class InputViewController: UIViewController {
         }
     }
 
-    @MainActor
-    private func startSpeechRecognitionIfPossible() async {
-        guard let speechRecognizer else {
-            presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
-            return
-        }
-        guard speechRecognizer.isAvailable else {
+	    @MainActor
+	    private func startSpeechRecognitionIfPossible() async {
+	        guard validateSpeechUsageDescriptions() else { return }
+	        guard let speechRecognizer else {
+	            presentPermissionAlert(title: "无法使用语音识别", message: "当前设备不支持语音识别。")
+	            return
+	        }
+	        guard speechRecognizer.isAvailable else {
             presentPermissionAlert(title: "语音识别暂不可用", message: "语音识别服务当前不可用，请稍后再试。")
             return
         }
@@ -701,11 +702,31 @@ class InputViewController: UIViewController {
 
         do {
             try beginSpeechRecognition()
-        } catch {
-            presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
-            stopSpeechRecognition()
-        }
-    }
+	        } catch {
+	            presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
+	            stopSpeechRecognition()
+	        }
+	    }
+
+	    private func validateSpeechUsageDescriptions() -> Bool {
+	        let missingKeys: [String] = [
+	            "NSSpeechRecognitionUsageDescription",
+	            "NSMicrophoneUsageDescription",
+	        ].filter { key in
+	            guard let value = Bundle.main.object(forInfoDictionaryKey: key) as? String else { return true }
+	            return value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+	        }
+	        guard missingKeys.isEmpty else {
+	            Task { @MainActor [weak self] in
+	                self?.presentPermissionAlert(
+	                    title: "缺少权限说明",
+	                    message: "App 缺少 Info.plist 字段：\(missingKeys.joined(separator: "、"))。\n系统在请求权限时会直接崩溃，请补齐后重新安装。"
+	                )
+	            }
+	            return false
+	        }
+	        return true
+	    }
 
     @MainActor
     private func requestSpeechAuthorization() async -> Bool {
