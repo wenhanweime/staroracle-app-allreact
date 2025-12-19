@@ -1,0 +1,148 @@
+下面我先基于你给的“当前实现描述”做一版**技术方案复盘 + 崩溃根因假设 + 加固改造建议 + 诊断落地清单**。
+（我现在没法直接打开你提到的 `StarO/StarO/InputDrawerManager.swift` 源码做逐行核对：`file_search` 显示你这边还没在聊天里授权/选择要检索的 GitHub 仓库。如果你希望我把分析精确到具体行号与调用顺序，请在 ChatGPT 里点 **@github** 选择对应 repo，或直接把该文件内容贴出来。）
+
+---
+
+## 1) 现状评价：你们的 stop/start 顺序已经是“更安全”的那一类
+
+你们已经做了几件很关键的事（这是对的）：
+
+* **stop 顺序调整为**：`audioEngine.stop → removeTap → endAudio/cancel`，能显著降低“tap 仍在 append buffer，同时 request endAudio”导致的并发断言/崩溃概率。
+* **pending deactivate 取消机制**：避免 stop→start 的短窗口里被 `setActive(false)` 误杀。
+* **旧任务回调隔离**：回调里用 `self.recognitionRequest === request` 过滤，能避免 UI/状态被旧 task 反向污染。
+
+所以现在还在出现 `_dispatch_assert_queue_fail`，大概率不是“逻辑顺序完全错了”，而是**队列/线程亲和性**或**跨队列调用时机**还没有被彻底收敛。
+
+---
+
+## 2) `_dispatch_assert_queue_fail` 的常见触发模式（结合 Speech/AVAudioEngine）
+
+你目前的两类怀疑都成立，我把它们“具体化”成更可验证的模式：
+
+### A. Speech/Audio 内部对象存在“必须在同一队列调用”的隐含约束
+
+典型情形：
+
+* `SFSpeechRecognitionTask.cancel()` / `recognitionRequest.endAudio()` / `request.append(buffer)` 这些调用**分别在不同队列**发生；
+* 或者某个对象（request/task/engine/inputNode）在创建/启动时绑定了内部串行队列，后续却从别的队列触发 stop/cancel。
+
+结果：libdispatch 断言“这个 block 预期在某队列执行，却跑到了另一队列”。
+
+### B. 你们 stop/start 的入口队列不一致（UI 点击在 Main，但 stop 的后半段在 global）
+
+你提到 “避免 stop 中任何 DispatchQueue.global”，这非常对：
+只要 stop 的任意一步跑到 global，而 start 在 main（或反过来），就可能出现：
+
+* stop 还没彻底移除 tap / endAudio，start 已经 installTap / append；
+* 或者 deactivate 的延迟任务在另一个队列抢跑。
+
+> 这类问题往往“零星”出现，和你描述的“仍有零星崩溃”一致。
+
+---
+
+## 3) 我建议的“最终形态”：把所有音频+语音操作收敛到单一串行域
+
+你们现在已经有 `isSpeechStopping`、`pendingSpeechDeactivateTask`，说明你们也在往“状态机”方向走。下一步是把它彻底“收口”：
+
+### 方案：SpeechController（actor 或专用串行队列）统一管理
+
+**目标**：任何会触碰以下对象的操作，都必须在同一个串行域内执行：
+
+* `audioEngine`（start/stop/reset）
+* `inputNode.installTap/removeTap`
+* `recognitionRequest.append/endAudio`
+* `recognitionTask`（start/cancel/置 nil）
+* `AVAudioSession setCategory/setActive`
+
+**UI 更新**：永远 `DispatchQueue.main.async`（或 `@MainActor`）回去。
+
+#### 为什么这能治 `_dispatch_assert_queue_fail`？
+
+因为它把“同一对象跨队列调用”的可能性降到最低：
+哪怕 Speech/AV 内部对调用队列有要求，你也至少保证了**你自己层面不会跨队列乱跳**，断言来源会更清晰（更容易定位到系统内部要求 vs 你们调用不一致）。
+
+---
+
+## 4) stop/start 的“强一致”状态机（建议你们直接按这个思路落）
+
+建议状态拆成最少 4 个：
+
+* `.idle`
+* `.starting(token)`
+* `.running(token)`
+* `.stopping(token)`
+
+并且引入一个 **token（UUID 或递增 Int）**，每次 start 都生成新 token，所有回调/延迟任务都带 token 校验：
+
+* token 不匹配 ⇒ 直接丢弃（比 “request 指针相等”更强，因为还能挡住延迟 deactivate、延迟 UI 更新等）。
+
+**stop 的关键点：**
+
+* stop 内不要再额外分叉队列（尤其是 global）。
+* deactivate 延迟可以保留，但必须也在同一串行域排队执行，并且带 token 校验。
+
+---
+
+## 5) 诊断落地：没有完整断言文本和栈，永远只能猜
+
+你已经写得很准确：**必须拿到断言文案 + 崩溃线程栈**。我补充一份“你们可以立刻加”的诊断手段，帮助下一次崩溃更快收敛：
+
+### A. 记录“当前执行队列 label + 线程”
+
+在 begin/stop/append/cancel/endAudio/installTap/removeTap 前后都打点：
+
+* 当前队列 label（`__dispatch_queue_get_label(nil)`）
+* 当前 thread（`Thread.isMainThread` + pthread id）
+* 当前 token / state
+
+这样哪怕崩溃栈不完整，你也能从日志看出“同一对象是否被不同队列触碰”。
+
+### B. 在关键入口加 `dispatchPrecondition`
+
+比如你决定“所有 Speech 操作必须在 speechQueue/actor”：
+
+* 在每个关键方法开头直接 `dispatchPrecondition(condition: .onQueue(speechQueue))`
+  这会把“哪里跑错队列”提前变成可控崩溃/断言（开发期），比线上 `_dispatch_assert_queue_fail` 好排查太多。
+
+### C. 给 audio tap 的回调也打点（但要轻量）
+
+tap 回调是高频的，只打采样日志或用 signpost。
+
+---
+
+## 6) 你列的“潜在改进方向”里，我会按优先级这样排
+
+**P0（几乎必做）**
+
+1. **单一串行域/actor 收敛所有 Speech/Audio 操作**（包含 start/stop/append/endAudio/cancel/deactivate）。
+2. **stop 中彻底移除 DispatchQueue.global 分支**（如果现在还有的话）。
+3. **token 化**：统一挡住旧回调/延迟任务。
+
+**P1（通常有用，但看栈再定）**
+4. 如果断言提示“必须主队列”：把那几个点（常见是 UI 相关或某些 session 操作）切回主线程，但仍由 speech 串行域发起调度，保持一致性。
+5. 识别结束的回调里（final result / remember `isFinal`），只在 token 匹配时触发 stop，避免“回调里 stop 导致重入”。
+
+**P2（优化与体验）**
+6. UI 文本合并策略：partial results 的合并做去抖（例如 50–100ms），避免主线程频繁刷新导致输入框卡顿。
+
+---
+
+## 7) 你接下来给我什么，我就能把方案“落到你们代码上”
+
+为了把“方案”变成“可合入的修改点”，我需要二选一即可：
+
+* **授权 GitHub repo**：在聊天里输入 **@github** 并选择对应 repo（然后我就能直接检索 `InputDrawerManager.swift` 并给到精确修改建议/伪代码/补丁级别建议）。
+* 或者你直接贴：
+
+  1. `beginSpeechRecognition()`
+  2. `stopSpeechRecognition(deactivateAudioSession:)`
+  3. `micButtonTapped`
+  4. recognitionTask 回调那段
+     我就能按你们现有结构给出最小改动的“串行域收敛”改法。
+
+同时，一旦你拿到崩溃信息，请把这两样贴出来（任何一个都行，越全越好）：
+
+* 断言完整文案（里面会有期望队列 label/指针）
+* 崩溃线程调用栈（至少到出现你们 Swift 符号为止）
+
+我会基于断言里“expected queue”直接判断：到底是你们跨队列调用，还是系统 API 必须在某个特定队列调用，然后给出**针对性的最终修复**。

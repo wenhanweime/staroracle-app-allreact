@@ -291,6 +291,7 @@ class InputViewController: UIViewController {
     private var isSpeechStopping: Bool = false
     private var didInstallSpeechTap: Bool = false
     private var pendingSpeechDeactivateTask: Task<Void, Never>?
+    private var speechToken: UUID?
     private var speechBaseText: String = ""
     
     // 约束
@@ -670,14 +671,13 @@ class InputViewController: UIViewController {
     
     @objc private func micButtonTapped() {
         NSLog("🎯 麦克风按钮被点击")
-        if isSpeechStopping {
-            return
-        }
-        if isSpeechRecording {
-            stopSpeechRecognition()
-        } else {
-            Task { @MainActor [weak self] in
-                await self?.startSpeechRecognitionIfPossible()
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            if self.isSpeechStopping { return }
+            if self.isSpeechRecording {
+                self.stopSpeechRecognition()
+            } else {
+                await self.startSpeechRecognitionIfPossible()
             }
         }
     }
@@ -709,11 +709,11 @@ class InputViewController: UIViewController {
 
         do {
             try beginSpeechRecognition()
-	        } catch {
-	            presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
-	            stopSpeechRecognition()
-	        }
-	    }
+        } catch {
+            presentPermissionAlert(title: "语音识别启动失败", message: error.localizedDescription)
+            stopSpeechRecognition()
+        }
+    }
 
 	    private func validateSpeechUsageDescriptions() -> Bool {
 	        let missingKeys: [String] = [
@@ -766,11 +766,16 @@ class InputViewController: UIViewController {
     }
 
     private func beginSpeechRecognition() throws {
+        let token = UUID()
+        let baseText = textField.text ?? ""
+
+        speechToken = token
+
         pendingSpeechDeactivateTask?.cancel()
         pendingSpeechDeactivateTask = nil
-        stopSpeechRecognition(deactivateAudioSession: false)
+        stopSpeechRecognitionLocked(token: nil, deactivateAudioSession: false, force: true)
 
-        speechBaseText = textField.text ?? ""
+        speechBaseText = baseText
 
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
@@ -796,45 +801,41 @@ class InputViewController: UIViewController {
         updateMicButton(isRecording: true)
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
-            guard let self else { return }
-            // 避免旧任务/旧 request 的回调打断当前录音或触发重复 stop
-            guard self.recognitionRequest === request else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard self.speechToken == token else { return }
 
-            if let result {
-                let spoken = result.bestTranscription.formattedString
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
+                if let result {
+                    let spoken = result.bestTranscription.formattedString
                     let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: spoken)
                     self.textField.text = merged
                     self.updateSendButtonState()
                     self.manager?.handleTextChange(merged)
                 }
-            }
 
-            if error != nil || (result?.isFinal ?? false) {
-                DispatchQueue.main.async { [weak self] in
-                    guard let self else { return }
-                    guard self.recognitionRequest === request else { return }
-                    self.stopSpeechRecognition()
+                if error != nil || (result?.isFinal ?? false) {
+                    self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: false)
                 }
             }
         }
     }
 
     private func stopSpeechRecognition() {
-        stopSpeechRecognition(deactivateAudioSession: true)
+        let token = speechToken
+        stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: false)
     }
 
-    private func stopSpeechRecognition(deactivateAudioSession: Bool) {
+    private func stopSpeechRecognitionLocked(token: UUID?, deactivateAudioSession: Bool, force: Bool) {
         guard !isSpeechStopping else { return }
+        if let current = speechToken, let token, current != token, !force { return }
         isSpeechStopping = true
-        defer { isSpeechStopping = false }
 
         // 先让 UI 立即响应（避免用户感觉“按了停不下来”）
         isSpeechRecording = false
-        updateMicButton(isRecording: false)
+        DispatchQueue.main.async { [weak self] in
+            self?.updateMicButton(isRecording: false)
+        }
 
-        // 先停引擎并移除 tap，确保不会再有音频 buffer 追加，避免 endAudio/append 并发触发系统内部队列断言。
         if audioEngine.isRunning {
             audioEngine.stop()
         }
@@ -843,7 +844,6 @@ class InputViewController: UIViewController {
             didInstallSpeechTap = false
         }
 
-        // 结束识别任务与音频请求
         recognitionRequest?.endAudio()
         recognitionRequest = nil
 
@@ -851,18 +851,24 @@ class InputViewController: UIViewController {
         recognitionTask = nil
 
         audioEngine.reset()
-        guard deactivateAudioSession else { return }
 
-        pendingSpeechDeactivateTask?.cancel()
-        pendingSpeechDeactivateTask = Task { @MainActor [weak self] in
-            do {
-                try await Task.sleep(nanoseconds: 250_000_000)
-            } catch {
-                return
+        if deactivateAudioSession {
+            pendingSpeechDeactivateTask?.cancel()
+            pendingSpeechDeactivateTask = Task { @MainActor [weak self] in
+                do {
+                    try await Task.sleep(nanoseconds: 250_000_000)
+                } catch {
+                    return
+                }
+                guard let self, !Task.isCancelled, !self.isSpeechRecording else { return }
+                try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
             }
-            guard let self, !Task.isCancelled, !self.isSpeechRecording else { return }
-            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
+
+        if force || token == speechToken {
+            speechToken = nil
+        }
+        isSpeechStopping = false
     }
 
     private func updateMicButton(isRecording: Bool) {
