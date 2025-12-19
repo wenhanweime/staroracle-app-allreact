@@ -843,15 +843,17 @@ class InputViewController: UIViewController {
         let token = UUID()
         let baseText = textField.text ?? ""
 
+        pendingSpeechDeactivateTask?.cancel()
+        pendingSpeechDeactivateTask = nil
+        stopSpeechRecognitionLocked(token: nil, deactivateAudioSession: false, force: true)
+
+        // 注意：stopSpeechRecognitionLocked(force: true) 会清空 speechToken；
+        // 必须在 stop 之后再写入本轮 token，否则识别回调/兜底任务会永远校验失败（表现为“开始说话但永远无回调”）。
         speechToken = token
         speechPreferOnDevice = preferOnDevice
         speechDidReceiveAnyResult = false
         pendingSpeechNoResultTask?.cancel()
         pendingSpeechNoResultTask = nil
-
-        pendingSpeechDeactivateTask?.cancel()
-        pendingSpeechDeactivateTask = nil
-        stopSpeechRecognitionLocked(token: nil, deactivateAudioSession: false, force: true)
 
         speechBaseText = baseText
 

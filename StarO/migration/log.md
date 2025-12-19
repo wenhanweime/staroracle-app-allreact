@@ -100,3 +100,4 @@
 - 语音定位增强：在语音启动的每个关键 guard/权限分支加入不可屏蔽的 `Foundation.NSLog`，便于从控制台直接判断卡在“Info.plist/服务可用性/语音权限/麦克风权限/AVAudioEngine 启动异常”的哪一步（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音识别链路诊断：新增 tap 首包日志与识别回调日志（len/final/error），并在支持时启用 `requiresOnDeviceRecognition` + `taskHint=.dictation`，用于区分“音频未采集”与“识别服务无回调/网络问题”（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音无回调兜底：若 tap 已收到音频但 4s 内无任何 result/error 回调，则提示用户并自动从“强制本地识别”回退到“允许网络识别”重试；若仍无回调则自动停止并提示检查网络/系统听写设置（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
+- 语音无输出修复：修复 beginSpeechRecognition 内部先写 `speechToken` 又调用 `stopSpeechRecognitionLocked(force: true)` 导致 token 被清空，使得识别回调/兜底任务的 token 校验永远失败（表现为“开始说话但永远无识别回调日志/无兜底”）；改为 stop 之后再写入 token（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
