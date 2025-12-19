@@ -295,6 +295,7 @@ class InputViewController: UIViewController {
     private var pendingSpeechDeactivateTask: Task<Void, Never>?
     private var speechToken: UUID?
     private var speechBaseText: String = ""
+    private var speechTapSignal: SpeechTapSignal?
     
     // 约束
     private var containerLeadingConstraint: NSLayoutConstraint!
@@ -846,26 +847,40 @@ class InputViewController: UIViewController {
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
         try audioSession.setActive(true)
+        let outputPorts = audioSession.currentRoute.outputs.map { $0.portType.rawValue }.joined(separator: ",")
+        let inputPorts = audioSession.currentRoute.inputs.map { $0.portType.rawValue }.joined(separator: ",")
+        Foundation.NSLog("🎙️ audioSession route outputs=\(outputPorts) inputs=\(inputPorts)")
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
+        request.taskHint = .dictation
+        if let speechRecognizer, speechRecognizer.supportsOnDeviceRecognition {
+            request.requiresOnDeviceRecognition = true
+            Foundation.NSLog("🎙️ speech on-device enabled")
+        } else {
+            Foundation.NSLog("🎙️ speech on-device not supported")
+        }
         recognitionRequest = request
 
         let inputNode = audioEngine.inputNode
         inputNode.removeTap(onBus: 0)
         didInstallSpeechTap = false
         let recordingFormat = inputNode.outputFormat(forBus: 0)
+        let signal = SpeechTapSignal()
+        speechTapSignal = signal
         inputNode.installTap(onBus: 0,
                              bufferSize: 1024,
                              format: recordingFormat,
-                             block: makeNonisolatedSpeechTap(request: request))
+                             block: makeNonisolatedSpeechTap(request: request, signal: signal))
         didInstallSpeechTap = true
 
         audioEngine.prepare()
         try audioEngine.start()
+        Foundation.NSLog("🎙️ audioEngine started isRunning=\(audioEngine.isRunning) format=\(recordingFormat.sampleRate)Hz ch=\(recordingFormat.channelCount)")
 
         isSpeechRecording = true
         updateMicButton(isRecording: true)
+        showSpeechToast("开始说话")
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
             DispatchQueue.main.async { [weak self] in
@@ -874,12 +889,16 @@ class InputViewController: UIViewController {
 
                 if let result {
                     let spoken = result.bestTranscription.formattedString
+                    Foundation.NSLog("🎙️ speech result len=\(spoken.count) final=\(result.isFinal)")
                     let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: spoken)
                     self.textField.text = merged
                     self.updateSendButtonState()
                     self.manager?.handleTextChange(merged)
                 }
 
+                if let error {
+                    Foundation.NSLog("🎙️ speech error: \(error.localizedDescription)")
+                }
                 if error != nil || (result?.isFinal ?? false) {
                     self.stopSpeechRecognitionLocked(token: token, deactivateAudioSession: true, force: false)
                 }
@@ -910,6 +929,7 @@ class InputViewController: UIViewController {
             audioEngine.inputNode.removeTap(onBus: 0)
             didInstallSpeechTap = false
         }
+        speechTapSignal = nil
 
         recognitionRequest?.endAudio()
         recognitionRequest = nil
@@ -1039,8 +1059,23 @@ class InputViewController: UIViewController {
 // MARK: - Speech tap helper (file-level / non-MainActor)
 /// 注意：一定要在 `@MainActor` 类型之外生成 tap 闭包，否则闭包可能被推断成 MainActor 隔离，
 /// 在 AVFAudio 的 RealtimeMessenger 队列执行时触发 `_dispatch_assert_queue_fail`。
-private func makeNonisolatedSpeechTap(request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
+private final class SpeechTapSignal {
+    var didSignalFirstBuffer: Bool = false
+    var bufferCount: Int = 0
+}
+
+private func makeNonisolatedSpeechTap(
+    request: SFSpeechAudioBufferRecognitionRequest,
+    signal: SpeechTapSignal
+) -> AVAudioNodeTapBlock {
     return { buffer, _ in
+        signal.bufferCount += 1
+        if !signal.didSignalFirstBuffer {
+            signal.didSignalFirstBuffer = true
+            DispatchQueue.main.async {
+                Foundation.NSLog("🎙️ tap received first buffer")
+            }
+        }
         request.append(buffer)
     }
 }
