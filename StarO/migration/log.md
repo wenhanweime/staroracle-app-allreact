@@ -74,3 +74,4 @@
 - 星卡交互（对话提示）：对话内“点击查看星卡”从直接打开详情 Sheet 改为弹出同款“单卡聚焦浮层”；并在浮层展示期间调用 `NativeChatBridge.setSystemModalPresented(true)` 下沉 ChatOverlay/InputDrawer 的窗口层级，确保星卡浮层始终在最上层（`RootView`）。
 - 对话渲染（Markdown）：普通消息气泡启用 Markdown（`NSAttributedString(markdown:)` + `InlinePresentationIntent` 映射为 bold/italic/code/删除线），并加 200 条缓存减少滚动/刷新时的重复解析；`hint-star:` 仍保持轻量胶囊样式与点击行为不变（`ChatOverlayManager.MessageTableViewCell`）。
 - 长期记忆（用户级）：后端 `chat-send` 在 `done` 后异步增量维护 `profiles.long_term_memory_prompt`（跨 `chat_id`），并在后续对话上下文中注入以提升跨会话个性化；个人主页新增“长期记忆”展示区用于排障（`AccountView` / `ProfileService`）。
+- Galaxy 历史点亮恢复：修复“已登录用户冷启动后历史点亮/永久点亮丢失”——此前 `RootView/GalaxyBackgroundView` 的 `.task` 早于 `AuthService.restoreSessionIfNeeded()` 完成触发，导致 `stars/galaxy_seed/TapHighlights` 首次拉取被 `SupabaseRuntime.loadConfig()==nil` 短路且后续不再触发；现在改为在 `hasRestoredSession==true` 后补触发同步（`StarOApp` 会话恢复后主动 `syncSupabaseStarsIfNeeded()`，`RootView/GalaxyBackgroundView` 也以 `hasRestoredSession` 为 id 重新执行一次）。

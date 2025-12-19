@@ -24,6 +24,7 @@ struct StarOApp: App {
         .environmentObject(environment.chatBridge)
         .task {
           await environment.authService.restoreSessionIfNeeded()
+          await environment.syncSupabaseStarsIfNeeded()
         }
     }
   }

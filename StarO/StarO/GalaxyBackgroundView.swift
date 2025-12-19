@@ -10,6 +10,7 @@ struct GalaxyBackgroundView: View {
   @EnvironmentObject private var galaxyStore: GalaxyStore
   @EnvironmentObject private var starStore: StarStore
   @EnvironmentObject private var conversationStore: ConversationStore
+  @EnvironmentObject private var authService: AuthService
   @StateObject private var viewModel = GalaxyViewModel()
   
   @State private var lastTapRegion: GalaxyRegion?
@@ -97,13 +98,7 @@ struct GalaxyBackgroundView: View {
       .onChange(of: starStore.constellation.stars) { _, _ in
         updatePermanentStarHighlights(for: proxy.size)
       }
-      .task {
-        // T-102: Seed must be fetched from server as the single source of truth.
-        if let seed = await GalaxySeedService.fetchSeed(), seed != viewModel.galaxySeed {
-          viewModel.galaxySeed = seed
-          _ = viewModel.prepareIfNeeded(for: proxy.size)
-        }
-
+      .task(id: authService.hasRestoredSession) {
         viewModel.onHighlightsPersisted = { entries in
           let indices = entries.compactMap { entry -> Int? in
             guard entry.id.hasPrefix("s-") else { return nil }
@@ -113,6 +108,19 @@ struct GalaxyBackgroundView: View {
             conversationStore.setPendingGalaxyStarIndices(indices, ttlSeconds: 1800)
           }
           Task { _ = await GalaxyHighlightsService.createHighlight(indices: indices) }
+        }
+
+        guard authService.hasRestoredSession,
+              authService.isAuthenticated,
+              SupabaseRuntime.loadConfig() != nil else {
+          updatePermanentStarHighlights(for: proxy.size)
+          return
+        }
+
+        // T-102: Seed must be fetched from server as the single source of truth.
+        if let seed = await GalaxySeedService.fetchSeed(), seed != viewModel.galaxySeed {
+          viewModel.galaxySeed = seed
+          _ = viewModel.prepareIfNeeded(for: proxy.size)
         }
 
         // App 启动/进入 Galaxy 时：拉取未过期 TapHighlight 并恢复高亮

@@ -142,7 +142,8 @@ struct RootView: View {
           chatBridge.setHorizontalOffset(offset, animated: false)
         }
       }
-      .task {
+      .task(id: authService.hasRestoredSession) {
+        guard authService.hasRestoredSession else { return }
         await environment.syncSupabaseStarsIfNeeded()
       }
       .onChange(of: activePane) { _, newValue in
