@@ -784,8 +784,8 @@ class InputViewController: UIViewController {
         inputNode.removeTap(onBus: 0)
         didInstallSpeechTap = false
         let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { [weak self] buffer, _ in
-            self?.recognitionRequest?.append(buffer)
+        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
+            request.append(buffer)
         }
         didInstallSpeechTap = true
 
@@ -834,6 +834,15 @@ class InputViewController: UIViewController {
         isSpeechRecording = false
         updateMicButton(isRecording: false)
 
+        // 先停引擎并移除 tap，确保不会再有音频 buffer 追加，避免 endAudio/append 并发触发系统内部队列断言。
+        if audioEngine.isRunning {
+            audioEngine.stop()
+        }
+        if didInstallSpeechTap {
+            audioEngine.inputNode.removeTap(onBus: 0)
+            didInstallSpeechTap = false
+        }
+
         // 结束识别任务与音频请求
         recognitionRequest?.endAudio()
         recognitionRequest = nil
@@ -841,14 +850,7 @@ class InputViewController: UIViewController {
         recognitionTask?.cancel()
         recognitionTask = nil
 
-        // 先停引擎（避免停引擎/移除 tap/停用 session 的竞态导致系统内部断言）
-        if audioEngine.isRunning {
-            audioEngine.stop()
-            audioEngine.reset()
-        }
-
-        // 不在 stop 时立刻 removeTap：AVAudioEngine 停止过程可能是异步的，立即 removeTap 容易触发内部断言（brk #0x1）。
-        // tap 会在下一次 beginSpeechRecognition 时统一 removeTap 并重新 install（那里引擎未运行，风险更低）。
+        audioEngine.reset()
         guard deactivateAudioSession else { return }
 
         pendingSpeechDeactivateTask?.cancel()

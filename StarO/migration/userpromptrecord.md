@@ -45,3 +45,6 @@
 
 # 10（已读 2025-12-19 16:42）
 - [x] 语音输入：点击停止后仍无法停止/仍可能触发 `brk #0x1`，修复 stop/start 的 pending deactivation 竞态（已完成 2025-12-19 16:42）。
+
+# 11（已读 2025-12-19 17:18）
+- [x] 语音输入：出现 `libdispatch.dylib _dispatch_assert_queue_fail`（队列断言）崩溃，调整 stop 顺序并确保 stop 时移除 tap（已完成 2025-12-19 17:18）。
