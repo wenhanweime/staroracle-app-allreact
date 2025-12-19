@@ -789,9 +789,10 @@ class InputViewController: UIViewController {
         inputNode.removeTap(onBus: 0)
         didInstallSpeechTap = false
         let recordingFormat = inputNode.outputFormat(forBus: 0)
-        inputNode.installTap(onBus: 0, bufferSize: 1024, format: recordingFormat) { buffer, _ in
-            request.append(buffer)
-        }
+        inputNode.installTap(onBus: 0,
+                             bufferSize: 1024,
+                             format: recordingFormat,
+                             block: makeNonisolatedSpeechTap(request: request))
         didInstallSpeechTap = true
 
         audioEngine.prepare()
@@ -894,6 +895,14 @@ class InputViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "好的", style: .default))
         present(alert, animated: true)
     }
+
+// MARK: - Speech tap helper (non-isolated)
+/// 在音频线程执行的 tap，保持非 MainActor，避免队列断言。
+private func makeNonisolatedSpeechTap(request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
+    return { buffer, _ in
+        request.append(buffer)
+    }
+}
     
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
         guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
