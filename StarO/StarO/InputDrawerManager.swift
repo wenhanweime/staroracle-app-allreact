@@ -895,14 +895,6 @@ class InputViewController: UIViewController {
         alert.addAction(UIAlertAction(title: "好的", style: .default))
         present(alert, animated: true)
     }
-
-// MARK: - Speech tap helper (non-isolated)
-/// 在音频线程执行的 tap，保持非 MainActor，避免队列断言。
-private func makeNonisolatedSpeechTap(request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
-    return { buffer, _ in
-        request.append(buffer)
-    }
-}
     
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
         guard let keyboardFrame = notification.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect else { return }
@@ -969,6 +961,15 @@ private func makeNonisolatedSpeechTap(request: SFSpeechAudioBufferRecognitionReq
 
         // 去通知化：不再通过全局通知广播，改由协议回调（InputDrawerPositionObservable）
         NSLog("🎯 InputDrawer: 已更新实际位置 actualBottomSpace=\(actualBottomSpaceFromScreen)")
+    }
+}
+
+// MARK: - Speech tap helper (file-level / non-MainActor)
+/// 注意：一定要在 `@MainActor` 类型之外生成 tap 闭包，否则闭包可能被推断成 MainActor 隔离，
+/// 在 AVFAudio 的 RealtimeMessenger 队列执行时触发 `_dispatch_assert_queue_fail`。
+private func makeNonisolatedSpeechTap(request: SFSpeechAudioBufferRecognitionRequest) -> AVAudioNodeTapBlock {
+    return { buffer, _ in
+        request.append(buffer)
     }
 }
 

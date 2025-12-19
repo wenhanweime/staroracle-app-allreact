@@ -146,3 +146,181 @@ tap 回调是高频的，只打采样日志或用 signpost。
 * 崩溃线程调用栈（至少到出现你们 Swift 符号为止）
 
 我会基于断言里“expected queue”直接判断：到底是你们跨队列调用，还是系统 API 必须在某个特定队列调用，然后给出**针对性的最终修复**。
+
+
+# 最新
+这份 bt all 已经足够“定责”了：崩溃不是 Speech/SFSpeech 的内部队列要求，也不是你 stop/start 的顺序，而是你们在 AVAudioEngine 的 tap 回调（音频线程 / RealtimeMessenger.mServiceQueue）里触发了 Swift Concurrency 的隔离检查，直接把 libdispatch 的 dispatch_assert_queue 触发了。
+
+看关键帧（Thread #2）：
+
+dispatch_assert_queue
+
+_swift_task_checkIsolatedSwift / swift_task_isCurrentExecutorWithFlagsImpl
+
+closure #1 in InputViewController.beginSpeechRecognition(...) at InputDrawerManager.swift:0
+
+AVAudioNodeTap::TapMessage::RealtimeMessenger_Perform()
+
+这条链路说明：
+
+✅ tap block 在 RealtimeMessenger.mServiceQueue 执行（这是实时音频线程/队列）
+✅ 你在这个 tap block 里调用了某个 被 Swift 并发隔离（@MainActor 或某个 actor）保护的对象/方法/属性
+✅ Swift Concurrency 检测到“当前执行器不是该 actor 的执行器”，于是走到 dispatch_assert_queue，最终 _dispatch_assert_queue_fail 崩。
+
+所以这不是“系统库要求特定队列”的神秘问题，而是你们自己的 actor/main actor 隔离违规，并且发生在 audio tap 的回调里。
+
+根因一句话
+
+你在 inputNode.installTap 的回调中（RealtimeMessenger.mServiceQueue）直接访问了 InputViewController（大概率是 @MainActor）的成员或方法，触发 Swift 并发隔离检查 → libdispatch 队列断言崩溃。
+
+为什么你看到 InputDrawerManager.swift:0
+
+这通常是因为：
+
+这是一个闭包（closure #1），符号化没有精确到行号；或
+
+编译优化 / 生成的 thunk 让行号丢失
+但不影响判断：就是 beginSpeechRecognition 里 installTap 的闭包。
+
+立刻可落地的修复（P0，最小改动、最安全）
+目标：tap 回调里“只做纯音频工作”，绝不触碰 MainActor/Actor 隔离对象
+
+你 tap 回调里应该只做两件事：
+
+把 buffer append 到 SFSpeechAudioBufferRecognitionRequest
+2)（可选）做很轻量的 gating / token 校验
+
+任何 UI 更新、任何访问 self（如果 self 是 @MainActor）、任何调用 stop/start 都必须切到对应 actor/主线程/专用队列。
+
+推荐实现方案（两种，按你们架构选）
+方案 A：把 tap 闭包变成“非隔离捕获”，不要直接碰 self
+
+在 beginSpeechRecognition() 里：
+
+先把 request、token、gate 等必要数据做成局部变量捕获
+
+tap 回调里只使用这些局部变量
+
+不要在 tap 回调里读写 self.xxx
+
+伪代码示意（重点是结构，不是逐字）：
+
+// beginSpeechRecognition 内
+let currentToken = self.sessionToken
+let request = self.recognitionRequest!          // local strong ref
+let gate = self.bufferGate                      // lock/atomic gate（非 MainActor 的对象）
+
+inputNode.installTap(onBus: 0, bufferSize: 1024, format: format) { buffer, when in
+    // 1) gate 检查（必须是线程安全且不触碰 @MainActor）
+    guard gate.isOpen(for: currentToken) else { return }
+
+    // 2) append（纯音频路径）
+    request.append(buffer)
+}
+
+
+UI 更新放在 recognitionTask 回调里，并 DispatchQueue.main.async 回去。
+
+这个方案的关键点：让 tap 回调完全不需要 self。
+
+方案 B：如果你必须在 tap 回调触发“停止/状态变更”，用 Task 跳回 MainActor
+
+有时你们会在 tap 回调里检测异常然后 stop —— 这一定要改成：
+
+Task { @MainActor in
+    self.stopSpeechRecognition(...)
+}
+
+
+或：
+
+DispatchQueue.main.async {
+    self.stopSpeechRecognition(...)
+}
+
+
+但强烈建议不要在 tap 回调里 stop，stop 应该由识别回调或 UI 控制触发；tap 回调越干净越好。
+
+---
+
+## 最新补充：闭包“本身”也可能是 `@MainActor`，即使不访问 self 也会崩
+
+如果崩溃栈出现：
+
+`dispatch_assert_queue → _swift_task_checkIsolatedSwift → closure #1 in InputViewController.makeNonisolatedSpeechTap(...) → RealtimeMessenger_Perform`
+
+说明问题已经不是“tap 回调里访问了某个 MainActor 成员”，而是：
+
+- 你传给 `installTap` 的闭包**本身被推断成了 `@MainActor` 闭包**（常见原因：闭包在 `UIViewController/@MainActor` 类型的方法里创建并返回）。
+- tap 真实执行在 `AVFAudio` 的 RealtimeMessenger 队列，Swift Concurrency runtime 会先检查闭包是否在正确 executor 上执行；不满足就直接触发 `_swift_task_checkIsolatedSwift → dispatch_assert_queue` 断言崩溃。
+
+### 结论
+
+- **不要在 `@MainActor` 类型内部生成 tap 闭包**（哪怕闭包内部只做 `request.append`）。
+- tap 闭包工厂必须在**文件级/非 MainActor 的独立类型**里生成，确保闭包不是 `@MainActor` 隔离。
+
+### 最小修复模板
+
+- 文件级函数：`makeSpeechTap(request:) -> AVAudioNodeTapBlock`
+- `beginSpeechRecognition()` 内：创建 request → `inputNode.installTap(..., block: makeSpeechTap(request: request))`
+
+你现在最可能“踩到隔离”的具体点（按常见写法猜）
+
+tap 回调里任何一句像下面这样的都可能触发：
+
+self.recognitionRequest?.append(buffer)（如果 self 是 @MainActor 或方法是 @MainActor）
+
+self.isRecording = true/false
+
+self.isSpeechStopping（如果它在 @MainActor 隔离里）
+
+self.pendingSpeechDeactivateTask?.cancel()
+
+self.stopSpeechRecognition(...)
+
+self.updateUI(...)
+
+self.inputText = ...
+
+因为从栈上看，隔离检查发生在你们 closure #1 里，而它正被 AVFAudio 在 RealtimeMessenger queue 调用。
+
+进一步稳健化（P1，我建议一起做）
+1) 明确隔离边界：把 UI 控制器标注为 @MainActor（如果还没）
+
+然后确保：
+
+begin/stop 入口在 main
+
+tap 回调不碰 self
+
+recognitionTask 回调里 Task { @MainActor in ... } 更新 UI
+
+2) gate（闸门）+ token（会话版本号）
+
+你们之前已有防竞态机制，我建议把 gate/token 做到 tap 回调里，避免 stop 时仍 append：
+
+stop 第一行：gate.close(token)
+
+start：gate.open(token)
+
+tap：guard gate.isOpen(token) else { return }
+
+这对“零星崩溃/断言”也很有效。
+
+你下一步我还需要你给的唯一东西：tap 回调代码片段
+
+现在根因已明确，但我还需要确认你们 tap 回调里到底做了哪些事，才能给你“最小差异补丁”。
+
+请把 beginSpeechRecognition() 里 installTap { buffer, when in ... } 的闭包内容原样贴出来（脱敏即可）。我会直接告诉你：
+
+哪些行会触发隔离检查
+
+应该如何改成“捕获局部 request + gate”，避免访问 self
+
+stop/start/UI 更新应该挪到哪里
+
+顺便：你看到的 SwiftUI module cache warning 不影响这个崩溃
+
+SwiftUI-...pcm does not exist 只是调试信息缺失导致类型降级，不是 crash 根因。
+
+结论：这次已经拿到硬证据了——崩溃点就在 beginSpeechRecognition 里 tap 闭包触发了 Swift Concurrency 的隔离断言。把 tap 回调改成“不碰 self，只 append request（局部捕获）”，并把任何 UI/状态变更切回 MainActor，就能把这类 _dispatch_assert_queue_fail 彻底打掉。

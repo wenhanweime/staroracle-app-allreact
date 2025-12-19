@@ -94,3 +94,4 @@
 - ChatOverlay 约束警告修复：初始化时不再激活 expanded 约束（保持 `isExpandedLayoutActive=false` 且隐藏 expandedView），避免在 collapsed 高度 65 下触发布局冲突日志，expanded 状态仍在切换时动态激活（`StarO/StarO/ChatOverlayManager.swift`）。
 - 语音串行域统一：参考《语音问题诊断》，将 Speech/Audio 操作收敛到主线程串行执行，引入 `speechToken` 防止旧回调/延迟 stop 干扰当前会话；全部 UI 更新与状态切换保持在主线程，减少 `_dispatch_assert_queue_fail` 队列断言风险（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音 tap 再加固：tap block 抽到非 MainActor 的 helper（只追加 buffer，不触碰 self/UI），避免因 UIKit/UIViewController 隐式 MainActor 隔离导致音频线程触发 `_dispatch_assert_queue_fail`（`StarO/StarO/InputDrawerManager.swift`）。
+- 语音 tap 闭包隔离修复：将 tap helper 从 `UIViewController` 类型内部挪到文件级作用域，避免闭包在 MainActor 上下文创建时被推断为 `@MainActor`，从根上消除 `_swift_task_checkIsolatedSwift → dispatch_assert_queue` 触发路径（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。

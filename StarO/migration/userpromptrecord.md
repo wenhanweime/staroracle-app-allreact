@@ -51,3 +51,6 @@
 
 # 12（已读 2025-12-20 01:40）
 - [x] 语音输入：对照《语音问题诊断》，统一在主线程串行执行 start/stop，并加入 token 防串扰（已完成 2025-12-20 01:40）。
+
+# 13（已读 2025-12-20 02:20）
+- [ ] 语音输入：仍出现 `_dispatch_assert_queue_fail`，栈指向 `makeNonisolatedSpeechTap`（闭包本身被推断为 `@MainActor`），需要将 tap 闭包创建挪到非 MainActor 的文件级作用域并验证（进行中）。
