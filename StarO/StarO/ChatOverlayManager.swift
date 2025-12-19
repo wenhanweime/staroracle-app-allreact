@@ -2367,9 +2367,18 @@ class StarRayActivityView: UIView {
         }
     }
 
-    func start() {
-        guard !isAnimating else { return }
-        isAnimating = true
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        guard window != nil else { return }
+        if isAnimating {
+            ensureAnimation()
+        }
+    }
+
+    private func ensureAnimation() {
+        if layer.animation(forKey: "star-rotate") != nil {
+            return
+        }
         let anim = CABasicAnimation(keyPath: "transform.rotation.z")
         anim.fromValue = 0
         anim.toValue = 2 * Double.pi
@@ -2377,11 +2386,15 @@ class StarRayActivityView: UIView {
         anim.repeatCount = .infinity
         anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
         layer.add(anim, forKey: "star-rotate")
+    }
+
+    func start() {
+        isAnimating = true
+        ensureAnimation()
         isHidden = false
     }
 
     func stop() {
-        guard isAnimating else { return }
         isAnimating = false
         layer.removeAnimation(forKey: "star-rotate")
     }

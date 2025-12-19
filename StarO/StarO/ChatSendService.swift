@@ -1,4 +1,14 @@
 import Foundation
+import StarOracleCore
+
+private func NSLog(_ format: String, _ args: CVarArg...) {
+  guard StarOracleDebug.verboseLogsEnabled else { return }
+  if args.isEmpty {
+    Foundation.NSLog("%@", format)
+  } else {
+    withVaList(args) { Foundation.NSLogv(format, $0) }
+  }
+}
 
 enum ChatSendService {
   enum StreamEvent: Sendable {
@@ -104,128 +114,180 @@ enum ChatSendService {
           request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
 
           let (bytes, response) = try await URLSession.shared.bytes(for: request)
-          guard let http = response as? HTTPURLResponse else {
-            throw ChatSendError.invalidResponse
-          }
-          guard (200..<300).contains(http.statusCode) else {
-            let raw = try await bytes.reduce(into: [UInt8]()) { $0.append($1) }
-            let text = String(data: Data(raw), encoding: .utf8) ?? ""
-            throw ChatSendError.http(status: http.statusCode, body: String(text.prefix(200)))
-          }
+          let urlTask = bytes.task
 
-          var currentEvent: String?
-          var dataLines: [String] = []
-          var didReceiveDone = false
-          var didYieldDelta = false
-          var pendingDone: (messageId: String?, chatId: String, traceId: String?)?
+            guard let http = response as? HTTPURLResponse else {
+              throw ChatSendError.invalidResponse
+            }
+            guard (200..<300).contains(http.statusCode) else {
+              let raw = try await bytes.reduce(into: [UInt8]()) { $0.append($1) }
+              let text = String(data: Data(raw), encoding: .utf8) ?? ""
+              throw ChatSendError.http(status: http.statusCode, body: String(text.prefix(200)))
+            }
 
-          func dispatchEventIfNeeded() throws {
-            guard !dataLines.isEmpty else {
+            var currentEvent: String?
+            var dataLines: [String] = []
+            var didReceiveDone = false
+            var didYieldDelta = false
+            var pendingDone: (messageId: String?, chatId: String, traceId: String?)?
+
+            func dispatchEventIfNeeded() throws {
+              guard !dataLines.isEmpty else {
+                currentEvent = nil
+                return
+              }
+              let eventName = (currentEvent ?? "message").trimmingCharacters(in: .whitespacesAndNewlines)
+              let payload = dataLines.joined(separator: "\n")
+              dataLines.removeAll(keepingCapacity: true)
               currentEvent = nil
-              return
-            }
-            let eventName = (currentEvent ?? "message").trimmingCharacters(in: .whitespacesAndNewlines)
-            let payload = dataLines.joined(separator: "\n")
-            dataLines.removeAll(keepingCapacity: true)
-            currentEvent = nil
 
-            guard let data = payload.data(using: .utf8) else { return }
+              guard let data = payload.data(using: .utf8) else { return }
 
-            switch eventName {
-            case "delta":
-              if let decoded = try? JSONDecoder().decode(DeltaPayload.self, from: data),
-                 let text = decoded.text, !text.isEmpty {
-                continuation.yield(.delta(text))
-                didYieldDelta = true
-              }
-            case "done":
-              if let decoded = try? JSONDecoder().decode(DonePayload.self, from: data) {
-                let resolvedChatId = (decoded.chat_id?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
-                  ?? chatId
-                if !resolvedChatId.isEmpty {
-                  NSLog("✅ ChatSendService | done chat_id=%@ message_id=%@ trace_id=%@", resolvedChatId, decoded.message_id ?? "nil", decoded.trace_id ?? "nil")
-                  if let serverTrace = decoded.trace_id,
-                     !serverTrace.isEmpty,
-                     serverTrace != requestTraceId {
-                    NSLog("⚠️ ChatSendService | trace_id mismatch request=%@ server=%@", requestTraceId, serverTrace)
-                  }
-                  pendingDone = (messageId: decoded.message_id, chatId: resolvedChatId, traceId: decoded.trace_id)
-                  didReceiveDone = true
+              switch eventName {
+              case "delta":
+                if let decoded = try? JSONDecoder().decode(DeltaPayload.self, from: data),
+                   let text = decoded.text, !text.isEmpty {
+                  continuation.yield(.delta(text))
+                  didYieldDelta = true
                 }
-              }
-            case "error":
-              if let decoded = try? JSONDecoder().decode(ErrorPayload.self, from: data) {
-                throw ChatSendError.server(code: decoded.code ?? "CH99", message: decoded.message ?? "unknown")
-              }
-              throw ChatSendError.server(code: "CH99", message: "unknown")
-            default:
-              break
-            }
-          }
-
-          // NOTE: 不使用 `bytes.lines`：在部分系统版本上会出现“lines 序列为空但 bytes 实际有数据”的情况，
-          // 导致 SSE 永远收不到 delta/done。这里改为按字节手动切行解析。
-          var lineBytes: [UInt8] = []
-          lineBytes.reserveCapacity(256)
-          var shouldStop = false
-
-          func flushLine() throws {
-            let data = Data(lineBytes)
-            lineBytes.removeAll(keepingCapacity: true)
-            let raw = String(data: data, encoding: .utf8) ?? ""
-            let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
-
-            if line.isEmpty {
-              try dispatchEventIfNeeded()
-              if didReceiveDone {
-                shouldStop = true
-              }
-              return
-            }
-            if line.hasPrefix(":") { return }
-            if line.hasPrefix("event:") {
-              currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
-              return
-            }
-            if line.hasPrefix("data:") {
-              var value = String(line.dropFirst(5))
-              if value.hasPrefix(" ") { value.removeFirst() }
-              dataLines.append(value)
-              return
-            }
-          }
-
-          for try await byte in bytes {
-            try Task.checkCancellation()
-            if byte == 0x0A { // \n
-              try flushLine()
-              if shouldStop {
-                bytes.task.cancel()
+              case "done":
+                if let decoded = try? JSONDecoder().decode(DonePayload.self, from: data) {
+                  let resolvedChatId = (decoded.chat_id?.trimmingCharacters(in: .whitespacesAndNewlines)).flatMap { $0.isEmpty ? nil : $0 }
+                    ?? chatId
+                  if !resolvedChatId.isEmpty {
+                    NSLog("✅ ChatSendService | done chat_id=%@ message_id=%@ trace_id=%@", resolvedChatId, decoded.message_id ?? "nil", decoded.trace_id ?? "nil")
+                    if let serverTrace = decoded.trace_id,
+                       !serverTrace.isEmpty,
+                       serverTrace != requestTraceId {
+                      NSLog("⚠️ ChatSendService | trace_id mismatch request=%@ server=%@", requestTraceId, serverTrace)
+                    }
+                    pendingDone = (messageId: decoded.message_id, chatId: resolvedChatId, traceId: decoded.trace_id)
+                    didReceiveDone = true
+                  }
+                }
+              case "error":
+                if let decoded = try? JSONDecoder().decode(ErrorPayload.self, from: data) {
+                  throw ChatSendError.server(code: decoded.code ?? "CH99", message: decoded.message ?? "unknown")
+                }
+                throw ChatSendError.server(code: "CH99", message: "unknown")
+              default:
                 break
               }
-            } else {
-              lineBytes.append(byte)
             }
-          }
-          if !lineBytes.isEmpty {
-            try flushLine()
-          }
 
-          try dispatchEventIfNeeded()
-          if let done = pendingDone {
-            if didYieldDelta != true,
-               let messageId = done.messageId?.trimmingCharacters(in: .whitespacesAndNewlines),
-               !messageId.isEmpty {
-              let fetched = (try? await fetchAssistantMessageContent(messageId: messageId, config: config)) ?? nil
-              if let fallback = fetched,
-                 !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                NSLog("ℹ️ ChatSendService | no delta received, fallback fetch message_id=%@", messageId)
-                continuation.yield(.delta(fallback))
+            // NOTE: 不使用 `bytes.lines`：在部分系统版本上会出现“lines 序列为空但 bytes 实际有数据”的情况，
+            // 导致 SSE 永远收不到 delta/done。这里改为按字节手动切行解析。
+            var lineBytes: [UInt8] = []
+            lineBytes.reserveCapacity(256)
+            var shouldStop = false
+
+            actor IdleTimeoutState {
+              private var lastActivityAt = Date()
+              private var didTimeout = false
+
+              func ping() {
+                lastActivityAt = Date()
+              }
+
+              func shouldTimeout(idleSeconds: TimeInterval) -> Bool {
+                guard !didTimeout else { return true }
+                if Date().timeIntervalSince(lastActivityAt) > idleSeconds {
+                  didTimeout = true
+                  return true
+                }
+                return false
+              }
+
+              func isTimedOut() -> Bool {
+                didTimeout
               }
             }
-            continuation.yield(.done(messageId: done.messageId, chatId: done.chatId, traceId: done.traceId))
-          }
-          continuation.finish()
+
+            let idleTimeoutSeconds: TimeInterval = 25
+            let idleState = IdleTimeoutState()
+            await idleState.ping()
+            let idleMonitorTask = Task {
+              while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 1_000_000_000)
+                if await idleState.shouldTimeout(idleSeconds: idleTimeoutSeconds) {
+                  urlTask.cancel()
+                  break
+                }
+              }
+            }
+            defer { idleMonitorTask.cancel() }
+
+            func flushLine() throws {
+              let data = Data(lineBytes)
+              lineBytes.removeAll(keepingCapacity: true)
+              let raw = String(data: data, encoding: .utf8) ?? ""
+              let line = raw.trimmingCharacters(in: CharacterSet(charactersIn: "\r"))
+
+              if line.isEmpty {
+                try dispatchEventIfNeeded()
+                if didReceiveDone {
+                  shouldStop = true
+                }
+                return
+              }
+              if line.hasPrefix(":") { return }
+              if line.hasPrefix("event:") {
+                currentEvent = String(line.dropFirst(6)).trimmingCharacters(in: .whitespacesAndNewlines)
+                return
+              }
+              if line.hasPrefix("data:") {
+                var value = String(line.dropFirst(5))
+                if value.hasPrefix(" ") { value.removeFirst() }
+                dataLines.append(value)
+                return
+              }
+            }
+
+            do {
+              var bytesSincePing = 0
+              for try await byte in bytes {
+                try Task.checkCancellation()
+                bytesSincePing += 1
+                if bytesSincePing >= 512 {
+                  bytesSincePing = 0
+                  await idleState.ping()
+                }
+                if byte == 0x0A { // \n
+                  await idleState.ping()
+                  try flushLine()
+                  if shouldStop {
+                    urlTask.cancel()
+                    break
+                  }
+                } else {
+                  lineBytes.append(byte)
+                }
+              }
+              if !lineBytes.isEmpty {
+                try flushLine()
+              }
+            } catch {
+              if await idleState.isTimedOut() {
+                throw URLError(.timedOut)
+              }
+              throw error
+            }
+
+            try dispatchEventIfNeeded()
+            if let done = pendingDone {
+              if didYieldDelta != true,
+                 let messageId = done.messageId?.trimmingCharacters(in: .whitespacesAndNewlines),
+                 !messageId.isEmpty {
+                let fetched = (try? await fetchAssistantMessageContent(messageId: messageId, config: config)) ?? nil
+                if let fallback = fetched,
+                   !fallback.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                  NSLog("ℹ️ ChatSendService | no delta received, fallback fetch message_id=%@", messageId)
+                  continuation.yield(.delta(fallback))
+                }
+              }
+              continuation.yield(.done(messageId: done.messageId, chatId: done.chatId, traceId: done.traceId))
+            }
+            continuation.finish()
         } catch is CancellationError {
           continuation.finish(throwing: ChatSendError.cancelled)
         } catch {

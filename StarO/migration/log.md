@@ -75,3 +75,5 @@
 - 对话渲染（Markdown）：普通消息气泡启用 Markdown（`NSAttributedString(markdown:)` + `InlinePresentationIntent` 映射为 bold/italic/code/删除线），并加 200 条缓存减少滚动/刷新时的重复解析；`hint-star:` 仍保持轻量胶囊样式与点击行为不变（`ChatOverlayManager.MessageTableViewCell`）。
 - 长期记忆（用户级）：后端 `chat-send` 在 `done` 后异步增量维护 `profiles.long_term_memory_prompt`（跨 `chat_id`），并在后续对话上下文中注入以提升跨会话个性化；个人主页新增“长期记忆”展示区用于排障（`AccountView` / `ProfileService`）。
 - Galaxy 历史点亮恢复：修复“已登录用户冷启动后历史点亮/永久点亮丢失”——此前 `RootView/GalaxyBackgroundView` 的 `.task` 早于 `AuthService.restoreSessionIfNeeded()` 完成触发，导致 `stars/galaxy_seed/TapHighlights` 首次拉取被 `SupabaseRuntime.loadConfig()==nil` 短路且后续不再触发；现在改为在 `hasRestoredSession==true` 后补触发同步（`StarOApp` 会话恢复后主动 `syncSupabaseStarsIfNeeded()`，`RootView/GalaxyBackgroundView` 也以 `hasRestoredSession` 为 id 重新执行一次）。
+- 对话兜底增强：为 `chat-send` SSE 增加“25s 无流量 idle 超时”并映射为 `URLError.timedOut`，避免连接卡死导致 UI 永久 loading；同时在 SSE 正常结束但未收到任何内容时，自动回源拉取最新 assistant 消息补写到 UI，否则落失败文案并露出“重试”（`ChatSendService` / `NativeChatBridge.performCloudStreaming`）。
+- Loading 动画停转修复：`StarRayActivityView` 在窗口层级切换/重挂载导致动画丢失时自动补挂旋转动画，避免加载指示器停在原地（`ChatOverlayManager.StarRayActivityView`）。

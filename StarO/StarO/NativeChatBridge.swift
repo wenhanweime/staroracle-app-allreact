@@ -485,6 +485,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     var buffer = ""
     var doneChatId: String?
     var requestStartedAt = Date()
+    var didSucceed = true
 
     let didSendGalaxyStarIndices = galaxyStarIndices != nil
     let didSendReviewSessionId = reviewSessionId != nil
@@ -520,17 +521,47 @@ final class NativeChatBridge: NSObject, ObservableObject {
         }
       }
 
+      let effectiveChatId = doneChatId ?? chatId
+      let trimmed = buffer.trimmingCharacters(in: .whitespacesAndNewlines)
+      if trimmed.isEmpty {
+        if let latest = await ChatMessagesService.fetchLatestAssistantMessage(chatId: effectiveChatId) {
+          let okTime = latest.timestamp >= requestStartedAt.addingTimeInterval(-2)
+          let text = latest.text.trimmingCharacters(in: .whitespacesAndNewlines)
+          if okTime, !text.isEmpty {
+            buffer = text
+            chatStore.updateStreamingMessage(id: streamingMessageId, text: text)
+          } else {
+            didSucceed = false
+          }
+        } else {
+          didSucceed = false
+        }
+
+        if didSucceed != true {
+          let fallbackText = "未能获取星语回应，请点击重试。"
+          chatStore.updateStreamingMessage(id: streamingMessageId, text: fallbackText)
+          setLastErrorMessage("发送失败：未能从云端读取本次回复。")
+        }
+      }
+
       chatStore.finalizeStreamingMessage(id: streamingMessageId)
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
-      await generateAndApplyConversationTitleIfNeeded(chatId: doneChatId ?? chatId)
-      setLastErrorMessage(nil)
+      if didSucceed == true {
+        conversationStore.markSseDone(sessionId: effectiveChatId)
+        if didSendGalaxyStarIndices {
+          conversationStore.clearPendingGalaxyStarIndices()
+        }
+        if didSendReviewSessionId {
+          conversationStore.clearReviewSession(forChatId: effectiveChatId)
+        }
+        await generateAndApplyConversationTitleIfNeeded(chatId: effectiveChatId)
+        setLastErrorMessage(nil)
+        startStarsPolling(afterDoneChatId: effectiveChatId)
+      }
 
       if let doneChatId, doneChatId != chatId {
         NSLog("⚠️ NativeChatBridge | done.chat_id 与请求 chat_id 不一致 request=%@ done=%@", chatId, doneChatId)
-      }
-      if let doneChatId {
-        startStarsPolling(afterDoneChatId: doneChatId)
       }
     } catch {
       if await tryRecoverFromCloudIfPossible(
