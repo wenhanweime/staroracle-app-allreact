@@ -290,6 +290,7 @@ class InputViewController: UIViewController {
     private var isSpeechRecording: Bool = false
     private var isSpeechStopping: Bool = false
     private var didInstallSpeechTap: Bool = false
+    private var pendingSpeechDeactivateTask: Task<Void, Never>?
     private var speechBaseText: String = ""
     
     // 约束
@@ -765,13 +766,15 @@ class InputViewController: UIViewController {
     }
 
     private func beginSpeechRecognition() throws {
-        stopSpeechRecognition()
+        pendingSpeechDeactivateTask?.cancel()
+        pendingSpeechDeactivateTask = nil
+        stopSpeechRecognition(deactivateAudioSession: false)
 
         speechBaseText = textField.text ?? ""
 
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
-        try audioSession.setActive(true, options: .notifyOthersOnDeactivation)
+        try audioSession.setActive(true)
 
         let request = SFSpeechAudioBufferRecognitionRequest()
         request.shouldReportPartialResults = true
@@ -819,6 +822,10 @@ class InputViewController: UIViewController {
     }
 
     private func stopSpeechRecognition() {
+        stopSpeechRecognition(deactivateAudioSession: true)
+    }
+
+    private func stopSpeechRecognition(deactivateAudioSession: Bool) {
         guard !isSpeechStopping else { return }
         isSpeechStopping = true
         defer { isSpeechStopping = false }
@@ -828,26 +835,32 @@ class InputViewController: UIViewController {
         updateMicButton(isRecording: false)
 
         // 结束识别任务与音频请求
-        let request = recognitionRequest
+        recognitionRequest?.endAudio()
         recognitionRequest = nil
 
-        let task = recognitionTask
+        recognitionTask?.cancel()
         recognitionTask = nil
 
-        // 清理音频 tap 与引擎
+        // 先停引擎（避免停引擎/移除 tap/停用 session 的竞态导致系统内部断言）
         if audioEngine.isRunning {
             audioEngine.stop()
+            audioEngine.reset()
         }
 
-        if didInstallSpeechTap {
-            audioEngine.inputNode.removeTap(onBus: 0)
-            didInstallSpeechTap = false
+        // 不在 stop 时立刻 removeTap：AVAudioEngine 停止过程可能是异步的，立即 removeTap 容易触发内部断言（brk #0x1）。
+        // tap 会在下一次 beginSpeechRecognition 时统一 removeTap 并重新 install（那里引擎未运行，风险更低）。
+        guard deactivateAudioSession else { return }
+
+        pendingSpeechDeactivateTask?.cancel()
+        pendingSpeechDeactivateTask = Task { @MainActor [weak self] in
+            do {
+                try await Task.sleep(nanoseconds: 250_000_000)
+            } catch {
+                return
+            }
+            guard let self, !Task.isCancelled, !self.isSpeechRecording else { return }
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         }
-
-        request?.endAudio()
-        task?.cancel()
-
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
     }
 
     private func updateMicButton(isRecording: Bool) {

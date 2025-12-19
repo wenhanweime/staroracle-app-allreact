@@ -89,3 +89,4 @@
   - 首次构建：从“最近用户消息”开始构建长期记忆，避免从最早历史回填导致长期看不到效果
   - 契约参考：`../staroracle-backend/docs/contracts/user-memory-refresh.md` 与 `../staroracle-backend/docs/contracts/chat-send.md`
 - 长期记忆（用户级）端侧补齐：对话结束后启动 idle 计时（默认 5 分钟），计时到达调用 `POST /functions/v1/user-memory-refresh (force=true)`；发送新消息/点“重试”会取消并重置该计时（`NativeChatBridge` / `UserMemoryRefreshService`）。
+- 语音停止卡死/崩溃再修复：修复“begin 内部调用 stop 会创建延迟停用任务，而取消该任务时因 `try? Task.sleep` 吞掉取消导致立刻 `setActive(false)`”的竞态；现在 begin 会先取消 pending deactivation，再以 `deactivateAudioSession=false` 方式做资源清理；真正停止时延迟停用会正确响应取消（catch `CancellationError` 直接 return），并补充 `audioEngine.reset()` 与 `setActive(true)`（不带 deactivation options）降低停用阶段触发 `brk #0x1` 风险（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
