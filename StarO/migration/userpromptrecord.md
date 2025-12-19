@@ -30,3 +30,6 @@
 - [x] 长期记忆总结触发时机与增量策略核查（已完成 2025-12-19 13:05）
   - 现状：后端仅在 `chat-send done` 后 best-effort 跑用户长期记忆更新；若长对话期间命中 `MIN_INTERVAL`，用户停止输入后不会再触发，从而造成“历史没被总结/长期记忆不更新”的体感。
   - 修复：后端新增 `POST /functions/v1/user-memory-refresh`，端侧应在用户 idle 5-10 分钟后调用（可 `force=true`），并补充游标字段 `last_message_id/last_chat_id` 便于排障；首次构建改为从“最近消息”开始（见后端仓库变更与契约文档）。
+
+# 6（已读 2025-12-19 13:25）
+- [x] 对话结束后（idle 触发）调用 user-memory-refresh（已完成 2025-12-19 13:25）

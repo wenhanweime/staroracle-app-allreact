@@ -85,3 +85,4 @@
   - 游标补充：`profiles.long_term_memory_last_message_id/long_term_memory_last_chat_id`（用于排障“总结到哪个对话/消息”）
   - 首次构建：从“最近用户消息”开始构建长期记忆，避免从最早历史回填导致长期看不到效果
   - 契约参考：`../staroracle-backend/docs/contracts/user-memory-refresh.md` 与 `../staroracle-backend/docs/contracts/chat-send.md`
+- 长期记忆（用户级）端侧补齐：对话结束后启动 idle 计时（默认 5 分钟），计时到达调用 `POST /functions/v1/user-memory-refresh (force=true)`；发送新消息/点“重试”会取消并重置该计时（`NativeChatBridge` / `UserMemoryRefreshService`）。

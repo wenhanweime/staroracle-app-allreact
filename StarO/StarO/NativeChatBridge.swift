@@ -42,6 +42,8 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private var cancellables = Set<AnyCancellable>()
   private var streamingTask: Task<Void, Never>?
   private var starsPollingTask: Task<Void, Never>?
+  private var userMemoryRefreshTask: Task<Void, Never>?
+  private var userMemoryRefreshGeneration: Int = 0
   private var didActivate = false
   private weak var windowScene: UIWindowScene?
   private weak var registeredBackgroundView: UIView?
@@ -80,6 +82,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   deinit {
     streamingTask?.cancel()
     starsPollingTask?.cancel()
+    userMemoryRefreshTask?.cancel()
   }
 
   func activateIfNeeded() {
@@ -200,6 +203,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else { return }
     NSLog("🎯 NativeChatBridge.sendMessage text=\(trimmed)")
+    cancelUserMemoryRefreshTimer()
     if presentationState == .hidden {
       openOverlay(expanded: true)
     }
@@ -246,6 +250,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
   private func retryCloudMessage(chatId: String, message: String, idempotencyKey: String) {
     streamingTask?.cancel()
     starsPollingTask?.cancel()
+    cancelUserMemoryRefreshTimer()
 
     let streamingMessageId: String = {
       if let last = chatStore.messages.last, !last.isUser {
@@ -482,6 +487,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     reviewSessionId: String?,
     streamingMessageId: String
   ) async {
+    defer { scheduleUserMemoryRefreshAfterIdle() }
     var buffer = ""
     var doneChatId: String?
     var requestStartedAt = Date()
@@ -580,6 +586,57 @@ final class NativeChatBridge: NSObject, ObservableObject {
       chatStore.setLoading(false)
       overlayManager.setLoading(false)
       setLastErrorMessage("发送失败：\(error.localizedDescription)")
+    }
+  }
+
+  // MARK: - User long-term memory refresh (idle trigger)
+
+  private func cancelUserMemoryRefreshTimer() {
+    userMemoryRefreshTask?.cancel()
+    userMemoryRefreshTask = nil
+  }
+
+  private func scheduleUserMemoryRefreshAfterIdle(delaySeconds: TimeInterval = 5 * 60) {
+    guard SupabaseRuntime.loadProjectConfig() != nil else { return }
+    guard delaySeconds > 0 else { return }
+
+    userMemoryRefreshTask?.cancel()
+    userMemoryRefreshGeneration += 1
+    let generation = userMemoryRefreshGeneration
+
+    userMemoryRefreshTask = Task { [weak self] in
+      guard let self else { return }
+      let ns = UInt64(delaySeconds * 1_000_000_000)
+      do {
+        try await Task.sleep(nanoseconds: ns)
+      } catch {
+        return
+      }
+      guard !Task.isCancelled else { return }
+      await self.performUserMemoryRefreshIfLatest(generation: generation)
+    }
+  }
+
+  private func performUserMemoryRefreshIfLatest(generation: Int) async {
+    guard generation == userMemoryRefreshGeneration else { return }
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+
+    do {
+      let traceId = SupabaseRuntime.makeTraceId()
+      let result = try await UserMemoryRefreshService.refresh(force: true, traceId: traceId)
+      NSLog(
+        "🧠 UserMemoryRefresh | ok updated=%@ reason=%@ processed=%@ tokens=%@",
+        String(result.updated ?? false),
+        result.reason ?? "nil",
+        result.processedMessages.map(String.init) ?? "nil",
+        result.approxTokens.map(String.init) ?? "nil"
+      )
+    } catch {
+      NSLog("⚠️ UserMemoryRefresh | failed error=%@", error.localizedDescription)
+    }
+
+    if generation == userMemoryRefreshGeneration {
+      userMemoryRefreshTask = nil
     }
   }
 
