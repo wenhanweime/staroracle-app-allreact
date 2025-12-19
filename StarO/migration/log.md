@@ -77,3 +77,11 @@
 - Galaxy 历史点亮恢复：修复“已登录用户冷启动后历史点亮/永久点亮丢失”——此前 `RootView/GalaxyBackgroundView` 的 `.task` 早于 `AuthService.restoreSessionIfNeeded()` 完成触发，导致 `stars/galaxy_seed/TapHighlights` 首次拉取被 `SupabaseRuntime.loadConfig()==nil` 短路且后续不再触发；现在改为在 `hasRestoredSession==true` 后补触发同步（`StarOApp` 会话恢复后主动 `syncSupabaseStarsIfNeeded()`，`RootView/GalaxyBackgroundView` 也以 `hasRestoredSession` 为 id 重新执行一次）。
 - 对话兜底增强：为 `chat-send` SSE 增加“25s 无流量 idle 超时”并映射为 `URLError.timedOut`，避免连接卡死导致 UI 永久 loading；同时在 SSE 正常结束但未收到任何内容时，自动回源拉取最新 assistant 消息补写到 UI，否则落失败文案并露出“重试”（`ChatSendService` / `NativeChatBridge.performCloudStreaming`）。
 - Loading 动画停转修复：`StarRayActivityView` 在窗口层级切换/重挂载导致动画丢失时自动补挂旋转动画，避免加载指示器停在原地（`ChatOverlayManager.StarRayActivityView`）。
+
+## 2025-12-19
+
+- 长期记忆（用户级）SoT 更新：后端补齐“idle 触发 + 游标可观测性”
+  - 新增接口：`POST /functions/v1/user-memory-refresh`（端侧在用户 idle 5-10 分钟后调用，可 `force=true`）
+  - 游标补充：`profiles.long_term_memory_last_message_id/long_term_memory_last_chat_id`（用于排障“总结到哪个对话/消息”）
+  - 首次构建：从“最近用户消息”开始构建长期记忆，避免从最早历史回填导致长期看不到效果
+  - 契约参考：`../staroracle-backend/docs/contracts/user-memory-refresh.md` 与 `../staroracle-backend/docs/contracts/chat-send.md`
