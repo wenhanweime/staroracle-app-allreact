@@ -282,7 +282,7 @@ class InputViewController: UIViewController {
     // MARK: - Speech (Apple Speech framework)
     private let speechRecognizer: SFSpeechRecognizer? = {
         let zh = Locale(identifier: "zh-CN")
-        return SFSpeechRecognizer(locale: zh)
+        return SFSpeechRecognizer(locale: zh) ?? SFSpeechRecognizer()
     }()
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
@@ -893,7 +893,13 @@ class InputViewController: UIViewController {
     private func presentPermissionAlert(title: String, message: String) {
         let alert = UIAlertController(title: title, message: message, preferredStyle: .alert)
         alert.addAction(UIAlertAction(title: "好的", style: .default))
-        present(alert, animated: true)
+        // InputDrawerWindow 可能不是 keyWindow（为了触摸透传我们不会 makeKeyAndVisible），
+        // 直接 present 可能会静默失败；优先从主窗口的 top VC present，确保用户能看到提示。
+        if let presenter = findTopMostPresentingViewController() {
+            presenter.present(alert, animated: true)
+        } else {
+            present(alert, animated: true)
+        }
     }
     
     @objc private func keyboardWillChangeFrame(_ notification: Notification) {
@@ -971,6 +977,21 @@ private func makeNonisolatedSpeechTap(request: SFSpeechAudioBufferRecognitionReq
     return { buffer, _ in
         request.append(buffer)
     }
+}
+
+@MainActor
+private func findTopMostPresentingViewController() -> UIViewController? {
+    let scenes = UIApplication.shared.connectedScenes
+        .compactMap { $0 as? UIWindowScene }
+        .filter { $0.activationState == .foregroundActive }
+
+    let windows = scenes.flatMap(\.windows)
+    let keyWindow = windows.first(where: \.isKeyWindow) ?? windows.first
+    var top = keyWindow?.rootViewController
+    while let presented = top?.presentedViewController {
+        top = presented
+    }
+    return top
 }
 
 // MARK: - 输入框共享状态（供 ChatOverlay 初次出现时立即对齐）
