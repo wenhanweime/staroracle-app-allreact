@@ -34,6 +34,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
   private let overlayManager = ChatOverlayManager()
   private let inputManager = InputDrawerManager()
+  private let starCardOverlayWindowManager = StarCardOverlayWindowManager()
   private let chatStore: ChatStore
   private let starStore: StarStore
   private let conversationStore: ConversationStore
@@ -906,6 +907,7 @@ final class NativeChatBridge: NSObject, ObservableObject {
     windowScene = scene
     overlayManager.attach(to: scene)
     inputManager.attach(to: scene)
+    starCardOverlayWindowManager.attach(to: scene)
     if isNewScene {
       registeredBackgroundView = nil
     }
@@ -914,6 +916,10 @@ final class NativeChatBridge: NSObject, ObservableObject {
       return
     }
     configureBackgroundViewIfNeeded()
+  }
+
+  func presentStarCard(_ star: StarOracleCore.Star, onOpenDetail: (() -> Void)? = nil) {
+    starCardOverlayWindowManager.present(star: star, onOpenDetail: onOpenDetail)
   }
 
   private func registerBackgroundView(_ view: UIView) {

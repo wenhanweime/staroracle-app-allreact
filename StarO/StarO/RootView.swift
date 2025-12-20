@@ -14,7 +14,6 @@ struct RootView: View {
 
   @State private var activePane: ActivePane = .home
   @State private var selectedStar: Star?
-  @State private var focusedStar: Star?
   @State private var isShowingAccount: Bool = false
   @State private var dragOffset: CGFloat = 0
 
@@ -86,7 +85,9 @@ struct RootView: View {
             inspirationStars: starStore.inspirationStars,
             onBack: { snapTo(.home) },
             onOpenStar: { star in
-              focusedStar = star
+              chatBridge.presentStarCard(star, onOpenDetail: {
+                selectedStar = star
+              })
             }
           )
           .frame(width: collectionWidth, alignment: .trailing)
@@ -114,18 +115,6 @@ struct RootView: View {
       .overlay(
         InspirationCardOverlay()
       )
-      .overlay {
-        if let star = focusedStar {
-          StarCardFocusOverlay(
-            star: star,
-            onDismiss: { focusedStar = nil },
-            onOpenDetail: {
-              selectedStar = star
-              focusedStar = nil
-            }
-          )
-        }
-      }
 
       .onAppear {
         DispatchQueue.main.async {
@@ -168,7 +157,9 @@ struct RootView: View {
           conversationStore.beginReviewSession(forChatId: conversationStore.currentSessionId)
         }
         if let star = findStar(by: starId) {
-          focusedStar = star
+          chatBridge.presentStarCard(star, onOpenDetail: {
+            selectedStar = star
+          })
         }
       }
       .sheet(item: $selectedStar) { star in
@@ -177,14 +168,11 @@ struct RootView: View {
       .sheet(isPresented: $isShowingAccount) {
         AccountView()
       }
-      .onChange(of: focusedStar) { _, _ in
-        chatBridge.setSystemModalPresented(selectedStar != nil || focusedStar != nil || isShowingAccount)
-      }
       .onChange(of: selectedStar) { _, _ in
-        chatBridge.setSystemModalPresented(selectedStar != nil || focusedStar != nil || isShowingAccount)
+        chatBridge.setSystemModalPresented(selectedStar != nil || isShowingAccount)
       }
       .onChange(of: isShowingAccount) { _, _ in
-        chatBridge.setSystemModalPresented(selectedStar != nil || focusedStar != nil || isShowingAccount)
+        chatBridge.setSystemModalPresented(selectedStar != nil || isShowingAccount)
       }
     }
   }
