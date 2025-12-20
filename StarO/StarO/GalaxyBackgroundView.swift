@@ -12,10 +12,14 @@ struct GalaxyBackgroundView: View {
   @EnvironmentObject private var conversationStore: ConversationStore
   @EnvironmentObject private var authService: AuthService
   @StateObject private var viewModel = GalaxyViewModel()
-  
+
   @State private var lastTapRegion: GalaxyRegion?
   @State private var lastTapDate: Date = .distantPast
   @State private var debounceTask: Task<Void, Never>?
+  @State private var didRestoreLocalGalaxyState: Bool = false
+  @State private var cachedPermanentStarIndices: [Int] = []
+  @State private var cachedTemporaryExpiresAtByIndex: [Int: Date] = [:]
+  @State private var cachedUserId: String?
   var isTapEnabled: Bool = true
 
   var body: some View {
@@ -92,6 +96,7 @@ struct GalaxyBackgroundView: View {
       .ignoresSafeArea()
       .task(id: proxy.size) {
         await MainActor.run {
+          restoreLocalGalaxyStateIfNeeded(for: proxy.size)
           updatePermanentStarHighlights(for: proxy.size)
         }
       }
@@ -107,9 +112,12 @@ struct GalaxyBackgroundView: View {
           if !indices.isEmpty {
             conversationStore.setPendingGalaxyStarIndices(indices, ttlSeconds: 1800)
           }
+          let expiresAt = Date().addingTimeInterval(24 * 60 * 60)
+          upsertCachedTemporaryHighlights(indices: indices, expiresAt: expiresAt)
           Task { _ = await GalaxyHighlightsService.createHighlight(indices: indices) }
         }
 
+        cachedUserId = resolvedCacheUserId()
         guard authService.hasRestoredSession,
               authService.isAuthenticated,
               SupabaseRuntime.loadConfig() != nil else {
@@ -121,6 +129,8 @@ struct GalaxyBackgroundView: View {
         if let seed = await GalaxySeedService.fetchSeed(), seed != viewModel.galaxySeed {
           viewModel.galaxySeed = seed
           _ = viewModel.prepareIfNeeded(for: proxy.size)
+          applyCachedTemporaryHighlights()
+          GalaxyStateCache.updateSeed(seed, userId: cachedUserId)
         }
 
         // App 启动/进入 Galaxy 时：拉取未过期 TapHighlight 并恢复高亮
@@ -129,7 +139,15 @@ struct GalaxyBackgroundView: View {
           _ = viewModel.prepareIfNeeded(for: proxy.size)
           for item in remote {
             viewModel.mergeTemporaryHighlights(indices: item.indices, expiresAt: item.expiresAt)
+            for idx in item.indices where idx >= 0 {
+              if let old = cachedTemporaryExpiresAtByIndex[idx] {
+                cachedTemporaryExpiresAtByIndex[idx] = max(old, item.expiresAt)
+              } else {
+                cachedTemporaryExpiresAtByIndex[idx] = item.expiresAt
+              }
+            }
           }
+          GalaxyStateCache.replaceTemporary(remote, userId: cachedUserId)
         }
 
         updatePermanentStarHighlights(for: proxy.size)
@@ -148,11 +166,71 @@ struct GalaxyBackgroundView: View {
 
   private func updatePermanentStarHighlights(for size: CGSize) {
     _ = viewModel.prepareIfNeeded(for: size)
-    let indices = starStore.constellation.stars
+    let computed = starStore.constellation.stars
       .filter { !$0.isTemplate && !$0.isTransient }
       .compactMap(\.galaxyStarIndices)
       .flatMap { $0 }
-    viewModel.setPermanentHighlights(indices: indices)
+    let computedIndices = Array(Set(computed.filter { $0 >= 0 })).sorted()
+    let resolved = !computedIndices.isEmpty ? computedIndices : cachedPermanentStarIndices
+    viewModel.setPermanentHighlights(indices: resolved)
+
+    if !computedIndices.isEmpty, computedIndices != cachedPermanentStarIndices {
+      cachedPermanentStarIndices = computedIndices
+      GalaxyStateCache.updatePermanentIndices(computedIndices, userId: cachedUserId)
+    }
+  }
+
+  private func restoreLocalGalaxyStateIfNeeded(for size: CGSize) {
+    guard !didRestoreLocalGalaxyState else { return }
+    cachedUserId = resolvedCacheUserId()
+    guard let snapshot = GalaxyStateCache.load(userId: cachedUserId) else {
+      didRestoreLocalGalaxyState = true
+      return
+    }
+
+    if let seed = snapshot.seed, seed != viewModel.galaxySeed {
+      viewModel.galaxySeed = seed
+    }
+    _ = viewModel.prepareIfNeeded(for: size)
+
+    cachedPermanentStarIndices = snapshot.permanentIndices
+    cachedTemporaryExpiresAtByIndex = snapshot.temporaryExpiresAtByIndex
+    applyCachedTemporaryHighlights()
+    if !cachedPermanentStarIndices.isEmpty {
+      viewModel.setPermanentHighlights(indices: cachedPermanentStarIndices)
+    }
+    didRestoreLocalGalaxyState = true
+  }
+
+  private func resolvedCacheUserId() -> String? {
+    let raw = AuthSessionStore.load()?.userId?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let raw, !raw.isEmpty { return raw }
+    let email = authService.userEmail?.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let email, !email.isEmpty { return email }
+    return nil
+  }
+
+  private func applyCachedTemporaryHighlights() {
+    guard !cachedTemporaryExpiresAtByIndex.isEmpty else { return }
+    let grouped = Dictionary(grouping: cachedTemporaryExpiresAtByIndex.keys) { idx in
+      cachedTemporaryExpiresAtByIndex[idx] ?? Date.distantPast
+    }
+    for (expiresAt, indices) in grouped {
+      guard expiresAt > Date() else { continue }
+      viewModel.mergeTemporaryHighlights(indices: indices, expiresAt: expiresAt)
+    }
+  }
+
+  private func upsertCachedTemporaryHighlights(indices: [Int], expiresAt: Date) {
+    guard !indices.isEmpty else { return }
+    for idx in indices where idx >= 0 {
+      if let old = cachedTemporaryExpiresAtByIndex[idx] {
+        cachedTemporaryExpiresAtByIndex[idx] = max(old, expiresAt)
+      } else {
+        cachedTemporaryExpiresAtByIndex[idx] = expiresAt
+      }
+    }
+    GalaxyStateCache.upsertTemporary(indices: indices, expiresAt: expiresAt, userId: cachedUserId)
   }
 
   private func regionLabel(_ region: GalaxyRegion) -> String {
