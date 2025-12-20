@@ -934,8 +934,8 @@ extension NativeChatBridge: InputDrawerDelegate {
     Task { @MainActor [weak self] in
       guard let self else { return }
       self.ensureOverlayVisible(collapsed: false)
-      // 仅当用户本就接近底部时自动滚动；避免“阅读历史时被强制拉回底部”，也减少聚焦瞬间的主线程负载。
-      self.overlayManager.requestScrollToBottom(animated: true, reason: "输入框聚焦", force: false)
+      // 强规则：聚焦输入框必须滚动到最底部，保证对话连续性与输入体验一致。
+      self.overlayManager.requestScrollToBottom(animated: true, reason: "输入框聚焦", force: true)
     }
   }
 
