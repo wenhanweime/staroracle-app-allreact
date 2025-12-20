@@ -41,6 +41,7 @@ enum UserMemoryRefreshService {
     let ok: Bool?
     let code: String?
     let message: String?
+    let error: String?
     let trace_id: String?
   }
 
@@ -104,10 +105,17 @@ enum UserMemoryRefreshService {
       }
 
       if let decoded = try? JSONDecoder().decode(ErrorResponse.self, from: data) {
+        let baseMessage = decoded.message ?? "unknown"
+        let detail = (decoded.error ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        let combined: String = {
+          guard !detail.isEmpty else { return baseMessage }
+          if baseMessage.contains(detail) { return baseMessage }
+          return "\(baseMessage)（\(detail)）"
+        }()
         throw RefreshError.http(
           status: http.statusCode,
           code: decoded.code ?? "UM99",
-          message: decoded.message ?? "unknown"
+          message: combined
         )
       }
 
@@ -125,4 +133,3 @@ enum UserMemoryRefreshService {
     }
   }
 }
-
