@@ -108,3 +108,4 @@
 - 麦克风按钮状态修复：移除 stop 清理阶段异步 `DispatchQueue.main.async` 更新导致的“后写覆盖”，改为主线程同步更新图标/高亮，确保录音态显示停止图标并高亮（`StarO/StarO/InputDrawerManager.swift`）。
 - 语音 UI 回归：麦克风按钮录音态显示“停止”图标并以紫色底高亮；toast 仅保留“请开始说话”，避免让用户误以为需要等待联网后才能开始说话（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音按钮状态增强：录音态同时设置 `.normal/.highlighted/.selected` 多种 control state 的图标，并显式设置 `isSelected`，避免个别状态仍渲染旧麦克风图标；并强制 `setNeedsLayout/layoutIfNeeded` 触发重绘（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
+- 语音交互再加固：麦克风按钮状态改为与 `isSpeechRecording` 的 `didSet` 绑定（跨线程自动回主线程更新），并在 begin 时先切到录音态以保证 UI 立即反馈；转写显示改为“最长文本胜出 + 内容未变化跳过更新”，减少 partial 改写导致的反复刷新与按钮态被覆盖（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。

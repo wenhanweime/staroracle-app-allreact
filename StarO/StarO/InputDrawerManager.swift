@@ -289,7 +289,19 @@ class InputViewController: UIViewController {
     private let audioEngine = AVAudioEngine()
     private var recognitionRequest: SFSpeechAudioBufferRecognitionRequest?
     private var recognitionTask: SFSpeechRecognitionTask?
-    private var isSpeechRecording: Bool = false
+    private var isSpeechRecording: Bool = false {
+        didSet {
+            guard oldValue != isSpeechRecording else { return }
+            if Thread.isMainThread {
+                updateMicButton(isRecording: isSpeechRecording)
+            } else {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self else { return }
+                    self.updateMicButton(isRecording: self.isSpeechRecording)
+                }
+            }
+        }
+    }
     private var isSpeechStopping: Bool = false
     private var didInstallSpeechTap: Bool = false
     private var pendingSpeechDeactivateTask: Task<Void, Never>?
@@ -424,6 +436,7 @@ class InputViewController: UIViewController {
         micButton = UIButton(type: .system)
         micButton.backgroundColor = UIColor.clear
         micButton.layer.cornerRadius = 16
+        micButton.clipsToBounds = true
         micButton.addTarget(self, action: #selector(micButtonTapped), for: .touchUpInside)
         micButton.translatesAutoresizingMaskIntoConstraints = false
         
@@ -843,6 +856,9 @@ class InputViewController: UIViewController {
         speechLastTranscription = ""
         speechAccumulatedTranscription = ""
 
+        // 先切到录音态（UI 立即响应），若后续启动失败会在 catch/stop 中回退。
+        isSpeechRecording = true
+
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
         try audioSession.setActive(true)
@@ -877,8 +893,6 @@ class InputViewController: UIViewController {
         try audioEngine.start()
         Foundation.NSLog("🎙️ audioEngine started isRunning=\(audioEngine.isRunning) format=\(recordingFormat.sampleRate)Hz ch=\(recordingFormat.channelCount)")
 
-        isSpeechRecording = true
-        updateMicButton(isRecording: true)
         showSpeechToast("请开始说话")
 
         recognitionTask = speechRecognizer?.recognitionTask(with: request) { [weak self] result, error in
@@ -890,27 +904,19 @@ class InputViewController: UIViewController {
                     let current = result.bestTranscription.formattedString
                     Foundation.NSLog("🎙️ speech result len=\(current.count) final=\(result.isFinal)")
 
-                    // 语音 partial result 可能会“回退/改写”，直接用 formattedString 会导致输入框内容反复刷新。
-                    // 为了更符合“持续累计”的体感，这里采用单调追加策略：只在识别文本增长时追加 delta，回退时忽略。
-                    if self.speechLastTranscription.isEmpty {
-                        self.speechAccumulatedTranscription = current
-                        self.speechLastTranscription = current
-                    } else if current.hasPrefix(self.speechLastTranscription) {
-                        let delta = String(current.dropFirst(self.speechLastTranscription.count))
-                        self.speechAccumulatedTranscription.append(delta)
-                        self.speechLastTranscription = current
-                    } else if self.speechLastTranscription.hasPrefix(current) {
-                        // ignore shrink/revision to keep monotonic accumulation
-                    } else if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                        if !self.speechAccumulatedTranscription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                           !self.speechAccumulatedTranscription.hasSuffix(" ") {
-                            self.speechAccumulatedTranscription.append(" ")
-                        }
-                        self.speechAccumulatedTranscription.append(current)
-                        self.speechLastTranscription = current
+                    let trimmed = current.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !trimmed.isEmpty else { return }
+
+                    // 语音 partial result 可能会“回退/改写”，直接用 formattedString 会导致输入框内容反复回退刷新。
+                    // 这里采用“最长文本胜出”的单调策略：仅在识别文本变长时更新显示，变短/同长改写则忽略，避免闪烁与反复覆盖。
+                    let previousBest = self.speechAccumulatedTranscription
+                    self.speechLastTranscription = trimmed
+                    if previousBest.isEmpty || trimmed.count > previousBest.count {
+                        self.speechAccumulatedTranscription = trimmed
                     }
 
                     let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: self.speechAccumulatedTranscription)
+                    guard self.textField.text != merged else { return }
                     self.textField.text = merged
                     self.updateSendButtonState()
                     self.manager?.handleTextChange(merged)
@@ -941,13 +947,6 @@ class InputViewController: UIViewController {
 
         // 先让 UI 立即响应（避免用户感觉“按了停不下来”）
         isSpeechRecording = false
-        if Thread.isMainThread {
-            updateMicButton(isRecording: false)
-        } else {
-            DispatchQueue.main.async { [weak self] in
-                self?.updateMicButton(isRecording: false)
-            }
-        }
 
         if audioEngine.isRunning {
             audioEngine.stop()
@@ -986,8 +985,8 @@ class InputViewController: UIViewController {
     }
 
     private func updateMicButton(isRecording: Bool) {
-        let primaryName = isRecording ? "stop.fill" : "mic.fill"
-        let fallbackName = isRecording ? "stop.circle.fill" : "mic"
+        let primaryName = isRecording ? "stop.circle.fill" : "mic.fill"
+        let fallbackName = isRecording ? "stop.fill" : "mic"
         let image = UIImage(systemName: primaryName) ?? UIImage(systemName: fallbackName)
         Foundation.NSLog("🎙️ updateMicButton isRecording=\(isRecording) symbol=\(primaryName)|\(fallbackName) imageNil=\(image == nil)")
 
@@ -1008,6 +1007,8 @@ class InputViewController: UIViewController {
         }
 
         micButton.setNeedsLayout()
+        micButton.setNeedsDisplay()
+        micButton.imageView?.setNeedsDisplay()
         micButton.layoutIfNeeded()
     }
 
