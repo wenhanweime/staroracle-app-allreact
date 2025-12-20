@@ -114,3 +114,7 @@
 - 长期记忆补齐：生产环境部署 `user-memory-refresh` Edge Function（`supabase functions deploy user-memory-refresh`），并在端侧恢复登录后按 idle 判定触发一次补刷新；个人主页“长期记忆”区增加“立即刷新”按钮，展示 updated/reason/processed/tokens 便于验证与排障（`StarO/StarO/RootView.swift`、`StarO/StarO/NativeChatBridge.swift`、`StarO/StarO/AccountView.swift`、`StarO/StarO/UserMemoryRefreshService.swift`）。
 - 长期记忆排障：确认远端 `profiles.long_term_memory_*` 字段尚未执行 migration，导致 `user-memory-refresh` 500 UM99；端侧补齐错误文案把后端 `error` 字段展示出来，避免只看到 unknown，便于提示“先跑远端迁移”（`StarO/StarO/UserMemoryRefreshService.swift`）。
 - 仓库卫生：将 `xcuserdata/*.xcuserstate` 等 Xcode 用户态文件加入 `.gitignore` 并从 git index 移除追踪，避免制造无意义 diff 与冲突。
+
+## 2025-12-21
+
+- 长期记忆（用户级）UM99 修复闭环：后端已补齐远端 `profiles.long_term_memory_*` 迁移（此前缺字段导致 `user-memory-refresh` 500），并修复 `SUMMARY_MODEL_ID` 为空字符串时的模型回退；回归 `user-memory-refresh (force=true)` 可成功更新并回填游标，个人主页长期记忆区可见最新摘要（后端记录见 `staroracle-backend/docs/log.md`）。
