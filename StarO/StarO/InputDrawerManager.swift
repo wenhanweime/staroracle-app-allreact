@@ -720,7 +720,13 @@ class InputViewController: UIViewController {
     
     @objc private func sendButtonTapped() {
         guard let text = textField.text, !text.isEmpty else { return }
-        
+
+        // 语音录制中点击“发送”也必须停止麦克风监听，
+        // 否则识别回调会在发送后继续写回输入框，造成“发出后又出现新文字”的错觉。
+        if isSpeechRecording {
+            stopSpeechRecognition()
+        }
+
         manager?.handleTextSubmit(text)
         textField.text = ""
         updateSendButtonState()
