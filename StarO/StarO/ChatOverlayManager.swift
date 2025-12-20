@@ -1130,13 +1130,12 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         let headerView = UIView()
         headerView.translatesAutoresizingMaskIntoConstraints = false
         expandedView.addSubview(headerView)
-        
-        let titleLabel = UILabel()
-        titleLabel.text = "ChatOverlay 对话"
-        titleLabel.textColor = .label
-        titleLabel.font = UIFont.boldSystemFont(ofSize: 18)
-        titleLabel.translatesAutoresizingMaskIntoConstraints = false
-        headerView.addSubview(titleLabel)
+
+        let starIcon = StarRayPulseView()
+        starIcon.tintColor = UIColor(red: 138/255.0, green: 95/255.0, blue: 189/255.0, alpha: 1.0) // #8A5FBD
+        starIcon.translatesAutoresizingMaskIntoConstraints = false
+        starIcon.isUserInteractionEnabled = false
+        headerView.addSubview(starIcon)
         
         let closeButton = UIButton(type: .system)
         closeButton.setTitle("×", for: .normal)
@@ -1189,9 +1188,11 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
             headerView.leadingAnchor.constraint(equalTo: expandedView.leadingAnchor, constant: 16),
             headerView.trailingAnchor.constraint(equalTo: expandedView.trailingAnchor, constant: -16),
             headerView.heightAnchor.constraint(equalToConstant: 44),
-            
-            titleLabel.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
-            titleLabel.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+
+            starIcon.leadingAnchor.constraint(equalTo: headerView.leadingAnchor),
+            starIcon.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
+            starIcon.widthAnchor.constraint(equalToConstant: 22),
+            starIcon.heightAnchor.constraint(equalToConstant: 22),
             
             closeButton.trailingAnchor.constraint(equalTo: headerView.trailingAnchor),
             closeButton.centerYAnchor.constraint(equalTo: headerView.centerYAnchor),
@@ -2536,6 +2537,111 @@ class StarRayActivityView: UIView {
     func stop() {
         isAnimating = false
         layer.removeAnimation(forKey: "star-rotate")
+    }
+}
+
+/// 头部装饰用八芒星：参考星卡的“射线闪烁”，不做旋转，不影响交互。
+final class StarRayPulseView: UIView {
+    private let rayCount = 8
+    private var rays: [CAShapeLayer] = []
+    private var isAnimating = false
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        isOpaque = false
+        setup()
+    }
+
+    required init?(coder: NSCoder) {
+        super.init(coder: coder)
+        isOpaque = false
+        setup()
+    }
+
+    private func setup() {
+        for _ in 0..<rayCount {
+            let layer = CAShapeLayer()
+            layer.lineCap = .round
+            layer.lineWidth = 2
+            layer.strokeColor = (tintColor ?? UIColor.systemPurple).cgColor
+            layer.fillColor = UIColor.clear.cgColor
+            layer.opacity = 0
+            self.layer.addSublayer(layer)
+            rays.append(layer)
+        }
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        let center = CGPoint(x: bounds.midX, y: bounds.midY)
+        let radius: CGFloat = max(6, min(bounds.width, bounds.height) * 0.42)
+        for (index, ray) in rays.enumerated() {
+            let angle = CGFloat(index) * (2 * .pi / CGFloat(rayCount))
+            let start = center
+            let end = CGPoint(
+                x: center.x + cos(angle) * radius,
+                y: center.y + sin(angle) * radius
+            )
+            let path = UIBezierPath()
+            path.move(to: start)
+            path.addLine(to: end)
+            ray.path = path.cgPath
+            ray.strokeColor = (tintColor ?? UIColor.systemPurple).cgColor
+        }
+
+        if isAnimating {
+            ensureAnimations()
+        }
+    }
+
+    override func tintColorDidChange() {
+        super.tintColorDidChange()
+        for ray in rays {
+            ray.strokeColor = (tintColor ?? UIColor.systemPurple).cgColor
+        }
+    }
+
+    override func didMoveToWindow() {
+        super.didMoveToWindow()
+        if window != nil {
+            start()
+        } else {
+            stop()
+        }
+    }
+
+    func start() {
+        guard !isAnimating else { return }
+        isAnimating = true
+        ensureAnimations()
+        isHidden = false
+    }
+
+    func stop() {
+        isAnimating = false
+        for ray in rays {
+            ray.removeAnimation(forKey: "opacity-pulse")
+            ray.opacity = 0
+        }
+    }
+
+    private func ensureAnimations() {
+        let now = CACurrentMediaTime()
+        for (index, ray) in rays.enumerated() {
+            if ray.animation(forKey: "opacity-pulse") != nil {
+                continue
+            }
+            let anim = CABasicAnimation(keyPath: "opacity")
+            anim.fromValue = 0.0
+            anim.toValue = 0.85
+            anim.duration = 1.5
+            anim.autoreverses = true
+            anim.repeatCount = .infinity
+            anim.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+            anim.beginTime = now + Double(index) * 0.10
+            anim.isRemovedOnCompletion = false
+            ray.add(anim, forKey: "opacity-pulse")
+        }
     }
 }
 
