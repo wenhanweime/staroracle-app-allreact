@@ -236,15 +236,17 @@ final class GalaxyViewModel: ObservableObject {
         }
     }
     
+    @discardableResult
     func triggerHighlight(
         at location: CGPoint,
         in size: CGSize,
         tapTimestamp: CFTimeInterval? = nil,
         isPermanent: Bool = false,
         expiresAt: Date? = nil,
-        shouldPersist: Bool = false
-    ) {
-        guard ringCount > 0 else { return }
+        shouldPersist: Bool = false,
+        hitTestRadius: CGFloat? = nil
+    ) -> [GalaxyHighlightEntry] {
+        guard ringCount > 0 else { return [] }
         
         // Use deterministic RNG if timestamp is provided to ensure consistent selection
         // between transient flash and permanent highlight
@@ -269,7 +271,13 @@ final class GalaxyViewModel: ObservableObject {
         }()
         
         // 收集候选星星
-        let candidates = collectCandidates(at: location, in: size, radius: radius, elapsed: elapsedAtTap)
+        let candidates = collectCandidates(
+            at: location,
+            in: size,
+            radius: radius,
+            elapsed: elapsedAtTap,
+            allowNearestFallback: hitTestRadius == nil
+        )
         
         guard !candidates.isEmpty else {
             #if DEBUG
@@ -277,7 +285,21 @@ final class GalaxyViewModel: ObservableObject {
                 print("[GalaxyViewModel] no selectable stars around tap")
             }
             #endif
-            return
+            return []
+        }
+
+        if let hitTestRadius {
+            let threshold = max(0.01, hitTestRadius)
+            let thresholdSquared = threshold * threshold
+            let nearestDistanceSquared = candidates.map(\.distance).min() ?? .greatestFiniteMagnitude
+            if nearestDistanceSquared > thresholdSquared {
+                #if DEBUG
+                if StarOracleDebug.verboseLogsEnabled {
+                    print("[GalaxyViewModel] tap missed stars (nearest=\(sqrt(nearestDistanceSquared))px, threshold=\(threshold)px)")
+                }
+                #endif
+                return []
+            }
         }
         
         #if DEBUG
@@ -315,9 +337,17 @@ final class GalaxyViewModel: ObservableObject {
         if shouldPersist, !entries.isEmpty {
             onHighlightsPersisted?(entries)
         }
+
+        return entries
     }
 
-    private func collectCandidates(at location: CGPoint, in size: CGSize, radius: CGFloat, elapsed: TimeInterval) -> [HighlightCandidate] {
+    private func collectCandidates(
+        at location: CGPoint,
+        in size: CGSize,
+        radius: CGFloat,
+        elapsed: TimeInterval,
+        allowNearestFallback: Bool = true
+    ) -> [HighlightCandidate] {
         var results: [HighlightCandidate] = []
         let radiusSquared = radius * radius
         for (index, ring) in rings.enumerated() {
@@ -332,7 +362,7 @@ final class GalaxyViewModel: ObservableObject {
                 }
             }
         }
-        if results.isEmpty {
+        if allowNearestFallback, results.isEmpty {
             var nearest: HighlightCandidate?
             var minDst = Double.greatestFiniteMagnitude
             for (index, ring) in rings.enumerated() {

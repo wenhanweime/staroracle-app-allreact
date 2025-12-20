@@ -24,24 +24,31 @@ struct GalaxyBackgroundView: View {
 
   var body: some View {
     GeometryReader { proxy in
+      let topExcludedHeight = proxy.safeAreaInsets.top + 96
       GalaxyMetalContainer(
         viewModel: viewModel,
         size: proxy.size,
         onRegionSelected: nil,
         onTap: { point, size, region, timestamp in
+          // 顶部菜单栏及周边区域：禁用银河点击，避免误触灵感卡片/高亮。
+          guard point.y >= topExcludedHeight else { return }
+
           // 纯点击 Galaxy：每次点击都产生“临时高亮（TapHighlight）”，并上报后端做跨设备 1 天同步。
           let ttlExpiresAt = Date().addingTimeInterval(24 * 60 * 60)
-          viewModel.triggerHighlight(
+          let highlightEntries = viewModel.triggerHighlight(
             at: point,
             in: size,
             tapTimestamp: timestamp,
             expiresAt: ttlExpiresAt,
-            shouldPersist: true
+            shouldPersist: true,
+            hitTestRadius: 22
           )
+          // 没有命中星点：不生成灵感卡片，避免“点空白也出卡”的误触。
+          guard !highlightEntries.isEmpty else { return }
 
           // Cancel previous task to prevent card generation from previous rapid taps
           debounceTask?.cancel()
-          
+
           // Lock UI during generation
           galaxyStore.setIsGeneratingCard(true)
           
