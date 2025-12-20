@@ -119,3 +119,4 @@
 
 - 长期记忆（用户级）UM99 修复闭环：后端已补齐远端 `profiles.long_term_memory_*` 迁移（此前缺字段导致 `user-memory-refresh` 500），并修复 `SUMMARY_MODEL_ID` 为空字符串时的模型回退；回归 `user-memory-refresh (force=true)` 可成功更新并回填游标，个人主页长期记忆区可见最新摘要（后端记录见 `staroracle-backend/docs/log.md`）。
 - Galaxy 防误触：顶部菜单栏及周边区域禁用 Galaxy 点击；未命中星点时不生成灵感卡片（仅命中星点才触发高亮与出卡）（`StarO/StarO/GalaxyBackgroundView.swift`、`StarO/StarO/Galaxy/GalaxyViewModel.swift`）。
+- 键盘弹起卡顿优化：预热 ChatOverlay 窗口（隐藏态提前创建窗口/UITableView），并将“输入框聚焦滚到底”改为非强制（仅接近底部才滚动），减少聚焦瞬间主线程负载（`StarO/StarO/NativeChatBridge.swift`、`StarO/StarO/ChatOverlayManager.swift`）。

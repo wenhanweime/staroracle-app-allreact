@@ -96,6 +96,13 @@ final class NativeChatBridge: NSObject, ObservableObject {
     ensureInputDrawerVisible()
     overlayManager.setConversationTitle(chatStore.conversationTitle)
     refreshOverlayMessages()
+
+    // 预热 ChatOverlay（隐藏态）：把首次创建窗口/UITableView 的开销提前到启动后，避免用户首次点击输入框时键盘弹起卡顿。
+    Task { @MainActor [weak self] in
+      guard let self else { return }
+      try? await Task.sleep(nanoseconds: 250_000_000)
+      self.overlayManager.preloadIfNeeded()
+    }
   }
 
   private var pendingInputVisibleWork: DispatchWorkItem?
@@ -927,7 +934,8 @@ extension NativeChatBridge: InputDrawerDelegate {
     Task { @MainActor [weak self] in
       guard let self else { return }
       self.ensureOverlayVisible(collapsed: false)
-      self.overlayManager.requestScrollToBottom(animated: true, reason: "输入框聚焦")
+      // 仅当用户本就接近底部时自动滚动；避免“阅读历史时被强制拉回底部”，也减少聚焦瞬间的主线程负载。
+      self.overlayManager.requestScrollToBottom(animated: true, reason: "输入框聚焦", force: false)
     }
   }
 

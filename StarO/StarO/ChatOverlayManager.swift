@@ -117,6 +117,7 @@ public class ChatOverlayManager {
 
     private struct PendingScrollToBottomRequest {
         let animated: Bool
+        let force: Bool
         let reason: String
     }
     private var pendingScrollToBottomRequest: PendingScrollToBottomRequest?
@@ -130,10 +131,10 @@ public class ChatOverlayManager {
     
     deinit {}
 
-    func requestScrollToBottom(animated: Bool = true, reason: String) {
+    func requestScrollToBottom(animated: Bool = true, reason: String, force: Bool = false) {
         DispatchQueue.main.async { [weak self] in
             guard let self else { return }
-            self.pendingScrollToBottomRequest = PendingScrollToBottomRequest(animated: animated, reason: reason)
+            self.pendingScrollToBottomRequest = PendingScrollToBottomRequest(animated: animated, force: force, reason: reason)
             self.flushPendingScrollToBottomIfPossible()
         }
     }
@@ -142,8 +143,19 @@ public class ChatOverlayManager {
         guard let request = pendingScrollToBottomRequest else { return }
         guard isVisible, currentState == .expanded, let overlayViewController else { return }
         if overlayViewController.isAnimatingInsert { return }
-        overlayViewController.scrollToBottom(animated: request.animated, reason: request.reason, force: true)
+        overlayViewController.scrollToBottom(animated: request.animated, reason: request.reason, force: request.force)
         pendingScrollToBottomRequest = nil
+    }
+
+    /// 预热浮窗窗口：提前创建 UIWindow/VC/UITableView，避免第一次打开（或输入框聚焦触发）时阻塞主线程造成键盘弹起卡顿。
+    /// 注意：预热后保持 `isHidden=true`，不抢占交互、不影响现有窗口层级。
+    func preloadIfNeeded() {
+        guard overlayWindow == nil else { return }
+        createOverlayWindow()
+        overlayWindow?.alpha = 0
+        overlayWindow?.isHidden = true
+        isVisible = false
+        currentState = .hidden
     }
     
     func attach(to scene: UIWindowScene) {
