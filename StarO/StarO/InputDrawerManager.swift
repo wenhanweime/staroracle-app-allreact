@@ -295,6 +295,8 @@ class InputViewController: UIViewController {
     private var pendingSpeechDeactivateTask: Task<Void, Never>?
     private var speechToken: UUID?
     private var speechBaseText: String = ""
+    private var speechLastTranscription: String = ""
+    private var speechAccumulatedTranscription: String = ""
     private var speechTapSignal: SpeechTapSignal?
     
     // 约束
@@ -838,6 +840,8 @@ class InputViewController: UIViewController {
         speechToken = token
 
         speechBaseText = baseText
+        speechLastTranscription = ""
+        speechAccumulatedTranscription = ""
 
         let audioSession = AVAudioSession.sharedInstance()
         try audioSession.setCategory(.playAndRecord, mode: .measurement, options: [.duckOthers, .defaultToSpeaker])
@@ -883,9 +887,30 @@ class InputViewController: UIViewController {
                 guard self.speechToken == token else { return }
 
                 if let result {
-                    let spoken = result.bestTranscription.formattedString
-                    Foundation.NSLog("🎙️ speech result len=\(spoken.count) final=\(result.isFinal)")
-                    let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: spoken)
+                    let current = result.bestTranscription.formattedString
+                    Foundation.NSLog("🎙️ speech result len=\(current.count) final=\(result.isFinal)")
+
+                    // 语音 partial result 可能会“回退/改写”，直接用 formattedString 会导致输入框内容反复刷新。
+                    // 为了更符合“持续累计”的体感，这里采用单调追加策略：只在识别文本增长时追加 delta，回退时忽略。
+                    if self.speechLastTranscription.isEmpty {
+                        self.speechAccumulatedTranscription = current
+                        self.speechLastTranscription = current
+                    } else if current.hasPrefix(self.speechLastTranscription) {
+                        let delta = String(current.dropFirst(self.speechLastTranscription.count))
+                        self.speechAccumulatedTranscription.append(delta)
+                        self.speechLastTranscription = current
+                    } else if self.speechLastTranscription.hasPrefix(current) {
+                        // ignore shrink/revision to keep monotonic accumulation
+                    } else if !current.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                        if !self.speechAccumulatedTranscription.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                           !self.speechAccumulatedTranscription.hasSuffix(" ") {
+                            self.speechAccumulatedTranscription.append(" ")
+                        }
+                        self.speechAccumulatedTranscription.append(current)
+                        self.speechLastTranscription = current
+                    }
+
+                    let merged = self.mergeSpeechText(base: self.speechBaseText, spoken: self.speechAccumulatedTranscription)
                     self.textField.text = merged
                     self.updateSendButtonState()
                     self.manager?.handleTextChange(merged)
@@ -916,8 +941,12 @@ class InputViewController: UIViewController {
 
         // 先让 UI 立即响应（避免用户感觉“按了停不下来”）
         isSpeechRecording = false
-        DispatchQueue.main.async { [weak self] in
-            self?.updateMicButton(isRecording: false)
+        if Thread.isMainThread {
+            updateMicButton(isRecording: false)
+        } else {
+            DispatchQueue.main.async { [weak self] in
+                self?.updateMicButton(isRecording: false)
+            }
         }
 
         if audioEngine.isRunning {
