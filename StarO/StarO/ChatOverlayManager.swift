@@ -2183,10 +2183,12 @@ class MessageTableViewCell: UITableViewCell {
         // AI空文本 -> 显示loading指示器
         let isLoadingAI = (!message.isUser && message.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
         let isStarHint = message.id.hasPrefix("hint-star:")
+        let isInspirationHint = message.id.hasPrefix("hint-inspiration:")
+        let isHint = isStarHint || isInspirationHint
         let trimmedText = message.text.trimmingCharacters(in: .whitespacesAndNewlines)
         let shouldShowRetry = (!message.isUser)
           && !isLoadingAI
-          && !isStarHint
+          && !isHint
           && (
             trimmedText.contains("未能获取星语回应")
             || trimmedText.contains("发送失败")
@@ -2194,8 +2196,8 @@ class MessageTableViewCell: UITableViewCell {
           )
         
         // 星卡提示（非气泡）：灰色文本 + 蓝色“点击查看…”
-        if isStarHint {
-            selectionStyle = .default
+        if isHint {
+            selectionStyle = isStarHint ? .default : .none
             activity.stop()
             activity.isHidden = true
             timeLabel.isHidden = true
@@ -2224,12 +2226,14 @@ class MessageTableViewCell: UITableViewCell {
             let fullText = message.text
             let attributed = NSMutableAttributedString(string: fullText)
             attributed.addAttribute(.foregroundColor, value: UIColor.systemGray, range: NSRange(location: 0, length: attributed.length))
-            let candidates = ["点击查看星卡", "点击查看", "查看星卡"]
-            if let keyword = candidates.first(where: { fullText.contains($0) }) {
-                let ns = fullText as NSString
-                let range = ns.range(of: keyword)
-                if range.location != NSNotFound, range.length > 0 {
-                    attributed.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: range)
+            if isStarHint {
+                let candidates = ["点击查看星卡", "点击查看", "查看星卡"]
+                if let keyword = candidates.first(where: { fullText.contains($0) }) {
+                    let ns = fullText as NSString
+                    let range = ns.range(of: keyword)
+                    if range.location != NSNotFound, range.length > 0 {
+                        attributed.addAttribute(.foregroundColor, value: UIColor.systemBlue, range: range)
+                    }
                 }
             }
             messageLabel.attributedText = attributed

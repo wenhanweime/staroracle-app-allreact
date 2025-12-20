@@ -366,6 +366,38 @@ final class NativeChatBridge: NSObject, ObservableObject {
     }
   }
 
+  func addInspirationHint(chatId: String, cardId: String, text: String) {
+    appendInspirationHint(chatId: chatId, cardId: cardId, text: text)
+  }
+
+  private func appendInspirationHint(chatId: String, cardId: String, text: String) {
+    let trimmedId = cardId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedId.isEmpty else { return }
+    let trimmedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedText.isEmpty else { return }
+
+    let hintId = "hint-inspiration:\(trimmedId)"
+
+    var ids = overlayHintIdsByChatId[chatId] ?? []
+    if ids.contains(hintId) { return }
+    ids.insert(hintId)
+    overlayHintIdsByChatId[chatId] = ids
+
+    let message = OverlayChatMessage(
+      id: hintId,
+      text: trimmedText,
+      isUser: false,
+      timestamp: Date().timeIntervalSince1970 * 1000
+    )
+    var list = overlayHintsByChatId[chatId] ?? []
+    list.append(message)
+    overlayHintsByChatId[chatId] = list
+
+    if chatId == conversationStore.currentSessionId {
+      refreshOverlayMessages()
+    }
+  }
+
   private func startStarsPolling(afterDoneChatId chatId: String) {
     starsPollingTask?.cancel()
     let previous = conversationStore.knownStar(forChatId: chatId)

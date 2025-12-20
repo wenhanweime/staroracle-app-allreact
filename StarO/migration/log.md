@@ -121,3 +121,4 @@
 - Galaxy 防误触：顶部菜单栏及周边区域禁用 Galaxy 点击；未命中星点时不生成灵感卡片（仅命中星点才触发高亮与出卡）（`StarO/StarO/GalaxyBackgroundView.swift`、`StarO/StarO/Galaxy/GalaxyViewModel.swift`）。
 - 键盘弹起卡顿优化：预热 ChatOverlay 窗口（隐藏态提前创建窗口/UITableView），并将“输入框聚焦滚到底”改为非强制（仅接近底部才滚动），减少聚焦瞬间主线程负载（`StarO/StarO/NativeChatBridge.swift`、`StarO/StarO/ChatOverlayManager.swift`）。
 - 交互规则回退：聚焦输入框仍强制滚动到对话最底部（不再条件化），同时保留 ChatOverlay 预热以降低首次聚焦卡顿（`StarO/StarO/NativeChatBridge.swift`）。
+- 灵感卡片→对话：提交灵感卡片后，先写入一条 `role=system` 的 messages 上下文（`【灵感卡片】...`）保证后续对话能读到卡片主内容；同时新增 `hint-inspiration:` 胶囊提示样式在对话内展示卡片内容，避免提问时上下文缺失；写入失败时兜底把上下文拼进首问（标注“非用户事实”）（`StarO/StarO/InspirationCardOverlay.swift`、`StarO/StarO/ChatMessageInsertService.swift`、`StarO/StarO/NativeChatBridge.swift`、`StarO/StarO/ChatOverlayManager.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。

@@ -1,3 +1,4 @@
+import Foundation
 import SwiftUI
 import StarOracleCore
 import StarOracleFeatures
@@ -110,6 +111,9 @@ struct InspirationCardOverlay: View {
     
     private func submit(card: InspirationCard, question: String) {
         let finalQuestion = question.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? card.question : question
+        let (mainText, footerText) = inspirationCardMainAndFooterText(card)
+        let hintText = inspirationHintText(mainText: mainText, footerText: footerText)
+        let systemContext = inspirationSystemContextText(mainText: mainText, footerText: footerText)
         
         // Animate out
         withAnimation(.easeIn(duration: 0.2)) {
@@ -121,13 +125,28 @@ struct InspirationCardOverlay: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
             if SupabaseRuntime.loadConfig() != nil {
                 environment.createSession(title: nil)
-                chatBridge.sendMessage(finalQuestion)
+                let chatId = environment.conversationStore.currentSessionId
+                chatBridge.addInspirationHint(chatId: chatId, cardId: card.id, text: hintText)
                 starStore.dismissInspirationCard(id: card.id)
                 // Reset
                 isFlipped = false
                 isAppearing = false
                 isClosing = false
                 dragOffset = .zero
+
+                Task { @MainActor in
+                    var messageToSend = finalQuestion
+                    do {
+                        try await ChatCreateService.ensureChatExists(chatId: chatId, title: nil)
+                        try await ChatMessageInsertService.insertSystemMessage(chatId: chatId, content: systemContext)
+                    } catch {
+                        if StarOracleDebug.verboseLogsEnabled {
+                            Foundation.NSLog("⚠️ InspirationCardOverlay | 写入灵感卡片上下文失败 err=%@", error.localizedDescription)
+                        }
+                        messageToSend = "\(systemContext)\n\n用户提问：\(finalQuestion)"
+                    }
+                    chatBridge.sendMessage(messageToSend)
+                }
                 return
             }
 
@@ -141,6 +160,51 @@ struct InspirationCardOverlay: View {
                 dragOffset = .zero
             }
         }
+    }
+
+    private func inspirationCardMainAndFooterText(_ card: InspirationCard) -> (String, String?) {
+        let contentTypeTag = card.tags.first(where: { $0.hasPrefix("content_type:") }) ?? ""
+        let isQuote = contentTypeTag == "content_type:quote"
+
+        let rawMain = (isQuote ? card.question : card.reflection).trimmingCharacters(in: .whitespacesAndNewlines)
+        let mainText = rawMain.isEmpty ? "……" : rawMain
+
+        let rawFooter = (isQuote ? card.reflection : card.question).trimmingCharacters(in: .whitespacesAndNewlines)
+        let footerText: String?
+        if rawFooter.isEmpty {
+            footerText = nil
+        } else if isQuote {
+            footerText = rawFooter.hasPrefix("—") ? rawFooter : "— \(rawFooter)"
+        } else {
+            footerText = rawFooter
+        }
+        return (mainText, footerText)
+    }
+
+    private func inspirationHintText(mainText: String, footerText: String?) -> String {
+        let main = mainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let footer = (footerText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var lines: [String] = []
+        if !main.isEmpty {
+            lines.append("灵感卡片：\(main)")
+        }
+        if !footer.isEmpty {
+            lines.append(footer)
+        }
+        return lines.joined(separator: "\n")
+    }
+
+    private func inspirationSystemContextText(mainText: String, footerText: String?) -> String {
+        let main = mainText.trimmingCharacters(in: .whitespacesAndNewlines)
+        let footer = (footerText ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        var lines: [String] = ["【灵感卡片】"]
+        if !main.isEmpty {
+            lines.append(main)
+        }
+        if !footer.isEmpty {
+            lines.append(footer)
+        }
+        return lines.joined(separator: "\n")
     }
 }
 
