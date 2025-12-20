@@ -2027,42 +2027,163 @@ class MessageTableViewCell: UITableViewCell {
         let cacheKey = "\(Int(baseFont.pointSize))|\(text)" as NSString
         if let cached = Self.markdownCache.object(forKey: cacheKey) { return cached }
 
-        do {
-            let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-            let attributed = try NSAttributedString(markdown: text, options: options)
-            let mutable = NSMutableAttributedString(attributedString: attributed)
-            let fullRange = NSRange(location: 0, length: mutable.length)
-            let inlineKey = NSAttributedString.Key("NSInlinePresentationIntent")
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let rendered = renderMarkdownWithCodeBlocksIfNeeded(normalized, baseFont: baseFont)
+        Self.markdownCache.setObject(rendered, forKey: cacheKey)
+        return rendered
+    }
 
-            mutable.enumerateAttribute(inlineKey, in: fullRange, options: []) { value, range, _ in
-                guard let number = value as? NSNumber else { return }
-                let intent = InlinePresentationIntent(rawValue: number.uintValue)
+    @available(iOS 15.0, *)
+    private func renderMarkdownWithCodeBlocksIfNeeded(_ text: String, baseFont: UIFont) -> NSMutableAttributedString {
+        guard text.contains("```") else {
+            return renderInlineMarkdown(normalizeMarkdownForUILabel(text), baseFont: baseFont)
+        }
 
-                if intent.contains(.code) {
-                    let font = UIFont.monospacedSystemFont(ofSize: baseFont.pointSize, weight: .regular)
-                    mutable.addAttribute(.font, value: font, range: range)
-                    mutable.addAttribute(.backgroundColor, value: UIColor.systemGray5.withAlphaComponent(0.35), range: range)
+        let lines = text.replacingOccurrences(of: "\r\n", with: "\n").split(separator: "\n", omittingEmptySubsequences: false)
+        let result = NSMutableAttributedString()
+
+        var isInCode = false
+        var normalBuffer: [String] = []
+        var codeBuffer: [String] = []
+
+        func flushNormal() {
+            guard !normalBuffer.isEmpty else { return }
+            let chunk = normalizeMarkdownForUILabel(normalBuffer.joined(separator: "\n"))
+            result.append(renderInlineMarkdown(chunk, baseFont: baseFont))
+            normalBuffer.removeAll(keepingCapacity: true)
+        }
+
+        func flushCode() {
+            guard !codeBuffer.isEmpty else { return }
+            let code = codeBuffer.joined(separator: "\n")
+            if result.length > 0, !result.string.hasSuffix("\n") {
+                result.append(NSAttributedString(string: "\n"))
+            }
+            result.append(renderCodeBlock(code, baseFont: baseFont))
+            if !result.string.hasSuffix("\n") {
+                result.append(NSAttributedString(string: "\n"))
+            }
+            codeBuffer.removeAll(keepingCapacity: true)
+        }
+
+        for lineSub in lines {
+            let line = String(lineSub)
+            if line.trimmingCharacters(in: .whitespacesAndNewlines).hasPrefix("```") {
+                if isInCode {
+                    flushCode()
+                    isInCode = false
                 } else {
-                    var traits = UIFontDescriptor.SymbolicTraits()
-                    if intent.contains(.stronglyEmphasized) { traits.insert(.traitBold) }
-                    if intent.contains(.emphasized) { traits.insert(.traitItalic) }
-                    if !traits.isEmpty,
-                       let descriptor = baseFont.fontDescriptor.withSymbolicTraits(traits) {
-                        let font = UIFont(descriptor: descriptor, size: baseFont.pointSize)
-                        mutable.addAttribute(.font, value: font, range: range)
-                    }
+                    flushNormal()
+                    isInCode = true
                 }
+                continue
+            }
 
-                if intent.contains(.strikethrough) {
-                    mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            if isInCode {
+                codeBuffer.append(line)
+            } else {
+                normalBuffer.append(line)
+            }
+        }
+
+        if isInCode {
+            flushCode()
+        } else {
+            flushNormal()
+        }
+
+        return result
+    }
+
+    @available(iOS 15.0, *)
+    private func renderInlineMarkdown(_ text: String, baseFont: UIFont) -> NSMutableAttributedString {
+        let options = AttributedString.MarkdownParsingOptions(interpretedSyntax: .inlineOnlyPreservingWhitespace)
+        let attributed = (try? NSAttributedString(markdown: text, options: options)) ?? NSAttributedString(string: text)
+        let mutable = NSMutableAttributedString(attributedString: attributed)
+        let fullRange = NSRange(location: 0, length: mutable.length)
+        let inlineKey = NSAttributedString.Key("NSInlinePresentationIntent")
+
+        mutable.enumerateAttribute(inlineKey, in: fullRange, options: []) { value, range, _ in
+            let intent: InlinePresentationIntent = {
+                if let number = value as? NSNumber {
+                    return InlinePresentationIntent(rawValue: number.uintValue)
+                }
+                if let raw = value as? InlinePresentationIntent {
+                    return raw
+                }
+                if let raw = value as? UInt {
+                    return InlinePresentationIntent(rawValue: raw)
+                }
+                return InlinePresentationIntent(rawValue: 0)
+            }()
+            guard intent.rawValue != 0 else { return }
+
+            if intent.contains(.code) {
+                let font = UIFont.monospacedSystemFont(ofSize: baseFont.pointSize, weight: .regular)
+                mutable.addAttribute(.font, value: font, range: range)
+                mutable.addAttribute(.backgroundColor, value: UIColor.systemGray5.withAlphaComponent(0.35), range: range)
+            } else {
+                var traits = UIFontDescriptor.SymbolicTraits()
+                if intent.contains(.stronglyEmphasized) { traits.insert(.traitBold) }
+                if intent.contains(.emphasized) { traits.insert(.traitItalic) }
+                if !traits.isEmpty,
+                   let descriptor = baseFont.fontDescriptor.withSymbolicTraits(traits) {
+                    let font = UIFont(descriptor: descriptor, size: baseFont.pointSize)
+                    mutable.addAttribute(.font, value: font, range: range)
                 }
             }
 
-            Self.markdownCache.setObject(mutable, forKey: cacheKey)
-            return mutable
-        } catch {
-            return nil
+            if intent.contains(.strikethrough) {
+                mutable.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            }
         }
+
+        return mutable
+    }
+
+    private func renderCodeBlock(_ code: String, baseFont: UIFont) -> NSAttributedString {
+        let normalized = code.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false)
+        let padded = lines.map { "  \($0)" }.joined(separator: "\n")
+
+        let fontSize = max(12, baseFont.pointSize * 0.92)
+        let font = UIFont.monospacedSystemFont(ofSize: fontSize, weight: .regular)
+        let paragraphStyle = NSMutableParagraphStyle()
+        paragraphStyle.lineSpacing = 2
+        paragraphStyle.paragraphSpacing = 6
+        paragraphStyle.paragraphSpacingBefore = 6
+
+        let attributed = NSMutableAttributedString(string: padded)
+        let range = NSRange(location: 0, length: attributed.length)
+        attributed.addAttribute(.font, value: font, range: range)
+        attributed.addAttribute(.paragraphStyle, value: paragraphStyle, range: range)
+        attributed.addAttribute(.backgroundColor, value: UIColor.systemGray5.withAlphaComponent(0.35), range: range)
+        return attributed
+    }
+
+    private func normalizeMarkdownForUILabel(_ text: String) -> String {
+        let normalized = text.replacingOccurrences(of: "\r\n", with: "\n")
+        let lines = normalized.split(separator: "\n", omittingEmptySubsequences: false)
+        let mapped = lines.map { lineSub -> String in
+            let line = String(lineSub)
+            let prefix = line.prefix { $0 == " " || $0 == "\t" }
+            let rest = line.dropFirst(prefix.count)
+
+            if rest.hasPrefix("- [x] ") || rest.hasPrefix("- [X] ") {
+                return "\(prefix)☑︎ \(rest.dropFirst(6))"
+            }
+            if rest.hasPrefix("- [ ] ") {
+                return "\(prefix)☐ \(rest.dropFirst(6))"
+            }
+            if rest.hasPrefix("- ") || rest.hasPrefix("* ") || rest.hasPrefix("+ ") {
+                return "\(prefix)• \(rest.dropFirst(2))"
+            }
+            if rest.hasPrefix("> ") {
+                return "\(prefix)▍ \(rest.dropFirst(2))"
+            }
+            return line
+        }
+        return mapped.joined(separator: "\n")
     }
     
     override init(style: UITableViewCell.CellStyle, reuseIdentifier: String?) {
