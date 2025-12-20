@@ -960,10 +960,15 @@ class InputViewController: UIViewController {
         let primaryName = isRecording ? "stop.fill" : "mic.fill"
         let fallbackName = isRecording ? "stop.circle.fill" : "mic"
         let image = UIImage(systemName: primaryName) ?? UIImage(systemName: fallbackName)
-        if image == nil {
-            Foundation.NSLog("🎙️ updateMicButton missing symbol primary=\(primaryName) fallback=\(fallbackName)")
-        }
+        Foundation.NSLog("🎙️ updateMicButton isRecording=\(isRecording) symbol=\(primaryName)|\(fallbackName) imageNil=\(image == nil)")
+
+        // 兼容：不同 control state 下也保持一致图标，避免某些系统态仍显示旧图标。
+        micButton.isSelected = isRecording
         micButton.setImage(image, for: .normal)
+        micButton.setImage(image, for: .highlighted)
+        micButton.setImage(image, for: .selected)
+        micButton.setImage(image, for: [.selected, .highlighted])
+
         if isRecording {
             let cosmicAccent = UIColor(red: 168/255.0, green: 85/255.0, blue: 247/255.0, alpha: 1.0) // #a855f7
             micButton.backgroundColor = cosmicAccent
@@ -972,6 +977,9 @@ class InputViewController: UIViewController {
             micButton.backgroundColor = .clear
             micButton.tintColor = UIColor(white: 1.0, alpha: 0.6)
         }
+
+        micButton.setNeedsLayout()
+        micButton.layoutIfNeeded()
     }
 
     private func mergeSpeechText(base: String, spoken: String) -> String {

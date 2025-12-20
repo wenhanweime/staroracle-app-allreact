@@ -102,3 +102,4 @@
 - 语音无回调兜底（回退）：曾实现“4s 无回调自动重试/联网回退”，但会在用户静默时误触发且提示易误导；现已移除联网回退与相关 toast，仅保留“请开始说话”提示（`StarO/StarO/InputDrawerManager.swift`）。
 - 语音无输出修复：修复 beginSpeechRecognition 内部先写 `speechToken` 又调用 `stopSpeechRecognitionLocked(force: true)` 导致 token 被清空，使得识别回调/兜底任务的 token 校验永远失败（表现为“开始说话但永远无识别回调日志/无兜底”）；改为 stop 之后再写入 token（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
 - 语音 UI 回归：麦克风按钮录音态显示“停止”图标并以紫色底高亮；toast 仅保留“请开始说话”，避免让用户误以为需要等待联网后才能开始说话（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
+- 语音按钮状态增强：录音态同时设置 `.normal/.highlighted/.selected` 多种 control state 的图标，并显式设置 `isSelected`，避免个别状态仍渲染旧麦克风图标；并强制 `setNeedsLayout/layoutIfNeeded` 触发重绘（`StarO/StarO/InputDrawerManager.swift`）。自测：`xcodebuild -scheme StarO -sdk iphonesimulator build`。
