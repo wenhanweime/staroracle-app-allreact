@@ -619,7 +619,6 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
   private func performUserMemoryRefreshIfLatest(generation: Int) async {
     guard generation == userMemoryRefreshGeneration else { return }
-    guard SupabaseRuntime.loadConfig() != nil else { return }
 
     do {
       let traceId = SupabaseRuntime.makeTraceId()
@@ -637,6 +636,26 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
     if generation == userMemoryRefreshGeneration {
       userMemoryRefreshTask = nil
+    }
+  }
+
+  func checkUserMemoryRefreshAfterRestoreIfNeeded(idleSeconds: TimeInterval = 5 * 60) {
+    guard SupabaseRuntime.loadProjectConfig() != nil else { return }
+    guard userMemoryRefreshTask == nil else { return }
+    guard idleSeconds > 0 else { return }
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+
+    let lastDoneAt = conversationStore.listSessions().compactMap(\.lastSseDoneAt).max()
+    guard let lastDoneAt else { return }
+
+    let idle = Date().timeIntervalSince(lastDoneAt)
+    guard idle >= idleSeconds else { return }
+
+    userMemoryRefreshGeneration += 1
+    let generation = userMemoryRefreshGeneration
+    userMemoryRefreshTask = Task { [weak self] in
+      guard let self else { return }
+      await self.performUserMemoryRefreshIfLatest(generation: generation)
     }
   }
 

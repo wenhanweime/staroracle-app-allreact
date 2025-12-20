@@ -22,6 +22,8 @@ struct AccountView: View {
   @State private var isShowingAIConfig = false
   @State private var errorMessage: String?
   @State private var isVerboseLogsEnabled: Bool = StarOracleDebug.verboseLogsEnabled
+  @State private var isRefreshingLongTermMemory: Bool = false
+  @State private var longTermMemoryRefreshStatus: String?
 
   @State private var draftDisplayName: String = ""
   @State private var draftAvatarEmoji: String = ""
@@ -217,6 +219,29 @@ struct AccountView: View {
         Text("暂无（会在对话后自动生成）")
           .font(.footnote)
           .foregroundStyle(.secondary)
+      }
+
+      if hasSupabaseConfig {
+        HStack {
+          Button {
+            Task { await refreshLongTermMemory() }
+          } label: {
+            if isRefreshingLongTermMemory {
+              ProgressView()
+            } else {
+              Text("立即刷新")
+            }
+          }
+          .disabled(isRefreshingLongTermMemory || isSaving || isLoading)
+          Spacer()
+        }
+
+        if let status = longTermMemoryRefreshStatus?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !status.isEmpty {
+          Text(status)
+            .font(.footnote)
+            .foregroundStyle(status.hasPrefix("刷新失败") ? .red : .secondary)
+        }
       }
     }
   }
@@ -419,6 +444,25 @@ struct AccountView: View {
     } catch {
       stats = nil
       errorMessage = error.localizedDescription
+    }
+  }
+
+  private func refreshLongTermMemory() async {
+    guard hasSupabaseConfig else { return }
+    guard !isRefreshingLongTermMemory else { return }
+    isRefreshingLongTermMemory = true
+    defer { isRefreshingLongTermMemory = false }
+
+    do {
+      let result = try await UserMemoryRefreshService.refresh(force: true)
+      let updated = String(result.updated ?? false)
+      let reason = result.reason ?? "nil"
+      let processed = result.processedMessages.map(String.init) ?? "nil"
+      let tokens = result.approxTokens.map(String.init) ?? "nil"
+      longTermMemoryRefreshStatus = "刷新完成：updated=\(updated) reason=\(reason) processed=\(processed) tokens=\(tokens)"
+      await reload()
+    } catch {
+      longTermMemoryRefreshStatus = "刷新失败：\(error.localizedDescription)"
     }
   }
 }

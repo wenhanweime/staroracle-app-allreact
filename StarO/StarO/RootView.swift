@@ -144,7 +144,9 @@ struct RootView: View {
       }
       .task(id: authService.hasRestoredSession) {
         guard authService.hasRestoredSession else { return }
+        environment.bootstrapConversationIfNeeded()
         await environment.syncSupabaseStarsIfNeeded()
+        chatBridge.checkUserMemoryRefreshAfterRestoreIfNeeded()
       }
       .onChange(of: activePane) { _, newValue in
         DispatchQueue.main.async {
