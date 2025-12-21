@@ -143,3 +143,4 @@
 ## 2025-12-22
 
 - 头像闪烁修复：用户已设置“头像照片”时，拉出左侧菜单/进入个人主页不再短暂显示 fallback 字母头像；新增 `AvatarDiskCache`（上传成功后立刻落盘，profile 刷新后后台预取并按 `avatar_url` 变更自动失效），UI 渲染优先读本地头像；远端加载阶段占位改为图标/渐变，不再显示字母（`StarO/StarO/AvatarUploadService.swift`、`StarO/StarO/AccountView.swift`、`StarO/StarO/AuthService.swift`、`StarO/StarO/DrawerMenuView.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。
+- ChatOverlay 崩溃修复：修复“语音转文字发送后偶发崩溃”——`UITableView Invalid batch updates detected`（row count 84→83，Updates 为空）；移除仅用于动态高度刷新的 `beginUpdates/endUpdates`，改为 `safeRelayoutRowHeight`（`reloadRows` + 行数一致性校验 + 120ms 节流 + 不一致时兜底 `reloadData`），并让 `OverlayViewController.updateMessages` 保证在主线程同步执行，减少消息刷新与回放/流式更新交错（`StarO/StarO/ChatOverlayManager.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。

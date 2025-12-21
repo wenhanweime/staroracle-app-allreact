@@ -257,3 +257,42 @@
 【任务拆解】
 - [x] 定位原因：头像照片为远端 URL 时，菜单/个人主页在 AsyncImage 加载阶段会先渲染“fallback 字母头像”，导致短暂闪烁（已完成 2025-12-22 02:51）
 - [x] 修复：端侧增加头像照片本地缓存（上传后立刻落盘；profile 刷新后后台预取），UI 优先读本地头像；远端加载占位不再显示字母（已完成 2025-12-22 02:51）
+
+# 50（已读 2025-12-22 03:26）
+【用户输入原文】
+> 刚我输入了语音 发送之后 出现了问题 看下日志帮我解决问题 🎙️ speech result len=98 final=false
+> Received external candidate resultset. Total number of candidates: 9
+> containerToPush is nil, will not push anything to candidate receiver for request token: 7A0C4133
+> 🎙️ speech result len=99 final=false
+> Received external candidate resultset. Total number of candidates: 9
+> containerToPush is nil, will not push anything to candidate receiver for request token: FC13C1FD
+> 🎙️ speech result len=102 final=false
+> Received external candidate resultset. Total number of candidates: 9
+> containerToPush is nil, will not push anything to candidate receiver for request token: 43BF4E65
+> 🎙️ speech result len=102 final=false
+> 🎙️ speech result len=103 final=false
+> Received external candidate resultset. Total number of candidates: 9
+> containerToPush is nil, will not push anything to candidate receiver for request token: FC548B15
+> 🎙️ speech result len=104 final=false
+> Received external candidate resultset. Total number of candidates: 9
+> containerToPush is nil, will not push anything to candidate receiver for request token: B774F56F
+> 🎙️ speech result len=105 final=false
+> Received external candidate resultset. Total number of candidates: 9
+> containerToPush is nil, will not push anything to candidate receiver for request token: 4EAF3D92
+> 🎙️ updateMicButton isRecording=false symbol=mic.fill|mic imageNil=false
+> Received external candidate resultset. Total number of candidates: 16
+> containerToPush is nil, will not push anything to candidate receiver for request token: 2AFE71D3
+> *** Assertion failure in -[UITableView _Bug_Detected_In_Client_Of_UITableView_Invalid_Batch_Updates:], UITableView.m:2614
+> *** Terminating app due to uncaught exception 'NSInternalInconsistencyException', reason: 'Invalid batch updates detected: the number of sections and/or rows returned by the data source before and after performing the batch updates are inconsistent with the updates.
+> Data source before updates = { 1 section with row counts: [84] }
+> Data source after updates = { 1 section with row counts: [83] }
+> Updates = [
+> 
+> ]
+> Table view: <UITableView: 0x11e4e8000; frame = (0 96; 430 776); clipsToBounds = YES; gestureRecognizers = <NSArray: 0x11e54def0>; backgroundColor = UIExtendedGrayColorSpace 0 0; layer = <CALayer: 0x11f335740>; contentOffset: {0, 6071.333333333333}; contentSize: {430, 6366.3333333333348}; adjustedContentInset: {0, 0, 481, 0}; dataSource: <StarO.OverlayViewController: 0x107b79800>>'
+> *** First throw call stack:
+> (0x19e0f1964 0x19afd1814 0x19bf94d78 0x1a509becc 0x1a509b198 0x1a50acf10 0x102995ff0 0x102996024 0x102996048 0x1a53ebb1c 0x102994cf8 0x1027dd9d0 0x1010fc63c 0x1011162e0 0x1011374b4 0x10110c778 0x10110c6b4 0x19e0962b4 0x19e049b3c 0x19e048a6c 0x240e7c498 0x1a3af370c 0x1a3a9bf6c 0x1a6db1d20 0x1a6dae8d4 0x1a6dae3c0 0x102bb4690 0x102bb484c 0x19b026e28)
+> libc++abi: terminating due to uncaught exception of type NSException
+
+【任务拆解】
+- [x] 修复：ChatOverlay 语音发送触发 `Invalid batch updates` 崩溃（移除 `beginUpdates/endUpdates`，改为 `safeRelayoutRowHeight` 节流+一致性校验+兜底 `reloadData`；并收敛 `updateMessages` 主线程同步执行）（`StarO/StarO/ChatOverlayManager.swift`）（已完成 2025-12-22 03:26）
