@@ -160,3 +160,9 @@
 > 我发现 supabase配置的好像不是原始的文字,而是一串看不懂的数码
 
 - [x] 说明：Supabase URL/Key/JWT 本身就是 token（常见为 JWT），看起来像“乱码”是正常的；Dashboard/CLI 的 secrets 也可能出于安全只显示遮罩，无法回读，只能覆盖重设（已完成 2025-12-21 16:22）
+
+# 37（已读 2025-12-21 16:35）
+【用户输入原文】
+> 我需要把模型更换为gpt-4.1-mini 帮我替换
+
+- [x] 已将远端 Supabase Edge Functions secrets 的 `MODEL_ID` 设为 `gpt-4.1-mini`（`SUMMARY_MODEL_ID` 仍为空字符串，按后端逻辑自动回退为 `MODEL_ID`）（已完成 2025-12-21 16:35）
