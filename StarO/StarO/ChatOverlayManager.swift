@@ -1135,6 +1135,7 @@ class OverlayViewController: UIViewController, InputOverlayAvoidingLayout {
         starIcon.tintColor = UIColor(red: 138/255.0, green: 95/255.0, blue: 189/255.0, alpha: 1.0) // #8A5FBD
         starIcon.translatesAutoresizingMaskIntoConstraints = false
         starIcon.isUserInteractionEnabled = false
+        starIcon.start()
         headerView.addSubview(starIcon)
         
         let closeButton = UIButton(type: .system)
@@ -1995,7 +1996,7 @@ class MessageTableViewCell: UITableViewCell {
     private let messageContainerView = UIView()
     private let messageLabel = UILabel()
     private let timeLabel = UILabel()
-    private let activity = StarRayActivityView()
+    private let activity = StarRayPulseView()
     private let retryButton = UIButton(type: .system)
 
     private static let markdownCache: NSCache<NSString, NSAttributedString> = {
@@ -2231,8 +2232,11 @@ class MessageTableViewCell: UITableViewCell {
         timeLabel.translatesAutoresizingMaskIntoConstraints = false
         contentView.addSubview(timeLabel)
         
-        // 自定义加载指示器（八芒星旋转）
+        // 自定义加载指示器（八芒星闪烁，与 ChatOverlay 顶部一致）
         activity.translatesAutoresizingMaskIntoConstraints = false
+        activity.isHidden = true
+        activity.isUserInteractionEnabled = false
+        activity.tintColor = UIColor(red: 138/255.0, green: 95/255.0, blue: 189/255.0, alpha: 1.0) // #8A5FBD
         messageContainerView.addSubview(activity)
 
         // 重试按钮
@@ -2388,7 +2392,6 @@ class MessageTableViewCell: UITableViewCell {
         if isLoadingAI {
             // 仅显示Star加载，不显示橄榄球样式的气泡/时间
             activity.isHidden = false
-            activity.tintColor = UIColor.systemPurple
             activity.start()
             timeLabel.isHidden = true
             messageContainerView.backgroundColor = .clear
@@ -2603,11 +2606,7 @@ final class StarRayPulseView: UIView {
 
     override func didMoveToWindow() {
         super.didMoveToWindow()
-        if window != nil {
-            start()
-        } else {
-            stop()
-        }
+        if window == nil { stop() }
     }
 
     func start() {
