@@ -239,5 +239,5 @@
 > 个人主页的头像设置,请增加选择相册照片的功能
 
 【任务拆解】
-- [ ] 后端：profiles 增加 `avatar_url` 字段；创建 `avatars` Storage bucket + RLS policy（仅允许用户上传/更新自己目录下的头像）；`get-profile/update-profile` 返回/写入该字段；更新契约文档
-- [ ] 前端：个人主页增加 PhotosPicker 选图与预览；上传至 Supabase Storage 并把 `avatar_url` 写回 `update-profile`；头像展示优先级：照片 > emoji > fallback；并同步左侧菜单与本地缓存
+- [x] 后端：profiles 增加 `avatar_url` 字段；创建 `avatars` Storage bucket + RLS policy（仅允许用户上传/更新自己目录下的头像）；`get-profile/update-profile` 返回/写入该字段；更新契约文档（已完成 2025-12-21 21:58）
+- [x] 前端：个人主页增加 PhotosPicker 选图与预览；上传至 Supabase Storage 并把 `avatar_url` 写回 `update-profile`；头像展示优先级：照片 > emoji > fallback；并同步左侧菜单与本地缓存（已完成 2025-12-21 21:58）
