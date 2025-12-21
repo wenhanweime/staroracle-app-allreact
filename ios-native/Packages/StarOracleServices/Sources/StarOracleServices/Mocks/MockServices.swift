@@ -63,13 +63,63 @@ public final class MockAIService: AIServiceProtocol {
     from messages: [ChatMessage],
     configuration: AIConfiguration
   ) async throws -> String {
-    if let first = messages.first(where: { $0.isUser }) {
-      return "关于\(String(first.text.prefix(4)))的对话"
+    guard let first = messages.first(where: { $0.isUser && !$0.text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }) else {
+      return "新对话"
     }
-    return "新对话"
+    let title = makeHeuristicTitle(from: first.text)
+    return title.isEmpty ? "新对话" : title
   }
 
   public func validate(configuration: AIConfiguration) async throws {}
+}
+
+private extension MockAIService {
+  func makeHeuristicTitle(from raw: String) -> String {
+    var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !text.isEmpty else { return "" }
+
+    text = text.replacingOccurrences(of: "\n", with: " ")
+    text = text.replacingOccurrences(of: "\r", with: " ")
+    if text.hasPrefix("【灵感卡片】") {
+      text = String(text.dropFirst("【灵感卡片】".count))
+    }
+
+    // 取第一句（避免把整段长文本塞进标题）
+    let sentenceSeparators = CharacterSet(charactersIn: "。！？?!；;\n\r")
+    if let firstSentence = text
+      .components(separatedBy: sentenceSeparators)
+      .map({ $0.trimmingCharacters(in: .whitespacesAndNewlines) })
+      .first(where: { !$0.isEmpty }) {
+      text = firstSentence
+    }
+
+    // 去掉常见开头口头禅/请求词，让标题更像“短语”
+    let prefixes = [
+      "请问", "帮我", "麻烦", "能不能", "可不可以", "我想问", "我想", "我觉得", "我现在", "你好", "嗨"
+    ]
+    for p in prefixes where text.hasPrefix(p) {
+      text = String(text.dropFirst(p.count)).trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // 去掉模板词（避免“关于…的对话/讨论/聊天”）
+    let banned = ["关于", "对话", "聊天", "讨论", "咨询", "提问", "交流"]
+    for token in banned {
+      text = text.replacingOccurrences(of: token, with: "")
+    }
+
+    // 去掉引号与常见标点
+    let stripped = text.unicodeScalars.filter { scalar in
+      let bannedScalars = CharacterSet(charactersIn: "\"“”‘’《》【】[]（）()，,。.！？?!:：;；—-·•")
+      return !bannedScalars.contains(scalar)
+    }
+    text = String(String.UnicodeScalarView(stripped))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    // 收敛长度
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmed.isEmpty { return "" }
+    return String(trimmed.prefix(12))
+  }
 }
 
 public final class MockInspirationService: InspirationServiceProtocol {

@@ -318,11 +318,14 @@ final class LiveAIService: AIServiceProtocol {
       .joined(separator: "\n")
 
     let prompt = """
-你是一个对话标题生成器。请根据下面的对话内容，生成一个简短的中文标题：
-- 不超过 12 个字
-- 不要包含引号
-- 不要换行
-- 只输出标题文本
+你是产品编辑，需要为聊天会话起一个“好理解、可扫读”的中文标题。
+
+硬性规则：
+- 只输出标题文本，不要解释
+- 4-12 个汉字（宁短不长）
+- 不要使用模板句：不要出现「关于」「对话」「聊天」「讨论」「提问」「咨询」等字样
+- 不要包含引号、不要包含标点、不要换行
+- 避免人名/邮箱/手机号/金额等敏感细节；尽量避免具体数字
 
 对话内容：
 \(transcript)
@@ -351,13 +354,14 @@ final class LiveAIService: AIServiceProtocol {
          let choices = json["choices"] as? [[String: Any]],
          let message = choices.first?["message"] as? [String: Any],
          let content = message["content"] as? String {
-        let cleaned = content
+       let cleaned = content
           .replacingOccurrences(of: "\n", with: " ")
           .trimmingCharacters(in: .whitespacesAndNewlines)
           .trimmingCharacters(in: CharacterSet(charactersIn: "\"“”‘’《》"))
           .trimmingCharacters(in: .whitespacesAndNewlines)
-        if !cleaned.isEmpty {
-          return String(cleaned.prefix(12))
+        let normalized = Self.normalizeConversationTitle(cleaned)
+        if !normalized.isEmpty {
+          return normalized
         }
       }
 
@@ -474,5 +478,48 @@ final class LiveAIService: AIServiceProtocol {
         return "请求失败 (\(status))：\(body)"
       }
     }
+  }
+}
+
+private extension LiveAIService {
+  static func normalizeConversationTitle(_ raw: String) -> String {
+    var title = raw
+      .replacingOccurrences(of: "\n", with: " ")
+      .replacingOccurrences(of: "\r", with: " ")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+      .trimmingCharacters(in: CharacterSet(charactersIn: "\"“”‘’《》"))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if let colon = title.lastIndex(of: "：") {
+      title = String(title[title.index(after: colon)...])
+    } else if let colon = title.lastIndex(of: ":") {
+      title = String(title[title.index(after: colon)...])
+    }
+    title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if title.hasPrefix("关于") {
+      title = String(title.dropFirst("关于".count))
+    }
+
+    let suffixes = ["的对话", "的聊天", "的讨论", "对话", "聊天", "讨论", "咨询", "提问"]
+    for suffix in suffixes where title.hasSuffix(suffix) {
+      title = String(title.dropLast(suffix.count))
+    }
+
+    let bannedScalars = CharacterSet(charactersIn: "\"“”‘’《》【】[]（）()，,。.！？?!:：;；—-·•")
+    let scalars = title.unicodeScalars.filter { !bannedScalars.contains($0) }
+    title = String(String.UnicodeScalarView(scalars))
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if title.isEmpty { return "" }
+
+    let bannedTokens = ["关于", "对话", "聊天", "讨论", "提问", "咨询"]
+    for token in bannedTokens {
+      title = title.replacingOccurrences(of: token, with: "")
+    }
+    title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    if title.isEmpty { return "" }
+
+    return String(title.prefix(12))
   }
 }
