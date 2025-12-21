@@ -108,7 +108,9 @@ struct DrawerMenuView: View {
       }
     }
     .task {
-      await refreshServerChats()
+      async let chatsTask: Void = refreshServerChats()
+      async let profileTask: Void = authService.refreshProfileIfNeeded(force: false)
+      _ = await (chatsTask, profileTask)
     }
   }
 
@@ -315,9 +317,7 @@ struct DrawerMenuView: View {
   }
 
   private var accountTitle: String {
-    let email = (authService.userEmail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    let prefix = (email.split(separator: "@").first.map(String.init) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    return prefix.isEmpty ? "个人主页" : prefix
+    authService.resolvedDisplayName
   }
 
   private var accountSubtitle: String {
@@ -325,9 +325,7 @@ struct DrawerMenuView: View {
   }
 
   private var accountAvatarText: String {
-    let value = accountTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let first = value.first { return String(first).uppercased() }
-    return "?"
+    authService.resolvedAvatarEmoji ?? authService.resolvedAvatarFallback
   }
 
 }

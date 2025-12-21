@@ -193,6 +193,7 @@
 > 现在的3条候选,跟灵感星卡的内容是两套ui ,你是不是理解错了,3条候选也应该是以灵感星卡的形态呈现,而不是由单独的样式呈现,帮我把3条候选合并到灵感星卡中,变成灵感库
 
 - [x] 交互调整：3 条候选不再用独立面板展示，改为与灵感星卡同款翻转卡片呈现并组成“灵感库”（已完成 2025-12-21 18:44）
+  - 备注：该实现随后按 #42 用户反馈回退为“单卡交互 + 候选仅作为卡片内容来源”（以最新规则为准）
 
 # 42（已读 2025-12-21 19:05）
 【用户输入原文】
@@ -200,3 +201,35 @@
 
 - [x] 交互回退：取消左右滑动切换，保持“点击 Galaxy 弹出单张灵感星卡”，候选仅作为该卡内容来源（已完成 2025-12-21 18:32）
 - [x] 候选收敛：生成风格更抽象/形而上，且 `content<=50字`（服务端约束 + 端侧二次截断兜底）（已完成 2025-12-21 18:32）
+
+# 43（已读 2025-12-21 20:00）
+【用户输入原文】
+> 刚刚的修改完全错了. 我们需要的只是关闭在灵感卡片界面左右切换灵感卡片候选,其他的左右滑动手势不要删掉.同时把左右滑动的候选灵感卡片变成下一张,下下一张灵感卡,即加入到灵感卡的候选池,而不是单次点击可以查看多张.
+
+- [x] Root 左右滑动手势恢复：保留“左右滑打开菜单/星卡集”的原交互，不再全局移除（`StarO/StarO/RootView.swift`）（已完成 2025-12-21 20:00）
+- [x] 灵感卡片界面禁用左右滑切换：灵感卡弹出时阻断 Root 拖拽切 pane（避免被误认为“左右切换候选灵感卡”），仅保留单卡交互与关闭手势（`StarO/StarO/RootView.swift`、`StarO/StarO/InspirationCardOverlay.swift`）（已完成 2025-12-21 20:00）
+- [x] 候选池语义确认：候选不在单次弹卡内“多张浏览”，而是作为下一张/下下一张的预取池来源（每次点击只消耗 1 条，后台补齐）（`StarO/StarO/PersonalizedInspirationPrefetcher.swift`、`StarO/StarO/GalaxyBackgroundView.swift`）（已完成 2025-12-21 20:00）
+
+# 44（已读 2025-12-21 20:08）
+【用户输入原文】
+> 现在弹出灵感卡之后左右滑动的交互失效了,不能通过左右滑动取消星卡
+
+- [x] 灵感卡左右滑关闭恢复：灵感卡弹出时支持左右滑/上滑甩掉关闭；并用 `highPriorityGesture` 确保不被 Root 的 DragGesture 抢手势（`StarO/StarO/InspirationCardOverlay.swift`）（已完成 2025-12-21 20:08）
+
+# 45（已读 2025-12-21 20:44）
+【用户输入原文】
+> 现在左侧菜单panel 展示的用户名称和头像,跟个人主页的用户名称和头像是不一致的,我们需要修改一下,确保在左侧菜单页面就展示正确的版本,而不是一直有滞后,帮我分析为什么造成这个原因个
+
+- [x] 原因定位：`DrawerMenuView` 仅用 `authService.userEmail` 推导昵称与头像首字母；而个人主页来自 `get-profile` 的 `display_name/avatar_emoji`，且保存后只更新了 `AccountView` 的局部状态，未同步共享状态，导致左侧菜单长期显示旧值/推导值（已完成 2025-12-21 20:44）
+- [x] 修复：在 `AuthService` 增加 `profileDisplayName/profileAvatarEmoji` 与本地缓存（UserDefaults），并提供 `refreshProfileIfNeeded/applyProfile`；`DrawerMenuView` 改为复用 `AuthService.resolvedDisplayName/Avatar` 并在打开菜单时刷新；个人主页保存/刷新后同步写回 `AuthService`，确保菜单即时一致（`StarO/StarO/AuthService.swift`、`StarO/StarO/DrawerMenuView.swift`、`StarO/StarO/AccountView.swift`）（已完成 2025-12-21 20:44）
+
+# 46（已读 2025-12-21 21:13）
+【用户输入原文】
+> 1. 左侧菜单panel 个人主页的用户名称和信息，再打开个人主页之后，依然需要刷新一下才能出来，这是不是跟远端拉取数据有关？这个信息肯定要本地存，然后异步校验，别都是打开之后再拉取，让用户感觉很有延迟，个人主页的其他信息也有这个现象，都需要修复
+> 2. 个人主页里的ai配置似乎跟云端的ai配置不是同样的模型 ，以哪个为准，为什么不是同步的？我想设置成用户可以更改的模式，用户可以通过点击模型id选项，修改模型
+> 3. 个人主页的用户名和信息点击编辑无法编辑，这个需要修复，支持编辑，同时用户的名称等信息也需要在云端存储
+
+【任务拆解】
+- [x] 个人主页信息本地缓存+异步校验：新增 `ProfileSnapshotStore` 缓存 `get-profile` 的 user/profile/stats，AccountView 打开先读缓存即时渲染，再异步 `get-profile` 刷新并回写缓存；AuthService 侧也会在 profile 刷新时回写快照（`StarO/StarO/ProfileSnapshotStore.swift`、`StarO/StarO/AccountView.swift`、`StarO/StarO/AuthService.swift`）（已完成 2025-12-21 21:13）
+- [x] 云端模型可配置：后端新增 `profiles.preferred_model_id`（迁移已执行），`chat-send` 上游模型优先使用该字段；个人主页新增“云端模型”编辑入口并调用 `update-profile` 写入云端（`StarO/StarO/AccountView.swift`、`StarO/StarO/ProfileService.swift`；后端 `staroracle-backend/supabase/migrations/20251221220000_profile_preferred_model_id.sql`、`staroracle-backend/supabase/functions/chat-send/index.ts`、`staroracle-backend/supabase/functions/update-profile/index.ts`、`staroracle-backend/supabase/functions/get-profile/index.ts`）（已完成 2025-12-21 21:13）
+- [x] 编辑资料可用：将“编辑资料”区移动到个人主页顶部紧邻头像信息，避免点击“编辑”后需要滚动才能看到（`StarO/StarO/AccountView.swift`）；昵称/头像仍通过 `update-profile` 落库到云端（已完成 2025-12-21 21:13）

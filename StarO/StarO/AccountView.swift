@@ -20,29 +20,32 @@ struct AccountView: View {
   @State private var isEditing = false
   @State private var isSaving = false
   @State private var isShowingAIConfig = false
+  @State private var isShowingCloudModelEditor = false
   @State private var errorMessage: String?
   @State private var isVerboseLogsEnabled: Bool = StarOracleDebug.verboseLogsEnabled
   @State private var isRefreshingLongTermMemory: Bool = false
   @State private var longTermMemoryRefreshStatus: String?
+  @State private var lastRemoteReloadAt: Date?
 
   @State private var draftDisplayName: String = ""
   @State private var draftAvatarEmoji: String = ""
+  @State private var draftPreferredModelId: String = ""
 
   private let avatarOptions: [String] = ["🪐", "🌙", "⭐️", "🌟", "✨", "☄️", "🌌", "🛰️", "🚀", "🔭", "🧿", "🌑"]
+  private let modelOptions: [String] = ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
 
   var body: some View {
     NavigationStack {
       Form {
         profileHeaderSection
+        if isEditing {
+          editSection
+        }
         statsSection
         accountInfoSection
         settingsSection
         debugSection
         longTermMemorySection
-
-        if isEditing {
-          editSection
-        }
 
         actionsSection
 
@@ -72,13 +75,17 @@ struct AccountView: View {
           .disabled(isLoading || isSaving)
         }
       }
-      .task {
-        await reload()
+      .onAppear {
+        hydrateFromCacheIfPossible()
+        Task { await reload(force: false) }
       }
     }
     .sheet(isPresented: $isShowingAIConfig) {
       AIConfigSheet()
         .environmentObject(environment)
+    }
+    .sheet(isPresented: $isShowingCloudModelEditor) {
+      cloudModelEditorSheet
     }
   }
 
@@ -184,12 +191,100 @@ struct AccountView: View {
 
   private var settingsSection: some View {
     Section("设置") {
+      if hasSupabaseConfig {
+        Button {
+          beginEditCloudModel()
+        } label: {
+          HStack {
+            Text("云端模型")
+            Spacer()
+            Text(resolvedPreferredModelDisplayText)
+              .foregroundStyle(.secondary)
+              .lineLimit(1)
+              .truncationMode(.middle)
+            Image(systemName: "chevron.right")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+        }
+        .disabled(isSaving || isLoading)
+
+        Text("云端对话会优先使用该模型；留空表示使用云端默认。")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+
       Button {
         isShowingAIConfig = true
       } label: {
-        Text("AI 配置")
+        Text(hasSupabaseConfig ? "本地 AI 配置（兜底）" : "AI 配置")
       }
       .disabled(isSaving || isLoading)
+
+      if hasSupabaseConfig {
+        Text("本地 AI 配置仅在未启用云端会话时生效。")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+      }
+    }
+  }
+
+  private var cloudModelEditorSheet: some View {
+    NavigationStack {
+      Form {
+        Section("云端模型 ID") {
+          TextField("留空=默认", text: $draftPreferredModelId)
+            .textInputAutocapitalization(.never)
+            .autocorrectionDisabled()
+
+          VStack(alignment: .leading, spacing: 10) {
+            Text("快速选择")
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 2), spacing: 10) {
+              ForEach(modelOptions, id: \.self) { model in
+                Button {
+                  draftPreferredModelId = model
+                } label: {
+                  Text(model)
+                    .font(.footnote.weight(.medium))
+                    .frame(maxWidth: .infinity, minHeight: 36)
+                    .background(
+                      RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        .fill(draftPreferredModelId == model ? Color.accentColor.opacity(0.18) : Color.clear)
+                    )
+                }
+                .buttonStyle(.plain)
+              }
+            }
+          }
+          .padding(.vertical, 6)
+
+          Button(role: .destructive) {
+            draftPreferredModelId = ""
+          } label: {
+            Text("恢复默认（清空）")
+          }
+        }
+      }
+      .navigationTitle("云端模型")
+      .toolbar {
+        ToolbarItem(placement: .cancellationAction) {
+          Button("取消") { isShowingCloudModelEditor = false }
+        }
+        ToolbarItem(placement: .confirmationAction) {
+          Button {
+            Task { await saveCloudModel() }
+          } label: {
+            if isSaving {
+              ProgressView()
+            } else {
+              Text("保存")
+            }
+          }
+          .disabled(isSaving)
+        }
+      }
     }
   }
 
@@ -304,8 +399,7 @@ struct AccountView: View {
   private var resolvedDisplayName: String {
     let backendName = profile?.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     if !backendName.isEmpty { return backendName }
-    let emailPrefix = (resolvedEmail.split(separator: "@").first.map(String.init) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-    return emailPrefix.isEmpty ? "未设置昵称" : emailPrefix
+    return authService.resolvedDisplayName
   }
 
   private var resolvedEmail: String {
@@ -352,6 +446,15 @@ struct AccountView: View {
     return raw
   }
 
+  private var resolvedPreferredModelId: String {
+    (profile?.preferredModelId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+
+  private var resolvedPreferredModelDisplayText: String {
+    let raw = resolvedPreferredModelId
+    return raw.isEmpty ? "默认（云端）" : raw
+  }
+
   private var resolvedLongTermMemoryPrompt: String? {
     let raw = profile?.longTermMemoryPrompt?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     return raw.isEmpty ? nil : raw
@@ -377,16 +480,12 @@ struct AccountView: View {
 
   private var resolvedAvatarEmoji: String? {
     let raw = profile?.avatarEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-    return raw.isEmpty ? nil : raw
+    if !raw.isEmpty { return raw }
+    return authService.resolvedAvatarEmoji
   }
 
   private var resolvedAvatarFallback: String {
-    let base = resolvedDisplayName
-    let trimmed = base.trimmingCharacters(in: .whitespacesAndNewlines)
-    if let first = trimmed.first {
-      return String(first).uppercased()
-    }
-    return "?"
+    authService.resolvedAvatarFallback
   }
 
   private func parseISODate(_ raw: String) -> Date? {
@@ -406,9 +505,37 @@ struct AccountView: View {
     errorMessage = nil
   }
 
+  private func beginEditCloudModel() {
+    draftPreferredModelId = resolvedPreferredModelId
+    isShowingCloudModelEditor = true
+    errorMessage = nil
+  }
+
   private func cancelEdit() {
     isEditing = false
     errorMessage = nil
+  }
+
+  private func saveCloudModel() async {
+    guard hasSupabaseConfig else { return }
+    guard !isSaving else { return }
+    isSaving = true
+    defer { isSaving = false }
+    errorMessage = nil
+
+    do {
+      let result = try await ProfileService.updateProfile(
+        displayName: nil,
+        avatarEmoji: nil,
+        preferredModelId: draftPreferredModelId.trimmingCharacters(in: .whitespacesAndNewlines)
+      )
+      user = result.user
+      profile = result.profile
+      persistProfileSnapshot()
+      isShowingCloudModelEditor = false
+    } catch {
+      errorMessage = error.localizedDescription
+    }
   }
 
   private func saveEdit() async {
@@ -424,14 +551,21 @@ struct AccountView: View {
       )
       user = result.user
       profile = result.profile
+      authService.applyProfile(displayName: result.profile.displayName, avatarEmoji: result.profile.avatarEmoji)
+      persistProfileSnapshot()
       isEditing = false
     } catch {
       errorMessage = error.localizedDescription
     }
   }
 
-  private func reload() async {
+  private func reload(force: Bool) async {
     guard !isLoading else { return }
+    if !force,
+       let last = lastRemoteReloadAt,
+       Date().timeIntervalSince(last) < 60 {
+      return
+    }
     isLoading = true
     defer { isLoading = false }
     errorMessage = nil
@@ -441,10 +575,40 @@ struct AccountView: View {
       user = result.user
       profile = result.profile
       stats = result.stats
+      authService.applyProfile(displayName: result.profile.displayName, avatarEmoji: result.profile.avatarEmoji)
+      persistProfileSnapshot()
+      lastRemoteReloadAt = Date()
     } catch {
       stats = nil
       errorMessage = error.localizedDescription
     }
+  }
+
+  private func reload() async {
+    await reload(force: true)
+  }
+
+  private func hydrateFromCacheIfPossible() {
+    let currentUserId = authService.userId ?? AuthSessionStore.load()?.userId
+    let currentEmail = authService.userEmail ?? AuthSessionStore.load()?.email
+    if user != nil && profile != nil { return }
+    guard let snapshot = ProfileSnapshotStore.load(userId: currentUserId, email: currentEmail) else { return }
+    user = snapshot.user
+    profile = snapshot.profile
+    stats = snapshot.stats
+  }
+
+  private func persistProfileSnapshot() {
+    guard let user, let profile else { return }
+    let currentUserId = authService.userId ?? AuthSessionStore.load()?.userId
+    let currentEmail = authService.userEmail ?? AuthSessionStore.load()?.email
+    ProfileSnapshotStore.save(
+      user: user,
+      profile: profile,
+      stats: stats,
+      userId: currentUserId,
+      email: currentEmail
+    )
   }
 
   private func refreshLongTermMemory() async {

@@ -31,6 +31,7 @@ final class AuthService: ObservableObject {
 
   @Published private(set) var isAuthenticated: Bool = false
   @Published private(set) var hasRestoredSession: Bool = false
+  @Published private(set) var userId: String?
   @Published private(set) var userEmail: String?
   @Published private(set) var isLoading: Bool = false
   @Published var errorMessage: String?
@@ -39,6 +40,19 @@ final class AuthService: ObservableObject {
   @Published private(set) var energyRemaining: Int?
 
   private var didRestore = false
+  private var profileRefreshTask: Task<Void, Never>?
+
+  @Published private(set) var profileDisplayName: String?
+  @Published private(set) var profileAvatarEmoji: String?
+  @Published private(set) var profileLoadedAt: Date?
+
+  private struct CachedProfile: Codable {
+    let displayName: String?
+    let avatarEmoji: String?
+    let updatedAt: Date
+  }
+
+  private static let profileCachePrefix = "staro.profile.v1."
 
   func restoreSessionIfNeeded() async {
     guard !didRestore else { return }
@@ -50,13 +64,18 @@ final class AuthService: ObservableObject {
   func restoreSession() async {
     guard let session = AuthSessionStore.load() else {
       isAuthenticated = false
+      userId = nil
       userEmail = nil
+      profileDisplayName = nil
+      profileAvatarEmoji = nil
+      profileLoadedAt = nil
       return
     }
 
     if session.expiresAt.timeIntervalSinceNow > 30 {
       applySession(session)
       await refreshEnergy()
+      await refreshProfileIfNeeded(force: false)
       return
     }
 
@@ -64,12 +83,17 @@ final class AuthService: ObservableObject {
       let refreshed = try await refreshSession(refreshToken: session.refreshToken)
       applySession(refreshed)
       await refreshEnergy()
+      await refreshProfileIfNeeded(force: false)
     } catch {
       AuthSessionStore.clear()
       isAuthenticated = false
+      userId = nil
       userEmail = nil
       energyDay = nil
       energyRemaining = nil
+      profileDisplayName = nil
+      profileAvatarEmoji = nil
+      profileLoadedAt = nil
       errorMessage = presentableErrorMessage(for: error)
     }
   }
@@ -93,6 +117,7 @@ final class AuthService: ObservableObject {
       ])
       applySession(session)
       await refreshEnergy()
+      await refreshProfileIfNeeded(force: true)
     } catch {
       errorMessage = presentableErrorMessage(for: error)
     }
@@ -139,6 +164,7 @@ final class AuthService: ObservableObject {
       if let session = decoded.toAuthSession(defaultEmail: trimmedEmail) {
         applySession(session)
         await refreshEnergy()
+        await refreshProfileIfNeeded(force: true)
         return
       }
 
@@ -173,21 +199,30 @@ final class AuthService: ObservableObject {
 
     AuthSessionStore.clear()
     isAuthenticated = false
+    userId = nil
     userEmail = nil
     energyDay = nil
     energyRemaining = nil
+    profileDisplayName = nil
+    profileAvatarEmoji = nil
+    profileLoadedAt = nil
+    profileRefreshTask?.cancel()
+    profileRefreshTask = nil
   }
 
   private func applySession(_ session: AuthSession) {
     let saved = AuthSessionStore.save(session)
     guard saved else {
       isAuthenticated = false
+      userId = nil
       userEmail = nil
       errorMessage = "登录态写入系统 Keychain 失败，请重启 App 或重装后重试。"
       return
     }
     isAuthenticated = true
+    userId = session.userId
     userEmail = session.email
+    restoreCachedProfile(userId: session.userId, email: session.email)
   }
 
   private func refreshEnergy() async {
@@ -236,6 +271,133 @@ final class AuthService: ObservableObject {
     }
 
     return error.localizedDescription
+  }
+
+  var resolvedDisplayName: String {
+    if isAuthenticated {
+      let backend = (profileDisplayName ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      if !backend.isEmpty { return backend }
+      let email = (userEmail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      let prefix = (email.split(separator: "@").first.map(String.init) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+      return prefix.isEmpty ? "未设置昵称" : prefix
+    }
+    return "个人主页"
+  }
+
+  var resolvedAvatarEmoji: String? {
+    let raw = (profileAvatarEmoji ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    return raw.isEmpty ? nil : raw
+  }
+
+  var resolvedAvatarFallback: String {
+    let trimmed = resolvedDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
+    if let first = trimmed.first {
+      return String(first).uppercased()
+    }
+    return "?"
+  }
+
+  func refreshProfileIfNeeded(force: Bool = false) async {
+    guard isAuthenticated else { return }
+    guard SupabaseRuntime.loadConfig() != nil else { return }
+
+    let now = Date()
+    if !force, let loadedAt = profileLoadedAt, now.timeIntervalSince(loadedAt) < 60 {
+      return
+    }
+
+    if let task = profileRefreshTask {
+      await task.value
+      return
+    }
+
+    profileRefreshTask = Task { @MainActor [weak self] in
+      guard let self else { return }
+      defer {
+        self.profileRefreshTask = nil
+      }
+      do {
+        let result = try await ProfileService.getProfile()
+        if let id = result.user.id?.trimmingCharacters(in: .whitespacesAndNewlines), !id.isEmpty {
+          self.userId = id
+        }
+        if let email = result.user.email?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
+          self.userEmail = email
+        }
+        self.applyProfile(displayName: result.profile.displayName, avatarEmoji: result.profile.avatarEmoji)
+        ProfileSnapshotStore.save(
+          user: result.user,
+          profile: result.profile,
+          stats: result.stats,
+          userId: self.userId,
+          email: self.userEmail
+        )
+      } catch {
+        self.profileLoadedAt = Date()
+      }
+    }
+
+    await profileRefreshTask?.value
+  }
+
+  func applyProfile(displayName: String?, avatarEmoji: String?) {
+    let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    profileDisplayName = name.isEmpty ? nil : name
+
+    let emoji = avatarEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    profileAvatarEmoji = emoji.isEmpty ? nil : emoji
+
+    profileLoadedAt = Date()
+    saveCachedProfile(
+      .init(displayName: profileDisplayName, avatarEmoji: profileAvatarEmoji, updatedAt: profileLoadedAt ?? Date()),
+      userId: userId,
+      email: userEmail
+    )
+  }
+
+  private func restoreCachedProfile(userId: String?, email: String?) {
+    guard let cached = loadCachedProfile(userId: userId, email: email) else { return }
+    let name = cached.displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    profileDisplayName = name.isEmpty ? nil : name
+    let emoji = cached.avatarEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    profileAvatarEmoji = emoji.isEmpty ? nil : emoji
+    profileLoadedAt = cached.updatedAt
+  }
+
+  private func cacheKey(userId: String?, email: String?) -> String? {
+    let trimmedId = (userId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if !trimmedId.isEmpty {
+      return "\(Self.profileCachePrefix)\(trimmedId)"
+    }
+    let trimmedEmail = (email ?? "").trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    if !trimmedEmail.isEmpty {
+      return "\(Self.profileCachePrefix)\(trimmedEmail)"
+    }
+    return nil
+  }
+
+  private func loadCachedProfile(userId: String?, email: String?) -> CachedProfile? {
+    guard let key = cacheKey(userId: userId, email: email) else { return nil }
+    guard let data = UserDefaults.standard.data(forKey: key) else { return nil }
+    do {
+      let decoder = JSONDecoder()
+      decoder.dateDecodingStrategy = .iso8601
+      return try decoder.decode(CachedProfile.self, from: data)
+    } catch {
+      return nil
+    }
+  }
+
+  private func saveCachedProfile(_ cached: CachedProfile, userId: String?, email: String?) {
+    guard let key = cacheKey(userId: userId, email: email) else { return }
+    do {
+      let encoder = JSONEncoder()
+      encoder.dateEncodingStrategy = .iso8601
+      let data = try encoder.encode(cached)
+      UserDefaults.standard.set(data, forKey: key)
+    } catch {
+      // ignore
+    }
   }
 
   private func refreshSession(refreshToken: String) async throws -> AuthSession {

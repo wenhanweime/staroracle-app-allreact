@@ -1,16 +1,17 @@
 import Foundation
 
 enum ProfileService {
-  struct User: Decodable, Sendable {
+  struct User: Codable, Sendable {
     let id: String?
     let email: String?
   }
 
-  struct Profile: Decodable, Sendable {
+  struct Profile: Codable, Sendable {
     let displayName: String?
     let avatarEmoji: String?
     let galaxySeed: String?
     let createdAt: String?
+    let preferredModelId: String?
     let longTermMemoryPrompt: String?
     let longTermMemoryUpdatedAt: String?
     let longTermMemoryLastMessageAt: String?
@@ -20,13 +21,14 @@ enum ProfileService {
       case avatarEmoji = "avatar_emoji"
       case galaxySeed = "galaxy_seed"
       case createdAt = "created_at"
+      case preferredModelId = "preferred_model_id"
       case longTermMemoryPrompt = "long_term_memory_prompt"
       case longTermMemoryUpdatedAt = "long_term_memory_updated_at"
       case longTermMemoryLastMessageAt = "long_term_memory_last_message_at"
     }
   }
 
-  struct Stats: Decodable, Sendable {
+  struct Stats: Codable, Sendable {
     let starsCount: Int?
     let chatsCount: Int?
 
@@ -133,6 +135,7 @@ enum ProfileService {
   static func updateProfile(
     displayName: String?,
     avatarEmoji: String?,
+    preferredModelId: String? = nil,
     traceId: String? = nil
   ) async throws -> (user: User, profile: Profile) {
     guard let config = SupabaseRuntime.loadConfig() else {
@@ -160,6 +163,9 @@ enum ProfileService {
     }
     if let avatarEmoji {
       body["avatar_emoji"] = avatarEmoji
+    }
+    if let preferredModelId {
+      body["preferred_model_id"] = preferredModelId
     }
     request.httpBody = try JSONSerialization.data(withJSONObject: body, options: [])
 
