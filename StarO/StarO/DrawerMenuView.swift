@@ -277,20 +277,8 @@ struct DrawerMenuView: View {
       onClose()
     } label: {
       HStack(spacing: 12) {
-        ZStack {
-          Circle()
-            .fill(
-              LinearGradient(
-                colors: [Color.purple.opacity(0.75), Color.blue.opacity(0.6)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-              )
-            )
-          Text(accountAvatarText)
-            .font(.system(size: 16, weight: .semibold))
-            .foregroundStyle(.white.opacity(0.9))
-        }
-        .frame(width: 34, height: 34)
+        accountAvatarView
+          .frame(width: 34, height: 34)
 
         VStack(alignment: .leading, spacing: 2) {
           Text(accountTitle)
@@ -324,8 +312,42 @@ struct DrawerMenuView: View {
     (authService.userEmail ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  private var accountAvatarText: String {
-    authService.resolvedAvatarEmoji ?? authService.resolvedAvatarFallback
+  private var accountAvatarView: some View {
+    let url = authService.resolvedAvatarUrl.flatMap(URL.init(string:))
+    return ZStack {
+      if let url {
+        AsyncImage(url: url) { phase in
+          switch phase {
+          case .success(let image):
+            image
+              .resizable()
+              .scaledToFill()
+          default:
+            accountAvatarPlaceholder
+          }
+        }
+      } else {
+        accountAvatarPlaceholder
+      }
+    }
+    .clipShape(Circle())
+    .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+  }
+
+  private var accountAvatarPlaceholder: some View {
+    ZStack {
+      Circle()
+        .fill(
+          LinearGradient(
+            colors: [Color.purple.opacity(0.75), Color.blue.opacity(0.6)],
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+          )
+        )
+      Text(authService.resolvedAvatarEmoji ?? authService.resolvedAvatarFallback)
+        .font(.system(size: 16, weight: .semibold))
+        .foregroundStyle(.white.opacity(0.9))
+    }
   }
 
 }

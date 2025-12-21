@@ -9,6 +9,7 @@ enum ProfileService {
   struct Profile: Codable, Sendable {
     let displayName: String?
     let avatarEmoji: String?
+    let avatarUrl: String?
     let galaxySeed: String?
     let createdAt: String?
     let preferredModelId: String?
@@ -19,6 +20,7 @@ enum ProfileService {
     enum CodingKeys: String, CodingKey {
       case displayName = "display_name"
       case avatarEmoji = "avatar_emoji"
+      case avatarUrl = "avatar_url"
       case galaxySeed = "galaxy_seed"
       case createdAt = "created_at"
       case preferredModelId = "preferred_model_id"
@@ -135,6 +137,7 @@ enum ProfileService {
   static func updateProfile(
     displayName: String?,
     avatarEmoji: String?,
+    avatarUrl: String? = nil,
     preferredModelId: String? = nil,
     traceId: String? = nil
   ) async throws -> (user: User, profile: Profile) {
@@ -163,6 +166,9 @@ enum ProfileService {
     }
     if let avatarEmoji {
       body["avatar_emoji"] = avatarEmoji
+    }
+    if let avatarUrl {
+      body["avatar_url"] = avatarUrl
     }
     if let preferredModelId {
       body["preferred_model_id"] = preferredModelId

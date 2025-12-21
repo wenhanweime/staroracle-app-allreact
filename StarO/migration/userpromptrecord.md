@@ -233,3 +233,11 @@
 - [x] 个人主页信息本地缓存+异步校验：新增 `ProfileSnapshotStore` 缓存 `get-profile` 的 user/profile/stats，AccountView 打开先读缓存即时渲染，再异步 `get-profile` 刷新并回写缓存；AuthService 侧也会在 profile 刷新时回写快照（`StarO/StarO/ProfileSnapshotStore.swift`、`StarO/StarO/AccountView.swift`、`StarO/StarO/AuthService.swift`）（已完成 2025-12-21 21:13）
 - [x] 云端模型可配置：后端新增 `profiles.preferred_model_id`（迁移已执行），`chat-send` 上游模型优先使用该字段；个人主页新增“云端模型”编辑入口并调用 `update-profile` 写入云端（`StarO/StarO/AccountView.swift`、`StarO/StarO/ProfileService.swift`；后端 `staroracle-backend/supabase/migrations/20251221220000_profile_preferred_model_id.sql`、`staroracle-backend/supabase/functions/chat-send/index.ts`、`staroracle-backend/supabase/functions/update-profile/index.ts`、`staroracle-backend/supabase/functions/get-profile/index.ts`）（已完成 2025-12-21 21:13）
 - [x] 编辑资料可用：将“编辑资料”区移动到个人主页顶部紧邻头像信息，避免点击“编辑”后需要滚动才能看到（`StarO/StarO/AccountView.swift`）；昵称/头像仍通过 `update-profile` 落库到云端（已完成 2025-12-21 21:13）
+
+# 47（已读 2025-12-21 21:28）
+【用户输入原文】
+> 个人主页的头像设置,请增加选择相册照片的功能
+
+【任务拆解】
+- [ ] 后端：profiles 增加 `avatar_url` 字段；创建 `avatars` Storage bucket + RLS policy（仅允许用户上传/更新自己目录下的头像）；`get-profile/update-profile` 返回/写入该字段；更新契约文档
+- [ ] 前端：个人主页增加 PhotosPicker 选图与预览；上传至 Supabase Storage 并把 `avatar_url` 写回 `update-profile`；头像展示优先级：照片 > emoji > fallback；并同步左侧菜单与本地缓存

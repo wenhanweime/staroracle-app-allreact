@@ -44,11 +44,13 @@ final class AuthService: ObservableObject {
 
   @Published private(set) var profileDisplayName: String?
   @Published private(set) var profileAvatarEmoji: String?
+  @Published private(set) var profileAvatarUrl: String?
   @Published private(set) var profileLoadedAt: Date?
 
   private struct CachedProfile: Codable {
     let displayName: String?
     let avatarEmoji: String?
+    let avatarUrl: String?
     let updatedAt: Date
   }
 
@@ -68,6 +70,7 @@ final class AuthService: ObservableObject {
       userEmail = nil
       profileDisplayName = nil
       profileAvatarEmoji = nil
+      profileAvatarUrl = nil
       profileLoadedAt = nil
       return
     }
@@ -93,6 +96,7 @@ final class AuthService: ObservableObject {
       energyRemaining = nil
       profileDisplayName = nil
       profileAvatarEmoji = nil
+      profileAvatarUrl = nil
       profileLoadedAt = nil
       errorMessage = presentableErrorMessage(for: error)
     }
@@ -205,6 +209,7 @@ final class AuthService: ObservableObject {
     energyRemaining = nil
     profileDisplayName = nil
     profileAvatarEmoji = nil
+    profileAvatarUrl = nil
     profileLoadedAt = nil
     profileRefreshTask?.cancel()
     profileRefreshTask = nil
@@ -289,6 +294,11 @@ final class AuthService: ObservableObject {
     return raw.isEmpty ? nil : raw
   }
 
+  var resolvedAvatarUrl: String? {
+    let raw = (profileAvatarUrl ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    return raw.isEmpty ? nil : raw
+  }
+
   var resolvedAvatarFallback: String {
     let trimmed = resolvedDisplayName.trimmingCharacters(in: .whitespacesAndNewlines)
     if let first = trimmed.first {
@@ -324,7 +334,11 @@ final class AuthService: ObservableObject {
         if let email = result.user.email?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
           self.userEmail = email
         }
-        self.applyProfile(displayName: result.profile.displayName, avatarEmoji: result.profile.avatarEmoji)
+        self.applyProfile(
+          displayName: result.profile.displayName,
+          avatarEmoji: result.profile.avatarEmoji,
+          avatarUrl: result.profile.avatarUrl
+        )
         ProfileSnapshotStore.save(
           user: result.user,
           profile: result.profile,
@@ -340,16 +354,24 @@ final class AuthService: ObservableObject {
     await profileRefreshTask?.value
   }
 
-  func applyProfile(displayName: String?, avatarEmoji: String?) {
+  func applyProfile(displayName: String?, avatarEmoji: String?, avatarUrl: String? = nil) {
     let name = displayName?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     profileDisplayName = name.isEmpty ? nil : name
 
     let emoji = avatarEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     profileAvatarEmoji = emoji.isEmpty ? nil : emoji
 
+    let url = avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    profileAvatarUrl = url.isEmpty ? nil : url
+
     profileLoadedAt = Date()
     saveCachedProfile(
-      .init(displayName: profileDisplayName, avatarEmoji: profileAvatarEmoji, updatedAt: profileLoadedAt ?? Date()),
+      .init(
+        displayName: profileDisplayName,
+        avatarEmoji: profileAvatarEmoji,
+        avatarUrl: profileAvatarUrl,
+        updatedAt: profileLoadedAt ?? Date()
+      ),
       userId: userId,
       email: userEmail
     )
@@ -361,6 +383,8 @@ final class AuthService: ObservableObject {
     profileDisplayName = name.isEmpty ? nil : name
     let emoji = cached.avatarEmoji?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     profileAvatarEmoji = emoji.isEmpty ? nil : emoji
+    let url = cached.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+    profileAvatarUrl = url.isEmpty ? nil : url
     profileLoadedAt = cached.updatedAt
   }
 

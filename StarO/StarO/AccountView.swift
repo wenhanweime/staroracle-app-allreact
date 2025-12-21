@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import PhotosUI
 import StarOracleCore
 import StarOracleFeatures
 import StarOracleServices
@@ -30,6 +31,10 @@ struct AccountView: View {
   @State private var draftDisplayName: String = ""
   @State private var draftAvatarEmoji: String = ""
   @State private var draftPreferredModelId: String = ""
+  @State private var avatarPhotoItem: PhotosPickerItem?
+  @State private var avatarPhotoPreview: UIImage?
+  @State private var avatarPhotoJPEG: Data?
+  @State private var shouldClearAvatarPhoto: Bool = false
 
   private let avatarOptions: [String] = ["🪐", "🌙", "⭐️", "🌟", "✨", "☄️", "🌌", "🛰️", "🚀", "🔭", "🧿", "🌑"]
   private let modelOptions: [String] = ["gpt-4.1-mini", "gpt-4.1", "gpt-4o-mini", "gpt-4o", "gpt-3.5-turbo"]
@@ -78,6 +83,23 @@ struct AccountView: View {
       .onAppear {
         hydrateFromCacheIfPossible()
         Task { await reload(force: false) }
+      }
+      .onChange(of: avatarPhotoItem) { _, newValue in
+        guard let newValue else { return }
+        Task { @MainActor in
+          do {
+            guard let data = try await newValue.loadTransferable(type: Data.self) else { return }
+            guard let processed = AvatarImageProcessor.makeAvatarJPEG(from: data) else {
+              errorMessage = "图片处理失败，请换一张试试。"
+              return
+            }
+            avatarPhotoJPEG = processed.jpeg
+            avatarPhotoPreview = processed.preview
+            shouldClearAvatarPhoto = false
+          } catch {
+            errorMessage = error.localizedDescription
+          }
+        }
       }
     }
     .sheet(isPresented: $isShowingAIConfig) {
@@ -132,6 +154,84 @@ struct AccountView: View {
     Section("编辑资料") {
       TextField("昵称（可留空）", text: $draftDisplayName)
       TextField("头像（emoji，可留空）", text: $draftAvatarEmoji)
+
+      VStack(alignment: .leading, spacing: 10) {
+        Text("头像照片")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+
+        PhotosPicker(selection: $avatarPhotoItem, matching: .images) {
+          HStack(spacing: 10) {
+            Image(systemName: "photo")
+            Text("从相册选择")
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .overlay(alignment: .trailing) {
+            Image(systemName: "chevron.right")
+              .font(.caption2)
+              .foregroundStyle(.secondary)
+          }
+        }
+        .disabled(isSaving)
+
+        HStack(spacing: 12) {
+          ZStack {
+            Circle()
+              .fill(Color.white.opacity(0.08))
+            if shouldClearAvatarPhoto {
+              Image(systemName: "person.crop.circle.badge.xmark")
+                .foregroundStyle(.secondary)
+            } else if let preview = avatarPhotoPreview {
+              Image(uiImage: preview)
+                .resizable()
+                .scaledToFill()
+            } else if let url = resolvedAvatarPhotoURL {
+              AsyncImage(url: url) { phase in
+                switch phase {
+                case .success(let image):
+                  image.resizable().scaledToFill()
+                default:
+                  Color.clear
+                }
+              }
+            } else {
+              Image(systemName: "person.crop.circle")
+                .foregroundStyle(.secondary)
+            }
+          }
+          .frame(width: 64, height: 64)
+          .clipShape(Circle())
+          .overlay(Circle().stroke(Color.white.opacity(0.12), lineWidth: 1))
+
+          VStack(alignment: .leading, spacing: 6) {
+            Text(shouldClearAvatarPhoto ? "将移除照片头像" : (resolvedAvatarPhotoURL != nil || avatarPhotoPreview != nil ? "已选择照片头像" : "未设置照片头像"))
+              .font(.footnote)
+              .foregroundStyle(.secondary)
+
+            HStack(spacing: 10) {
+              if shouldClearAvatarPhoto {
+                Button("撤销移除") {
+                  shouldClearAvatarPhoto = false
+                }
+                .buttonStyle(.bordered)
+              } else if resolvedAvatarPhotoURL != nil || avatarPhotoPreview != nil {
+                Button(role: .destructive) {
+                  shouldClearAvatarPhoto = true
+                  avatarPhotoItem = nil
+                  avatarPhotoPreview = nil
+                  avatarPhotoJPEG = nil
+                } label: {
+                  Text("移除照片")
+                }
+                .buttonStyle(.bordered)
+              }
+            }
+          }
+
+          Spacer()
+        }
+      }
+      .padding(.vertical, 6)
 
       VStack(alignment: .leading, spacing: 10) {
         Text("快速选择")
@@ -383,7 +483,11 @@ struct AccountView: View {
           startPoint: .topLeading,
           endPoint: .bottomTrailing
         ))
-      if let emoji {
+      if !shouldClearAvatarPhoto, let preview = avatarPhotoPreview {
+        avatarPhotoLayer(preview)
+      } else if !shouldClearAvatarPhoto, let url = resolvedAvatarPhotoURL {
+        avatarPhotoLayer(url)
+      } else if let emoji {
         Text(emoji)
           .font(.system(size: size * 0.55))
       } else {
@@ -394,6 +498,34 @@ struct AccountView: View {
     }
     .frame(width: size, height: size)
     .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
+  }
+
+  private func avatarPhotoLayer(_ url: URL) -> some View {
+    AsyncImage(url: url) { phase in
+      switch phase {
+      case .success(let image):
+        image
+          .resizable()
+          .scaledToFill()
+      default:
+        Color.clear
+      }
+    }
+    .clipShape(Circle())
+  }
+
+  private func avatarPhotoLayer(_ image: UIImage) -> some View {
+    Image(uiImage: image)
+      .resizable()
+      .scaledToFill()
+      .clipShape(Circle())
+  }
+
+  private var resolvedAvatarPhotoURL: URL? {
+    let raw = (profile?.avatarUrl ?? authService.resolvedAvatarUrl ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !raw.isEmpty else { return nil }
+    return URL(string: raw)
   }
 
   private var resolvedDisplayName: String {
@@ -502,6 +634,10 @@ struct AccountView: View {
     isEditing = true
     draftDisplayName = profile?.displayName ?? ""
     draftAvatarEmoji = profile?.avatarEmoji ?? ""
+    avatarPhotoItem = nil
+    avatarPhotoPreview = nil
+    avatarPhotoJPEG = nil
+    shouldClearAvatarPhoto = false
     errorMessage = nil
   }
 
@@ -513,6 +649,10 @@ struct AccountView: View {
 
   private func cancelEdit() {
     isEditing = false
+    avatarPhotoItem = nil
+    avatarPhotoPreview = nil
+    avatarPhotoJPEG = nil
+    shouldClearAvatarPhoto = false
     errorMessage = nil
   }
 
@@ -545,14 +685,34 @@ struct AccountView: View {
     errorMessage = nil
 
     do {
+      var avatarUrlUpdate: String? = nil
+      if shouldClearAvatarPhoto {
+        avatarUrlUpdate = ""
+      } else if let jpeg = avatarPhotoJPEG {
+        let uid = resolvedUserId
+        if uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          throw AvatarUploadService.AvatarUploadError.invalidUserId
+        }
+        avatarUrlUpdate = try await AvatarUploadService.uploadAvatarJPEG(jpeg, userId: uid)
+      }
+
       let result = try await ProfileService.updateProfile(
         displayName: draftDisplayName,
-        avatarEmoji: draftAvatarEmoji
+        avatarEmoji: draftAvatarEmoji,
+        avatarUrl: avatarUrlUpdate
       )
       user = result.user
       profile = result.profile
-      authService.applyProfile(displayName: result.profile.displayName, avatarEmoji: result.profile.avatarEmoji)
+      authService.applyProfile(
+        displayName: result.profile.displayName,
+        avatarEmoji: result.profile.avatarEmoji,
+        avatarUrl: result.profile.avatarUrl
+      )
       persistProfileSnapshot()
+      avatarPhotoItem = nil
+      avatarPhotoPreview = nil
+      avatarPhotoJPEG = nil
+      shouldClearAvatarPhoto = false
       isEditing = false
     } catch {
       errorMessage = error.localizedDescription
@@ -575,7 +735,11 @@ struct AccountView: View {
       user = result.user
       profile = result.profile
       stats = result.stats
-      authService.applyProfile(displayName: result.profile.displayName, avatarEmoji: result.profile.avatarEmoji)
+      authService.applyProfile(
+        displayName: result.profile.displayName,
+        avatarEmoji: result.profile.avatarEmoji,
+        avatarUrl: result.profile.avatarUrl
+      )
       persistProfileSnapshot()
       lastRemoteReloadAt = Date()
     } catch {
