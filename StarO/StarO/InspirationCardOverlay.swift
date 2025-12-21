@@ -11,68 +11,94 @@ struct InspirationCardOverlay: View {
     @State private var isAppearing = false
     @State private var dragOffset: CGSize = .zero
     @State private var isClosing = false
+    @State private var selectedCardIndex: Int = 0
     
     // Card dimensions matching React (~280x400)
     private let cardWidth: CGFloat = 300
     private let cardHeight: CGFloat = 440
     
     var body: some View {
-        if let card = starStore.currentInspirationCard {
+        if let primaryCard = starStore.currentInspirationCard {
+            let libraryCards = inspirationLibraryCards(primaryCard: primaryCard)
             ZStack {
                 // Dimmed background
                 Color.black.opacity(isClosing ? 0 : 0.6)
                     .ignoresSafeArea()
                     .onTapGesture {
-                        dismiss(id: card.id)
+                        dismiss()
                     }
                     .animation(.easeOut(duration: 0.3), value: isClosing)
                 
                 // Card Container
-                ZStack {
-                    // Front Face
-                    CardFrontFace(card: card, onFlip: {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            isFlipped = true
+                TabView(selection: $selectedCardIndex) {
+                    ForEach(Array(libraryCards.enumerated()), id: \.element.id) { index, card in
+                        let isCurrent = selectedCardIndex == index
+                        let flipped = isCurrent && isFlipped
+
+                        ZStack {
+                            CardFrontFace(card: card, onFlip: {
+                                guard isCurrent else { return }
+                                withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                    isFlipped = true
+                                }
+                            })
+                                .opacity(flipped ? 0 : 1)
+                                .rotation3DEffect(
+                                    .degrees(flipped ? 180 : 0),
+                                    axis: (x: 0.0, y: 1.0, z: 0.0),
+                                    perspective: 0.8
+                                )
+                                .accessibilityHidden(flipped)
+
+                            CardBackFace(
+                                card: card,
+                                onFlipBack: {
+                                    guard isCurrent else { return }
+                                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
+                                        isFlipped = false
+                                    }
+                                },
+                                onSubmit: { question in
+                                    guard isCurrent else { return }
+                                    submit(card: card, question: question)
+                                }
+                            )
+                            .opacity(flipped ? 1 : 0)
+                            .rotation3DEffect(
+                                .degrees(flipped ? 0 : -180),
+                                axis: (x: 0.0, y: 1.0, z: 0.0),
+                                perspective: 0.8
+                            )
+                            .accessibilityHidden(!flipped)
                         }
-                    })
-                        .opacity(isFlipped ? 0 : 1)
-                        .rotation3DEffect(
-                            .degrees(isFlipped ? 180 : 0),
-                            axis: (x: 0.0, y: 1.0, z: 0.0),
-                            perspective: 0.8
-                        )
-                        .accessibilityHidden(isFlipped)
-                    
-                    // Back Face
-                    CardBackFace(card: card, onFlipBack: {
-                        withAnimation(.spring(response: 0.6, dampingFraction: 0.8)) {
-                            isFlipped = false
-                        }
-                    }, onSubmit: { question in
-                        submit(card: card, question: question)
-                    })
-                    .opacity(isFlipped ? 1 : 0)
-                    .rotation3DEffect(
-                        .degrees(isFlipped ? 0 : -180),
-                        axis: (x: 0.0, y: 1.0, z: 0.0),
-                        perspective: 0.8
-                    )
-                    .accessibilityHidden(!isFlipped)
+                        .tag(index)
+                        .frame(width: cardWidth, height: cardHeight)
+                    }
                 }
+                .tabViewStyle(.page(indexDisplayMode: libraryCards.count > 1 ? .automatic : .never))
                 .frame(width: cardWidth, height: cardHeight)
                 .offset(dragOffset)
-                .rotationEffect(.degrees(Double(dragOffset.width / 15)))
                 .scaleEffect(isClosing ? 0.8 : (isAppearing ? 1 : 0.9))
                 .opacity(isClosing ? 0 : (isAppearing ? 1 : 0))
-                .gesture(
+                .simultaneousGesture(
                     DragGesture()
                         .onChanged { value in
-                            dragOffset = value.translation
+                            if abs(value.translation.height) > abs(value.translation.width) {
+                                dragOffset = CGSize(width: 0, height: value.translation.height)
+                            } else {
+                                dragOffset = .zero
+                            }
                         }
                         .onEnded { value in
-                            let threshold: CGFloat = 100
-                            if abs(value.translation.width) > threshold || abs(value.velocity.width) > 500 {
-                                dismiss(id: card.id, velocity: value.velocity)
+                            let threshold: CGFloat = 120
+                            guard abs(value.translation.height) > abs(value.translation.width) else {
+                                withAnimation(.spring()) {
+                                    dragOffset = .zero
+                                }
+                                return
+                            }
+                            if abs(value.translation.height) > threshold || abs(value.velocity.height) > 600 {
+                                dismiss(velocity: value.velocity)
                             } else {
                                 withAnimation(.spring()) {
                                     dragOffset = .zero
@@ -82,36 +108,30 @@ struct InspirationCardOverlay: View {
                 )
             }
             .zIndex(100)
-            .overlay(alignment: .bottom) {
-                if SupabaseRuntime.loadConfig() != nil, AuthSessionStore.load() != nil {
-                    if !starStore.personalizedInspirationCandidates.isEmpty {
-                        PersonalizedInspirationCandidatesPanel(items: starStore.personalizedInspirationCandidates)
-                            .padding(.horizontal, 16)
-                            .padding(.bottom, 18)
-                            .opacity(isClosing ? 0 : 1)
-                            .allowsHitTesting(false)
-                    } else {
-                        Text("为你生成中…")
-                            .font(.system(size: 12, weight: .regular))
-                            .foregroundStyle(.white.opacity(0.65))
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 8)
-                            .background(Color.black.opacity(0.35), in: Capsule())
-                            .padding(.bottom, 18)
-                            .opacity(isClosing ? 0 : 1)
-                            .allowsHitTesting(false)
-                    }
-                }
-            }
             .onAppear {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
                     isAppearing = true
                 }
             }
+            .onChange(of: selectedCardIndex) { _, _ in
+                isFlipped = false
+            }
+            .onChange(of: primaryCard.id) { _, _ in
+                selectedCardIndex = 0
+                isFlipped = false
+            }
+            .onChange(of: starStore.personalizedInspirationCandidates) { _, _ in
+                let candidateCount = min(3, starStore.personalizedInspirationCandidates.count)
+                let maxIndex = max(0, (1 + candidateCount) - 1)
+                if selectedCardIndex > maxIndex || selectedCardIndex < 0 {
+                    selectedCardIndex = 0
+                    isFlipped = false
+                }
+            }
         }
     }
     
-    private func dismiss(id: String, velocity: CGSize = .zero) {
+    private func dismiss(velocity: CGSize = .zero) {
         withAnimation(.easeIn(duration: 0.25)) {
             isClosing = true
             if velocity != .zero {
@@ -121,12 +141,13 @@ struct InspirationCardOverlay: View {
         }
         
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) {
-            starStore.dismissInspirationCard(id: id)
+            starStore.dismissInspirationCard(id: nil)
             // Reset state for next time
             isFlipped = false
             isAppearing = false
             isClosing = false
             dragOffset = .zero
+            selectedCardIndex = 0
         }
     }
     
@@ -148,12 +169,13 @@ struct InspirationCardOverlay: View {
                 environment.createSession(title: nil)
                 let chatId = environment.conversationStore.currentSessionId
                 chatBridge.addInspirationHint(chatId: chatId, cardId: card.id, text: hintText)
-                starStore.dismissInspirationCard(id: card.id)
+                starStore.dismissInspirationCard(id: nil)
                 // Reset
                 isFlipped = false
                 isAppearing = false
                 isClosing = false
                 dragOffset = .zero
+                selectedCardIndex = 0
 
                 Task { @MainActor in
                     var messageToSend = finalQuestion
@@ -173,14 +195,47 @@ struct InspirationCardOverlay: View {
 
             Task {
                 try? await starStore.addStar(question: finalQuestion, at: nil)
-                starStore.dismissInspirationCard(id: card.id)
+                starStore.dismissInspirationCard(id: nil)
                 // Reset
                 isFlipped = false
                 isAppearing = false
                 isClosing = false
                 dragOffset = .zero
+                selectedCardIndex = 0
             }
         }
+    }
+
+    private func inspirationLibraryCards(primaryCard: InspirationCard) -> [InspirationCard] {
+        var cards: [InspirationCard] = [primaryCard]
+
+        if SupabaseRuntime.loadConfig() != nil, AuthSessionStore.load() != nil {
+            let personalized = starStore.personalizedInspirationCandidates.prefix(3).map { candidate in
+                let kind = candidate.kind.trimmingCharacters(in: .whitespacesAndNewlines)
+                let title = candidate.title.trimmingCharacters(in: .whitespacesAndNewlines)
+                let content = candidate.content.trimmingCharacters(in: .whitespacesAndNewlines)
+
+                var tags = candidate.tags
+                tags.append("content_type:question")
+                tags.append("personalized")
+                if !kind.isEmpty {
+                    tags.append("personalized_kind:\(kind)")
+                }
+                return InspirationCard(
+                    id: candidate.id,
+                    title: title.isEmpty ? "为你定制" : title,
+                    question: title.isEmpty ? "为你定制" : title,
+                    reflection: content.isEmpty ? "……" : content,
+                    tags: tags,
+                    emotionalTone: "探寻中",
+                    category: "personalized_inspiration",
+                    spawnedAt: candidate.spawnedAt
+                )
+            }
+            cards.append(contentsOf: personalized)
+        }
+
+        return cards
     }
 
     private func inspirationCardMainAndFooterText(_ card: InspirationCard) -> (String, String?) {
