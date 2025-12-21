@@ -65,8 +65,18 @@ struct GalaxyBackgroundView: View {
               starStore.setIsAsking(false, position: StarPosition(x: xPct, y: yPct))
             }
 
+            let shouldUseCloud = SupabaseRuntime.loadConfig() != nil && authService.isAuthenticated
+            let cardIdForThisTap = UUID().uuidString.lowercased()
+            let prefetchedCard: InspirationCard? = shouldUseCloud
+              ? await InspirationCardPrefetcher.shared.takeClonedCard(withNewId: cardIdForThisTap)
+              : nil
+
             await MainActor.run {
-              _ = starStore.drawInspirationCard(region: region)
+              if let prefetchedCard {
+                starStore.presentInspirationCard(prefetchedCard)
+              } else {
+                _ = starStore.drawInspirationCard(region: region)
+              }
               lastTapRegion = region
               lastTapDate = Date()
 
@@ -74,27 +84,11 @@ struct GalaxyBackgroundView: View {
               galaxyStore.setIsGeneratingCard(false)
             }
 
-            guard SupabaseRuntime.loadConfig() != nil else { return }
-            let localCardId = await MainActor.run { starStore.currentInspirationCard?.id }
-            guard let localCardId, !localCardId.isEmpty else { return }
-
-            let remoteCard = await StarPluckService.pluckInspiration()
-            guard !Task.isCancelled else { return }
-            guard let remoteCard else { return }
-
-            await MainActor.run {
-              guard starStore.currentInspirationCard?.id == localCardId else { return }
-              let merged = InspirationCard(
-                id: localCardId,
-                title: remoteCard.title,
-                question: remoteCard.question,
-                reflection: remoteCard.reflection,
-                tags: remoteCard.tags,
-                emotionalTone: remoteCard.emotionalTone,
-                category: remoteCard.category,
-                spawnedAt: remoteCard.spawnedAt
-              )
-              starStore.replaceCurrentInspirationCard(merged)
+            // 预取下一张云端灵感卡：保证翻转时文本稳定，不在展示中途“热更新”卡片内容。
+            if shouldUseCloud {
+              Task.detached {
+                await InspirationCardPrefetcher.shared.prefetchIfNeeded()
+              }
             }
           }
         },
@@ -130,6 +124,10 @@ struct GalaxyBackgroundView: View {
               SupabaseRuntime.loadConfig() != nil else {
           updatePermanentStarHighlights(for: proxy.size)
           return
+        }
+
+        Task.detached {
+          await InspirationCardPrefetcher.shared.prefetchIfNeeded()
         }
 
         // T-102: Seed must be fetched from server as the single source of truth.

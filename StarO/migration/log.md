@@ -126,3 +126,4 @@
 - 对话气泡 Markdown：增强 `ChatOverlayManager.MessageTableViewCell.renderMarkdown`，增加代码块（```）分段渲染与列表/任务列表的轻量规范化，且对 `NSInlinePresentationIntent` 做更健壮的解析，避免解析失败时退化为纯文本导致“看起来不支持 Markdown”（`StarO/StarO/ChatOverlayManager.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。
 - 章程更新：补充 `StarO/migration/constitution.md` —— `userpromptrecord.md` 每条记录必须包含“用户输入原文”（逐字粘贴不改写），并回填近期条目原文以保证可追溯。
 - ChatOverlay 头部视觉：将展开态头部的占位标题“ChatOverlay 对话”替换为左上角八芒星动画（参考星卡射线闪烁），保留右侧关闭按钮（`StarO/StarO/ChatOverlayManager.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。
+- 灵感卡内容稳定：修复“翻转时文字变化”——此前 Galaxy 点击会先展示本地卡，再异步用云端 `star-pluck` 结果替换 `currentInspirationCard`，导致展示中途内容热更新；现在改为登录后预取云端卡缓存，点击时优先使用缓存直接展示，并立即预取下一张，同时不再对已展示的卡做替换（`StarO/StarO/InspirationCardPrefetcher.swift`、`StarO/StarO/GalaxyBackgroundView.swift`）。自测：`xcodebuild -project StarO/StarO.xcodeproj -scheme StarO -sdk iphonesimulator build`。
