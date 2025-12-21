@@ -786,7 +786,19 @@ final class NativeChatBridge: NSObject, ObservableObject {
 
     // 仅在默认占位标题时覆盖，避免误改用户自定义命名
     let current = latestSession.title.trimmingCharacters(in: .whitespacesAndNewlines)
-    let isPlaceholder = current.isEmpty || current == "新会话" || current == "未命名会话"
+    let isTemplateTitle = current.hasPrefix("关于") && (
+      current.hasSuffix("的对话") ||
+      current.hasSuffix("的聊天") ||
+      current.hasSuffix("的讨论") ||
+      current.hasSuffix("对话") ||
+      current.hasSuffix("聊天") ||
+      current.hasSuffix("讨论")
+    )
+    let isPlaceholder = current.isEmpty ||
+      current == "新会话" ||
+      current == "新对话" ||
+      current == "未命名会话" ||
+      isTemplateTitle
     guard isPlaceholder else { return }
 
     conversationStore.renameSession(id: trimmedId, title: generated)

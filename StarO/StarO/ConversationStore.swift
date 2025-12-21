@@ -121,6 +121,7 @@ final class ConversationStore: ObservableObject {
     let now = Date()
     let trimmedTitle = (title ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
     let resolvedTitle = trimmedTitle.isEmpty ? "未命名会话" : trimmedTitle
+    let isTemplateTitle = Self.isTemplateConversationTitle(trimmedTitle)
     let persistedMessages = messages.map { message in
       PersistMessage(
         id: message.id,
@@ -139,7 +140,7 @@ final class ConversationStore: ObservableObject {
           session.createdAt = createdAt
         }
         session.updatedAt = updatedAt ?? now
-        session.hasCustomTitle = !trimmedTitle.isEmpty
+        session.hasCustomTitle = !trimmedTitle.isEmpty && !isTemplateTitle
         session.hasSupabaseConversationStarted = true
         self.sessionsStorage.insert(session, at: 0)
       } else {
@@ -150,7 +151,7 @@ final class ConversationStore: ObservableObject {
           messages: persistedMessages,
           createdAt: createdAt ?? now,
           updatedAt: updatedAt ?? now,
-          hasCustomTitle: !trimmedTitle.isEmpty,
+          hasCustomTitle: !trimmedTitle.isEmpty && !isTemplateTitle,
           lastSseDoneAt: nil,
           hasSupabaseConversationStarted: true
         )
@@ -408,6 +409,16 @@ final class ConversationStore: ObservableObject {
       needsSave = true
     }
 
+    // 迁移：旧版本可能把“关于…的对话/聊天/讨论”当作自定义标题保存，导致无法再生成更像人话的标题。
+    // 这里将该类模板标题回退为非自定义，后续会在打开会话/对话完成后自动生成并回写云端。
+    for index in initialSessions.indices {
+      if initialSessions[index].hasCustomTitle,
+         Self.isTemplateConversationTitle(initialSessions[index].title) {
+        initialSessions[index].hasCustomTitle = false
+        needsSave = true
+      }
+    }
+
     if initialCurrentId.isEmpty {
       initialCurrentId = initialSessions.first?.id ?? ""
       needsSave = true
@@ -494,6 +505,14 @@ final class ConversationStore: ObservableObject {
       lastSseDoneAt: nil,
       hasSupabaseConversationStarted: false
     )
+  }
+
+  private static func isTemplateConversationTitle(_ title: String) -> Bool {
+    let trimmed = title.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return false }
+    guard trimmed.hasPrefix("关于") else { return false }
+    let suffixes = ["的对话", "的聊天", "的讨论", "对话", "聊天", "讨论"]
+    return suffixes.contains(where: { trimmed.hasSuffix($0) })
   }
 
   private static func defaultURL() -> URL {

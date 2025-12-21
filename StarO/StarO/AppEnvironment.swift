@@ -175,7 +175,19 @@ final class AppEnvironment: ObservableObject {
     guard let latest = conversationStore.session(id: trimmedId), latest.hasCustomTitle != true else { return }
 
     let currentTitle = latest.title.trimmingCharacters(in: .whitespacesAndNewlines)
-    let isPlaceholder = currentTitle.isEmpty || currentTitle == "新会话" || currentTitle == "未命名会话"
+    let isTemplateTitle = currentTitle.hasPrefix("关于") && (
+      currentTitle.hasSuffix("的对话") ||
+      currentTitle.hasSuffix("的聊天") ||
+      currentTitle.hasSuffix("的讨论") ||
+      currentTitle.hasSuffix("对话") ||
+      currentTitle.hasSuffix("聊天") ||
+      currentTitle.hasSuffix("讨论")
+    )
+    let isPlaceholder = currentTitle.isEmpty ||
+      currentTitle == "新会话" ||
+      currentTitle == "新对话" ||
+      currentTitle == "未命名会话" ||
+      isTemplateTitle
     guard isPlaceholder else { return }
 
     conversationStore.renameSession(id: trimmedId, title: generated)
