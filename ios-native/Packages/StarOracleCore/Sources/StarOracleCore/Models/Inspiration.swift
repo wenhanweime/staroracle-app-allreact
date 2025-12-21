@@ -31,6 +31,31 @@ public struct InspirationCard: Identifiable, Codable, Equatable, Sendable {
   }
 }
 
+public struct PersonalizedInspirationCandidate: Identifiable, Codable, Equatable, Sendable {
+  public let id: String
+  public var kind: String
+  public var title: String
+  public var content: String
+  public var tags: [String]
+  public var spawnedAt: Int?
+
+  public init(
+    id: String,
+    kind: String,
+    title: String,
+    content: String,
+    tags: [String] = [],
+    spawnedAt: Int? = nil
+  ) {
+    self.id = id
+    self.kind = kind
+    self.title = title
+    self.content = content
+    self.tags = tags
+    self.spawnedAt = spawnedAt
+  }
+}
+
 public struct GalaxyHighlight: Codable, Equatable, Sendable {
   public var colorHex: String
 

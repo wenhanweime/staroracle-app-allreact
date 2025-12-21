@@ -34,6 +34,9 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
   @Published public private(set) var currentInspirationCard: InspirationCard? {
     willSet { logStateChange("currentInspirationCard -> \(String(describing: newValue?.id))") }
   }
+  @Published public private(set) var personalizedInspirationCandidates: [PersonalizedInspirationCandidate] {
+    willSet { logStateChange("personalizedInspirationCandidates -> \(newValue.count)") }
+  }
   @Published public private(set) var hasTemplate: Bool {
     willSet { logStateChange("hasTemplate -> \(newValue)") }
   }
@@ -64,6 +67,7 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
     isLoading: Bool = false,
     pendingStarPosition: StarPosition? = nil,
     currentInspirationCard: InspirationCard? = nil,
+    personalizedInspirationCandidates: [PersonalizedInspirationCandidate] = [],
     hasTemplate: Bool = false,
     templateInfo: ConstellationTemplateInfo? = nil,
     lastCreatedStarId: String? = nil,
@@ -84,6 +88,7 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
     self.isLoading = isLoading
     self.pendingStarPosition = pendingStarPosition
     self.currentInspirationCard = currentInspirationCard
+    self.personalizedInspirationCandidates = personalizedInspirationCandidates
     self.hasTemplate = hasTemplate
     self.templateInfo = templateInfo
     self.lastCreatedStarId = lastCreatedStarId
@@ -240,6 +245,7 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
 
   public func presentInspirationCard(_ card: InspirationCard) {
     currentInspirationCard = card
+    personalizedInspirationCandidates = []
     inspirationStars.append(
       Star(
         id: "inspiration-\(card.id)-\(UUID().uuidString)",
@@ -268,6 +274,10 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
       inspirationStars = Array(inspirationStars.suffix(60))
     }
     soundService?.play(.starClick)
+  }
+
+  public func setPersonalizedInspirationCandidates(_ list: [PersonalizedInspirationCandidate]) {
+    personalizedInspirationCandidates = list
   }
 
   public func replaceCurrentInspirationCard(_ card: InspirationCard) {
@@ -317,6 +327,7 @@ public final class StarStore: ObservableObject, StarStoreProtocol {
       return
     }
     currentInspirationCard = nil
+    personalizedInspirationCandidates = []
   }
 
   public func viewStar(id: String?) {

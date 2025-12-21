@@ -82,6 +82,27 @@ struct InspirationCardOverlay: View {
                 )
             }
             .zIndex(100)
+            .overlay(alignment: .bottom) {
+                if SupabaseRuntime.loadConfig() != nil, AuthSessionStore.load() != nil {
+                    if !starStore.personalizedInspirationCandidates.isEmpty {
+                        PersonalizedInspirationCandidatesPanel(items: starStore.personalizedInspirationCandidates)
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 18)
+                            .opacity(isClosing ? 0 : 1)
+                            .allowsHitTesting(false)
+                    } else {
+                        Text("为你生成中…")
+                            .font(.system(size: 12, weight: .regular))
+                            .foregroundStyle(.white.opacity(0.65))
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 8)
+                            .background(Color.black.opacity(0.35), in: Capsule())
+                            .padding(.bottom, 18)
+                            .opacity(isClosing ? 0 : 1)
+                            .allowsHitTesting(false)
+                    }
+                }
+            }
             .onAppear {
                 withAnimation(.spring(response: 0.5, dampingFraction: 0.7).delay(0.1)) {
                     isAppearing = true

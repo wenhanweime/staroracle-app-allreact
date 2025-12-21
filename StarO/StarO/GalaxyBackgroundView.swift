@@ -70,6 +70,14 @@ struct GalaxyBackgroundView: View {
             let prefetchedCard: InspirationCard? = shouldUseCloud
               ? await InspirationCardPrefetcher.shared.takeClonedCard(withNewId: cardIdForThisTap)
               : nil
+            let userIdForCache = cachedUserId ?? resolvedCacheUserId()
+            let personalizedCandidates: [PersonalizedInspirationCandidate] = shouldUseCloud
+              ? await PersonalizedInspirationPrefetcher.shared.takeClonedItems(
+                userId: userIdForCache,
+                limit: 3,
+                newIdPrefix: "pi"
+              )
+              : []
 
             await MainActor.run {
               if let prefetchedCard {
@@ -77,6 +85,7 @@ struct GalaxyBackgroundView: View {
               } else {
                 _ = starStore.drawInspirationCard(region: region)
               }
+              starStore.setPersonalizedInspirationCandidates(personalizedCandidates)
               lastTapRegion = region
               lastTapDate = Date()
 
@@ -88,6 +97,7 @@ struct GalaxyBackgroundView: View {
             if shouldUseCloud {
               Task.detached {
                 await InspirationCardPrefetcher.shared.prefetchIfNeeded()
+                await PersonalizedInspirationPrefetcher.shared.prefetchIfNeeded(userId: userIdForCache, force: true)
               }
             }
           }
@@ -128,6 +138,7 @@ struct GalaxyBackgroundView: View {
 
         Task.detached {
           await InspirationCardPrefetcher.shared.prefetchIfNeeded()
+          await PersonalizedInspirationPrefetcher.shared.prefetchIfNeeded(userId: cachedUserId)
         }
 
         // T-102: Seed must be fetched from server as the single source of truth.
