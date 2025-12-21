@@ -64,14 +64,16 @@ struct InspirationCardOverlay: View {
                 .rotationEffect(.degrees(Double(dragOffset.width / 15)))
                 .scaleEffect(isClosing ? 0.8 : (isAppearing ? 1 : 0.9))
                 .opacity(isClosing ? 0 : (isAppearing ? 1 : 0))
-                .gesture(
+                .highPriorityGesture(
                     DragGesture()
                         .onChanged { value in
                             dragOffset = value.translation
                         }
                         .onEnded { value in
                             let threshold: CGFloat = 100
-                            if abs(value.translation.width) > threshold || abs(value.velocity.width) > 500 {
+                            let shouldDismissHorizontally = abs(value.translation.width) > threshold || abs(value.velocity.width) > 500
+                            let shouldDismissUpwards = value.translation.height < -threshold || value.velocity.height < -650
+                            if shouldDismissHorizontally || shouldDismissUpwards {
                                 dismiss(id: card.id, velocity: value.velocity)
                             } else {
                                 withAnimation(.spring()) {

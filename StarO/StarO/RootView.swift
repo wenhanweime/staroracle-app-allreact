@@ -101,10 +101,12 @@ struct RootView: View {
         DragGesture(minimumDistance: 8)
           .onChanged { value in
             guard !galaxyStore.isGeneratingCard else { return }
+            guard starStore.currentInspirationCard == nil else { return }
             handleDragChanged(value.translation.width, width: width)
           }
           .onEnded { value in
             guard !galaxyStore.isGeneratingCard else { return }
+            guard starStore.currentInspirationCard == nil else { return }
             handleDragEnded(value.translation.width, width: width)
           }
       )
