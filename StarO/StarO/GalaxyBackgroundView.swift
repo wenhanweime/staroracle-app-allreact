@@ -68,27 +68,30 @@ struct GalaxyBackgroundView: View {
             let shouldUseCloud = SupabaseRuntime.loadConfig() != nil && authService.isAuthenticated
             let userIdForCache = cachedUserId ?? resolvedCacheUserId()
             let cardIdForThisTap = UUID().uuidString.lowercased()
-            let prefetchedCard: InspirationCard? = shouldUseCloud
+            let personalizedCandidate: PersonalizedInspirationCandidate? = shouldUseCloud
+              ? await PersonalizedInspirationPrefetcher.shared.takeNextClonedItem(
+                userId: userIdForCache,
+                newIdPrefix: "pi"
+              )
+              : nil
+            let personalizedCard: InspirationCard? = personalizedCandidate.map {
+              makeInspirationCard(from: $0, cardId: cardIdForThisTap)
+            }
+            let prefetchedCard: InspirationCard? = (shouldUseCloud && personalizedCard == nil)
               ? await InspirationCardPrefetcher.shared.takeClonedCard(
                 withNewId: cardIdForThisTap,
                 userId: userIdForCache
               )
               : nil
-            let personalizedCandidates: [PersonalizedInspirationCandidate] = shouldUseCloud
-              ? await PersonalizedInspirationPrefetcher.shared.takeClonedItems(
-                userId: userIdForCache,
-                limit: 3,
-                newIdPrefix: "pi"
-              )
-              : []
 
             await MainActor.run {
-              if let prefetchedCard {
+              if let personalizedCard {
+                starStore.presentInspirationCard(personalizedCard)
+              } else if let prefetchedCard {
                 starStore.presentInspirationCard(prefetchedCard)
               } else {
                 _ = starStore.drawInspirationCard(region: region)
               }
-              starStore.setPersonalizedInspirationCandidates(personalizedCandidates)
               lastTapRegion = region
               lastTapDate = Date()
 
@@ -100,7 +103,7 @@ struct GalaxyBackgroundView: View {
             if shouldUseCloud {
               Task.detached {
                 await InspirationCardPrefetcher.shared.prefetchIfNeeded(userId: userIdForCache)
-                await PersonalizedInspirationPrefetcher.shared.prefetchIfNeeded(userId: userIdForCache, force: true)
+                await PersonalizedInspirationPrefetcher.shared.prefetchIfNeeded(userId: userIdForCache)
               }
             }
           }
@@ -258,5 +261,53 @@ struct GalaxyBackgroundView: View {
     case .relation: return "关系"
     case .growth: return "成长"
     }
+  }
+
+  private func makeInspirationCard(
+    from candidate: PersonalizedInspirationCandidate,
+    cardId: String
+  ) -> InspirationCard {
+    let kind = candidate.kind.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+    let title = normalizeShortText(candidate.title, maxChars: 18)
+    let content = normalizeShortText(candidate.content, maxChars: 50)
+
+    var tags = candidate.tags
+    tags.append("content_type:question")
+    tags.append("personalized")
+    if !kind.isEmpty {
+      tags.append("personalized_kind:\(kind)")
+    }
+    let sourceId = candidate.id.trimmingCharacters(in: .whitespacesAndNewlines)
+    if !sourceId.isEmpty {
+      tags.append("source_id:\(sourceId)")
+    }
+
+    let resolvedQuestion = title.isEmpty ? "为你生成" : title
+    let resolvedReflection = content.isEmpty ? "……" : content
+
+    return InspirationCard(
+      id: cardId,
+      title: resolvedQuestion,
+      question: resolvedQuestion,
+      reflection: resolvedReflection,
+      tags: tags,
+      emotionalTone: "探寻中",
+      category: "personalized_inspiration",
+      spawnedAt: candidate.spawnedAt
+    )
+  }
+
+  private func normalizeShortText(_ raw: String, maxChars: Int) -> String {
+    let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return "" }
+    let flattened = trimmed
+      .replacingOccurrences(of: "\r", with: " ")
+      .replacingOccurrences(of: "\n", with: " ")
+    let collapsed = flattened
+      .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !collapsed.isEmpty else { return "" }
+    let resolvedMax = max(1, maxChars)
+    return String(collapsed.prefix(resolvedMax))
   }
 }

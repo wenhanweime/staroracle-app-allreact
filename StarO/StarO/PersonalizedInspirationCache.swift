@@ -49,7 +49,7 @@ private extension PersonalizedInspirationCache {
       ?? URL(fileURLWithPath: NSTemporaryDirectory())
     let raw = (userId ?? "anonymous").trimmingCharacters(in: .whitespacesAndNewlines)
     let safe = safeFileComponent(raw.isEmpty ? "anonymous" : raw)
-    return dir.appendingPathComponent("personalized_inspiration_\(safe).json")
+    return dir.appendingPathComponent("personalized_inspiration_v2_\(safe).json")
   }
 
   static func safeFileComponent(_ raw: String) -> String {
@@ -62,4 +62,3 @@ private extension PersonalizedInspirationCache {
     )
   }
 }
-
