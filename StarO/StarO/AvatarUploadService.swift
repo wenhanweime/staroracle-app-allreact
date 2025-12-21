@@ -104,3 +104,85 @@ enum AvatarUploadService {
   }
 }
 
+enum AvatarDiskCache {
+  private static let directoryName = "staro-avatar-cache-v1"
+  private static let remoteURLKeyPrefix = "staro.avatar.remoteUrl.v1."
+
+  static func localURL(for userId: String) -> URL? {
+    let trimmed = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else { return nil }
+    guard let base = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first else { return nil }
+    let dir = base.appendingPathComponent(directoryName, isDirectory: true)
+    do {
+      try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+    } catch {
+      return nil
+    }
+    return dir.appendingPathComponent("\(trimmed).jpg")
+  }
+
+  static func hasLocalAvatar(userId: String) -> Bool {
+    guard let url = localURL(for: userId) else { return false }
+    return FileManager.default.fileExists(atPath: url.path)
+  }
+
+  static func save(_ data: Data, userId: String, remoteURL: String? = nil) {
+    let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedUserId.isEmpty else { return }
+    guard let url = localURL(for: trimmedUserId) else { return }
+    do {
+      try data.write(to: url, options: .atomic)
+    } catch {
+      // ignore
+    }
+    if let remote = remoteURL?.trimmingCharacters(in: .whitespacesAndNewlines), !remote.isEmpty {
+      UserDefaults.standard.set(remote, forKey: remoteURLKeyPrefix + trimmedUserId)
+    }
+  }
+
+  static func clear(userId: String) {
+    let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedUserId.isEmpty else { return }
+    UserDefaults.standard.removeObject(forKey: remoteURLKeyPrefix + trimmedUserId)
+    guard let url = localURL(for: trimmedUserId) else { return }
+    try? FileManager.default.removeItem(at: url)
+  }
+
+  static func sync(userId: String, remoteURL: String?) {
+    let trimmedUserId = userId.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmedUserId.isEmpty else { return }
+    let trimmedRemote = (remoteURL ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if trimmedRemote.isEmpty {
+      clear(userId: trimmedUserId)
+      return
+    }
+
+    let key = remoteURLKeyPrefix + trimmedUserId
+    let stored = (UserDefaults.standard.string(forKey: key) ?? "")
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+
+    if stored != trimmedRemote {
+      UserDefaults.standard.set(trimmedRemote, forKey: key)
+      if let url = localURL(for: trimmedUserId) {
+        try? FileManager.default.removeItem(at: url)
+      }
+    }
+
+    guard !hasLocalAvatar(userId: trimmedUserId) else { return }
+    prefetchDownload(userId: trimmedUserId, remoteURL: trimmedRemote)
+  }
+
+  private static func prefetchDownload(userId: String, remoteURL: String) {
+    guard let url = URL(string: remoteURL) else { return }
+    let key = remoteURLKeyPrefix + userId
+    let expectedRemote = remoteURL
+
+    Task.detached(priority: .background) {
+      guard let data = try? Data(contentsOf: url) else { return }
+      let stillExpected = (UserDefaults.standard.string(forKey: key) ?? "")
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+      guard stillExpected == expectedRemote else { return }
+      save(data, userId: userId, remoteURL: expectedRemote)
+    }
+  }
+}

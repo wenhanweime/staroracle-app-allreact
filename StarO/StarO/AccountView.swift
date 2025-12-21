@@ -475,6 +475,8 @@ struct AccountView: View {
   private func avatarView(size: CGFloat) -> some View {
     let emoji = resolvedAvatarEmoji
     let fallback = resolvedAvatarFallback
+    let uid = resolvedUserId.trimmingCharacters(in: .whitespacesAndNewlines)
+    let localURL = uid.isEmpty ? nil : AvatarDiskCache.localURL(for: uid)
 
     return ZStack {
       Circle()
@@ -485,6 +487,8 @@ struct AccountView: View {
         ))
       if !shouldClearAvatarPhoto, let preview = avatarPhotoPreview {
         avatarPhotoLayer(preview)
+      } else if !shouldClearAvatarPhoto, let localURL, let image = UIImage(contentsOfFile: localURL.path) {
+        avatarPhotoLayer(image)
       } else if !shouldClearAvatarPhoto, let url = resolvedAvatarPhotoURL {
         avatarPhotoLayer(url)
       } else if let emoji {
@@ -688,12 +692,21 @@ struct AccountView: View {
       var avatarUrlUpdate: String? = nil
       if shouldClearAvatarPhoto {
         avatarUrlUpdate = ""
+        let uid = resolvedUserId
+        if !uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+          AvatarDiskCache.clear(userId: uid)
+        }
       } else if let jpeg = avatarPhotoJPEG {
         let uid = resolvedUserId
         if uid.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
           throw AvatarUploadService.AvatarUploadError.invalidUserId
         }
         avatarUrlUpdate = try await AvatarUploadService.uploadAvatarJPEG(jpeg, userId: uid)
+        if let avatarUrlUpdate {
+          AvatarDiskCache.save(jpeg, userId: uid, remoteURL: avatarUrlUpdate)
+        } else {
+          AvatarDiskCache.save(jpeg, userId: uid)
+        }
       }
 
       let result = try await ProfileService.updateProfile(

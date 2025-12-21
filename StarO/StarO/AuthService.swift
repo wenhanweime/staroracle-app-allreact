@@ -183,6 +183,7 @@ final class AuthService: ObservableObject {
     isLoading = true
     defer { isLoading = false }
     errorMessage = nil
+    let existingUserId = userId
 
     if let config = SupabaseRuntime.loadConfig() {
       let url = config.url
@@ -202,6 +203,10 @@ final class AuthService: ObservableObject {
     }
 
     AuthSessionStore.clear()
+    if let uid = existingUserId?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !uid.isEmpty {
+      AvatarDiskCache.clear(userId: uid)
+    }
     isAuthenticated = false
     userId = nil
     userEmail = nil
@@ -375,6 +380,10 @@ final class AuthService: ObservableObject {
       userId: userId,
       email: userEmail
     )
+    if let uid = userId?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !uid.isEmpty {
+      AvatarDiskCache.sync(userId: uid, remoteURL: profileAvatarUrl)
+    }
   }
 
   private func restoreCachedProfile(userId: String?, email: String?) {
@@ -386,6 +395,10 @@ final class AuthService: ObservableObject {
     let url = cached.avatarUrl?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
     profileAvatarUrl = url.isEmpty ? nil : url
     profileLoadedAt = cached.updatedAt
+    let uid = (userId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    if !uid.isEmpty {
+      AvatarDiskCache.sync(userId: uid, remoteURL: profileAvatarUrl)
+    }
   }
 
   private func cacheKey(userId: String?, email: String?) -> String? {

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import UIKit
 import StarOracleCore
 import StarOracleFeatures
 
@@ -313,28 +314,34 @@ struct DrawerMenuView: View {
   }
 
   private var accountAvatarView: some View {
-    let url = authService.resolvedAvatarUrl.flatMap(URL.init(string:))
+    let uid = (authService.userId ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    let local = uid.isEmpty ? nil : AvatarDiskCache.localURL(for: uid)
+    let remote = authService.resolvedAvatarUrl.flatMap(URL.init(string:))
     return ZStack {
-      if let url {
-        AsyncImage(url: url) { phase in
+      if let local, let image = UIImage(contentsOfFile: local.path) {
+        Image(uiImage: image)
+          .resizable()
+          .scaledToFill()
+      } else if let remote {
+        AsyncImage(url: remote) { phase in
           switch phase {
           case .success(let image):
             image
               .resizable()
               .scaledToFill()
           default:
-            accountAvatarPlaceholder
+            accountAvatarPlaceholder(hasRemotePhoto: true)
           }
         }
       } else {
-        accountAvatarPlaceholder
+        accountAvatarPlaceholder(hasRemotePhoto: false)
       }
     }
     .clipShape(Circle())
     .overlay(Circle().stroke(Color.white.opacity(0.15), lineWidth: 1))
   }
 
-  private var accountAvatarPlaceholder: some View {
+  private func accountAvatarPlaceholder(hasRemotePhoto: Bool) -> some View {
     ZStack {
       Circle()
         .fill(
@@ -344,9 +351,19 @@ struct DrawerMenuView: View {
             endPoint: .bottomTrailing
           )
         )
-      Text(authService.resolvedAvatarEmoji ?? authService.resolvedAvatarFallback)
-        .font(.system(size: 16, weight: .semibold))
-        .foregroundStyle(.white.opacity(0.9))
+      if let emoji = authService.resolvedAvatarEmoji {
+        Text(emoji)
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(.white.opacity(0.9))
+      } else if hasRemotePhoto {
+        Image(systemName: "person.crop.circle.fill")
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(.white.opacity(0.85))
+      } else {
+        Text(authService.resolvedAvatarFallback)
+          .font(.system(size: 16, weight: .semibold))
+          .foregroundStyle(.white.opacity(0.9))
+      }
     }
   }
 
