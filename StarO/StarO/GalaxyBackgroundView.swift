@@ -66,11 +66,14 @@ struct GalaxyBackgroundView: View {
             }
 
             let shouldUseCloud = SupabaseRuntime.loadConfig() != nil && authService.isAuthenticated
+            let userIdForCache = cachedUserId ?? resolvedCacheUserId()
             let cardIdForThisTap = UUID().uuidString.lowercased()
             let prefetchedCard: InspirationCard? = shouldUseCloud
-              ? await InspirationCardPrefetcher.shared.takeClonedCard(withNewId: cardIdForThisTap)
+              ? await InspirationCardPrefetcher.shared.takeClonedCard(
+                withNewId: cardIdForThisTap,
+                userId: userIdForCache
+              )
               : nil
-            let userIdForCache = cachedUserId ?? resolvedCacheUserId()
             let personalizedCandidates: [PersonalizedInspirationCandidate] = shouldUseCloud
               ? await PersonalizedInspirationPrefetcher.shared.takeClonedItems(
                 userId: userIdForCache,
@@ -96,7 +99,7 @@ struct GalaxyBackgroundView: View {
             // 预取下一张云端灵感卡：保证翻转时文本稳定，不在展示中途“热更新”卡片内容。
             if shouldUseCloud {
               Task.detached {
-                await InspirationCardPrefetcher.shared.prefetchIfNeeded()
+                await InspirationCardPrefetcher.shared.prefetchIfNeeded(userId: userIdForCache)
                 await PersonalizedInspirationPrefetcher.shared.prefetchIfNeeded(userId: userIdForCache, force: true)
               }
             }
@@ -137,7 +140,7 @@ struct GalaxyBackgroundView: View {
         }
 
         Task.detached {
-          await InspirationCardPrefetcher.shared.prefetchIfNeeded()
+          await InspirationCardPrefetcher.shared.prefetchIfNeeded(userId: cachedUserId)
           await PersonalizedInspirationPrefetcher.shared.prefetchIfNeeded(userId: cachedUserId)
         }
 

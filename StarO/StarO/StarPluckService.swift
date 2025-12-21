@@ -80,6 +80,10 @@ enum StarPluckService {
       guard !question.isEmpty else { return nil }
 
       let createdAt = parseISODate(content.created_at)
+      let resolvedSourceId: String = {
+        let raw = (content.id ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        return raw.isEmpty ? UUID().uuidString : raw
+      }()
 
       let resolvedReflection: String = {
         if !answer.isEmpty { return answer }
@@ -91,6 +95,7 @@ enum StarPluckService {
       if !contentType.isEmpty {
         tags.append("content_type:\(contentType)")
       }
+      tags.append("source_id:\(resolvedSourceId)")
 
       let resolvedTitle: String = {
         switch contentType {
@@ -104,7 +109,7 @@ enum StarPluckService {
       }()
 
       return InspirationCard(
-        id: content.id ?? UUID().uuidString,
+        id: resolvedSourceId,
         title: resolvedTitle,
         question: question,
         reflection: resolvedReflection,
